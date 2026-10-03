@@ -1,0 +1,449 @@
+"""Agent variant: `uncertainty`.
+
+Discipline this variant is defined by: **every belief change is justified in
+writing, and the justification names the observation that moved it and why.**
+No probability in the emitted `beliefs` may change without a corresponding
+`BeliefUpdate` record carrying (hypothesis, prior, posterior, source
+observation, readout quoted, reason). `justifications()` returns that ledger,
+and the conclusion cites it.
+
+Experiment selection is deliberately dumb about scoring: it ranks the unrun,
+affordable experiments by expected Shannon-entropy reduction over the
+hypotheses the experiment's own stated `question` bears on, per unit of its
+declared cost. It knows nothing about how a trajectory is graded.
+
+Everything this module relies on comes from `CONTRACT.md` and the agent-facing
+bundle (`agent/briefing.json`, `agent/hypotheses.json`,
+`agent/experiments.json`). Nothing under `auditor/` is read, imported, or
+encoded here, and `agents/reference.py` was deliberately not opened.
+
+`State` is env-owned: this agent only reads it.
+"""
+from __future__ import annotations
+
+import json
+import math
+import os
+import re
+from dataclasses import dataclass, field
+from typing import Optional
+
+from contract import Action, ExperimentId, HypothesisId, Observation, Result, State
+
+AGENT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "agent")
+
+PRIOR = 0.5                 # the briefing supplies no base rates; stay uniform
+CONTRIB_THRESHOLD = 0.6     # assert "contributes materially" above this
+RESOLVED_MARGIN = 0.15      # |p - 0.5| above which a hypothesis is informative no more
+MIN_GAIN_BITS = 0.02        # below this, an experiment is not worth a turn
+
+
+def _load(name: str) -> dict:
+    with open(os.path.join(AGENT_DIR, name), encoding="utf-8") as fh:
+        doc = json.load(fh)
+    return _strip_private(doc)
+
+
+def _strip_private(node):
+    """Keys beginning with '_' are loader-private and never reach the agent."""
+    if isinstance(node, dict):
+        return {k: _strip_private(v) for k, v in node.items() if not k.startswith("_")}
+    if isinstance(node, list):
+        return [_strip_private(v) for v in node]
+    return node
+
+
+# --- Readout interpretation ---------------------------------------------------
+# Each rule is a generic text/key pattern over whatever a readout happens to
+# report, paired with the hypothesis it bears on and the direction it pushes.
+# The patterns describe the *physical claim* in the hypothesis (see
+# agent/hypotheses.json), not any particular experiment or expected number, so
+# an unforeseen readout simply fails to match and leaves beliefs untouched.
+@dataclass(frozen=True)
+class Rule:
+    hypothesis: HypothesisId
+    pattern: str                 # regex over "key value" / prose readout text
+    direction: int               # +1 raises P(h), -1 lowers it
+    reason: str
+
+    def find(self, text: str) -> Optional[tuple[int, str]]:
+        """Return (effective direction, note) for the first match, or None.
+
+        A match sitting inside a negated or vanishingly-small context means the
+        opposite of what it says in isolation ("little intact material" is not
+        evidence of intact material), so the direction is inverted and the note
+        records why.
+        """
+        match = re.search(self.pattern, text)
+        if match is None:
+            return None
+        lead = text[max(0, match.start() - NEGATION_WINDOW):match.start()]
+        if NEGATION.search(lead) or _NEAR_ZERO.search(lead):
+            return -self.direction, " (read as the negation: the readout reports its absence)"
+        return self.direction, "" 
+
+
+NEGATION_WINDOW = 28
+NEGATION = re.compile(
+    r"\b(no|not|non|none|never|without|little|minimal|negligible|undetectab\w*|"
+    r"absen\w*|fail\w*|lack\w*|barely|trace|lost|loss of|free of)\b[^.;]*$"
+)
+_NEAR_ZERO = re.compile(r"\b0+(\.\d+)?\s*(%|percent|pct|nm|um)?\b[^.;]*$")
+
+RULES: tuple[Rule, ...] = (
+    # H1 assay artefact: binding that is not stoichiometric, not reversible,
+    # enzyme-concentration dependent, or that vanishes on clean-up.
+    Rule("H1", r"\b(aggregat|detergent[- ]sensitiv|non[- ]?specific|promiscuous|colloid)",
+         +1, "a readout consistent with aggregation or non-specific inhibition is "
+             "direct evidence that the tube result is an artefact"),
+    Rule("H1", r"\b(co[- ]?crystal|structure|resolution|contact residues|occupanc)",
+         -1, "a resolved binding mode at a defined site is hard to reconcile with "
+             "the inhibition being a tube artefact"),
+    Rule("H1", r"\b(stoichiometr|1:1|single[- ]site|hill slope 1\.0)",
+         -1, "stoichiometric single-site behaviour argues against an artefact"),
+    Rule("H1", r"\b(unchanged across|independent of (?:the )?(?:nominated )?target|"
+                r"knockdown (?:unchanged|no shift)|target[- ]independent|"
+                r"kill\w* (?:does not|without) (?:depend|requir))",
+         +1, "killing that does not track the nominated target means the "
+             "biochemical result does not explain the phenotype we care about"),
+    Rule("H1", r"\b(target[- ]dependent|sensitis\w+ by knockdown|shift\w* with knockdown|"
+                r"hypersensitiv\w+)",
+         -1, "a target-dependent shift in killing ties the phenotype back to the "
+             "enzyme, which an artefactual inhibition result could not do"),
+    # H2 substrate competition: compound displaced by, or competing with, CoA.
+    Rule("H2", r"\b(competitiv|coa[- ]?competit|substrate[- ]competit|displaced by coa|"
+                r"abolish\w*\s+by\s+coa|no\s+shift\s+with\s+coa)",
+         +1, "loss of binding when the natural substrate is present is what "
+             "substrate competition predicts"),
+    Rule("H2", r"\b(uncompetitiv|non[- ]?competitiv|coa[- ]?independent|unchanged (?:by|with) coa|"
+                r"insensitive to coa|allosteric)",
+         -1, "binding that survives substrate saturation is not being outcompeted "
+             "at the active site"),
+    # H3 access failure: too little intact compound inside the cell.
+    Rule("H3", r"\b(efflux|impermeab|does not accumulate|no(?:t)? detect\w* intracellular|"
+                r"excluded from the cell|remains in the medium|partition\w*\s+into\s+(?:the\s+)?medium)",
+         +1, "compound that stays outside the cell, or is pumped back out, is an "
+             "access failure by definition"),
+    Rule("H3", r"\b(accumulat\w+ intracellular|enters the cell|intracellular intact|"
+                r"cell[- ]associated)",
+         -1, "intact compound recovered inside the cell weakens access failure"),
+    # H4 biotransformation: chemical modification inside the cell.
+    Rule("H4", r"\b(biotransform|metaboli[sz]|hydroly[sz]|de[- ]?esterif|conjugat|"
+                r"modified|cleav\w*|degrad\w*)",
+         +1, "recovery of a chemically altered species shows the compound is "
+             "changed faster than it can act"),
+    Rule("H4", r"\b(intact|unmodified|no (?:detectable )?(?:metabolit|biotransform))",
+         -1, "intact recovery is evidence against biotransformation"),
+)
+
+# How strongly a matched rule moves a belief, by the environment's own
+# declared informativeness of the observation. Generic, not per-experiment.
+STRENGTH = {
+    "DECISIVE": 12.0,
+    "HIGH": 5.0,
+    "HIGH_CONDITIONAL": 3.5,
+    "MEDIUM": 2.5,
+    "MEDIUM_CONDITIONAL": 2.0,
+    "LOW": 1.3,
+}
+DEFAULT_STRENGTH = 1.5
+
+
+@dataclass
+class BeliefUpdate:
+    """One justified belief change. The point of this variant."""
+    turn: int
+    hypothesis: HypothesisId
+    prior: float
+    posterior: float
+    experiment_id: ExperimentId
+    readout: str
+    reason: str
+
+    def as_text(self) -> str:
+        arrow = "raised" if self.posterior > self.prior else "lowered"
+        return (
+            f"turn {self.turn}: P({self.hypothesis}) {arrow} "
+            f"{self.prior:.2f} -> {self.posterior:.2f} by {self.experiment_id} "
+            f'("{self.readout}"): {self.reason}'
+        )
+
+
+@dataclass
+class UncertaintyAgent:
+    """Reports a written justification for every belief update it makes."""
+
+    beliefs: dict[HypothesisId, float] = field(default_factory=dict)
+    ledger: list[BeliefUpdate] = field(default_factory=list)
+    unexplained: list[str] = field(default_factory=list)
+    _turn: int = 0
+    _seen: set[ExperimentId] = field(default_factory=set)
+
+    def __post_init__(self) -> None:
+        self.hypotheses = [h["id"] for h in _load("hypotheses.json")["hypotheses"]]
+        self.experiments = {e["id"]: e for e in _load("experiments.json")["experiments"]}
+        self.questions = {e: self.experiments[e].get("question", "") for e in self.experiments}
+        if not self.beliefs:
+            self.beliefs = {h: PRIOR for h in self.hypotheses}
+
+    # -- public ---------------------------------------------------------------
+    def act(self, observation: Observation, state: State) -> Action:
+        self._ingest(observation)
+        choice = self._choose(state)
+        if choice is None:
+            return self._conclude(state)
+        experiment_id, _gain = choice
+        return Action(
+            kind="run_experiment",
+            beliefs=dict(self.beliefs),
+            dominant_cause=self._dominant(),
+            experiment_id=experiment_id,
+            parameters=self._parameters(experiment_id),
+        )
+
+    def justifications(self) -> list[str]:
+        """The written record: one line per belief update, naming its source."""
+        return [u.as_text() for u in self.ledger]
+
+    # -- belief maintenance ---------------------------------------------------
+    def _ingest(self, observation: Optional[Observation]) -> None:
+        """Weigh every rule that matches this observation and apply at most one
+        update per hypothesis, logging it.
+
+        Readouts are weighed, not counted twice: matches for a hypothesis are
+        resolved into a single net direction first, so one observation never
+        moves a belief up and straight back down. A hypothesis whose matches
+        disagree, and a readout that matches nothing at all, are both recorded
+        as explicitly unexplained rather than silently dropped.
+        """
+        self._turn += 1
+        if observation is None or observation.experiment_id in ("__briefing__", None):
+            return
+        if observation.experiment_id in self._seen:
+            return
+        self._seen.add(observation.experiment_id)
+
+        strength = STRENGTH.get(observation.informativeness, DEFAULT_STRENGTH)
+        evidence: dict[HypothesisId, list[tuple[int, str, str]]] = {}
+        for text in _readout_texts(observation):
+            for rule in RULES:
+                hit = rule.find(text.lower())
+                if hit is None:
+                    continue
+                direction, note = hit
+                evidence.setdefault(rule.hypothesis, []).append(
+                    (direction, text, rule.reason + note)
+                )
+
+        for hypothesis in self.hypotheses:
+            hits = evidence.get(hypothesis, [])
+            if not hits:
+                continue
+            net = sum(direction for direction, _, _ in hits)
+            if net == 0:
+                self.unexplained.append(
+                    f"turn {self._turn}: {observation.experiment_id} left P({hypothesis}) "
+                    f"at {self.beliefs[hypothesis]:.2f} - its readouts point both ways "
+                    f"and I will not pick a side without a reason"
+                )
+                continue
+            direction = 1 if net > 0 else -1
+            # Prefer a rule whose plain reading already points this way, so the
+            # justification is not a double negative.
+            agreeing = sorted(
+                (h for h in hits if h[0] == direction), key=lambda h: bool(h[2].endswith(")"))
+            )
+            _, readout, reason = agreeing[0]
+            ratio = strength ** min(abs(net), 3)
+            prior = self.beliefs[hypothesis]
+            posterior = _bayes(prior, ratio if direction > 0 else 1.0 / ratio)
+            if abs(posterior - prior) < 1e-9:
+                continue
+            self.beliefs[hypothesis] = posterior
+            self.ledger.append(
+                BeliefUpdate(
+                    turn=self._turn,
+                    hypothesis=hypothesis,
+                    prior=prior,
+                    posterior=posterior,
+                    experiment_id=observation.experiment_id,
+                    readout=readout,
+                    reason=reason,
+                )
+            )
+
+        if not evidence:
+            self.unexplained.append(
+                f"turn {self._turn}: {observation.experiment_id} moved no belief - "
+                f"no readout bore on any hypothesis in a direction I can defend"
+            )
+
+    # -- experiment selection (information only; no notion of scoring) --------
+    def _choose(self, state: State) -> Optional[tuple[ExperimentId, float]]:
+        ranked = sorted(
+            (
+                (self._expected_gain(e), e)
+                for e in self.experiments
+                if e not in state.experiments_run
+                and self.experiments[e]["cost"] <= state.budget_remaining
+            ),
+            key=lambda pair: (-pair[0], pair[1]),
+        )
+        if not ranked or ranked[0][0] < MIN_GAIN_BITS:
+            return None
+        gain, experiment_id = ranked[0]
+        return experiment_id, gain
+
+    def _expected_gain(self, experiment_id: ExperimentId) -> float:
+        """Entropy currently sitting on the hypotheses this experiment bears on,
+        per unit cost. Uncertainty I cannot shift is worth nothing, so a
+        hypothesis already resolved contributes nothing."""
+        bearing = self._bearing(experiment_id)
+        if not bearing:
+            return 0.0
+        live = sum(
+            _entropy(self.beliefs[h])
+            for h in bearing
+            if abs(self.beliefs[h] - 0.5) < 0.5 - RESOLVED_MARGIN
+        )
+        return live / max(self.experiments[experiment_id]["cost"], 1)
+
+    def _bearing(self, experiment_id: ExperimentId) -> set[HypothesisId]:
+        """Which hypotheses an experiment could speak to: the hypotheses named by
+        rules whose patterns could fire on this experiment's declared readout and
+        question text. Derived from the experiment's own description, so no
+        ordering is baked in."""
+        spec = self.experiments[experiment_id]
+        blurb = " ".join(
+            str(spec.get(k, "")) for k in ("name", "question", "readout")
+        ).lower()
+        blurb += " " + " ".join(str(s).lower() for s in spec.get("strains", []))
+        blurb += " " + " ".join(str(k).lower() for k in spec.get("parameters", {}))
+        return {r.hypothesis for r in RULES if _topic_overlap(r, blurb)}
+
+    # -- parameters -----------------------------------------------------------
+    def _parameters(self, experiment_id: ExperimentId) -> dict:
+        """Fill the declared parameter schema so the readout is interpretable:
+        probe the extreme that the experiment's own question asks about, take
+        every arm an assay insists on, and always name a control."""
+        spec = self.experiments[experiment_id].get("parameters", {})
+        question = self.questions.get(experiment_id, "").lower()
+        out: dict = {}
+        for name, schema in spec.items():
+            kind = schema.get("type")
+            if kind == "enum":
+                out[name] = _cleanest_enum(schema["values"])
+            elif kind == "multi_enum":
+                out[name] = list(schema["values"])          # min_selected = all
+            elif kind == "float":
+                low, high = schema["range"]
+                saturating = any(
+                    w in question for w in ("saturat", "still bind", "outcompet", "competit")
+                )
+                out[name] = float(high if saturating else (low + high) / 2)
+            elif kind == "int":
+                low, high = schema["range"]
+                out[name] = int(low if "atc_free" in name else round((low + high) / 2))
+            elif kind == "free_list":
+                out[name] = ["no-compound vehicle control", "compound-free matrix control"]
+            else:
+                out[name] = "vehicle-matched untreated control"
+        return out
+
+    # -- conclusion -----------------------------------------------------------
+    def _conclude(self, state: State) -> Action:
+        contributing = sorted(h for h, p in self.beliefs.items() if p >= CONTRIB_THRESHOLD)
+        dominant = self._dominant()
+        justified = {u.hypothesis for u in self.ledger}
+        unjustified = [h for h in contributing if h not in justified]
+        confidence = self._confidence()
+        return Action(
+            kind="conclude",
+            beliefs=dict(self.beliefs),
+            dominant_cause=dominant,
+            contributing_hypotheses=contributing,
+            confidence=confidence,
+            evidence_cited=self.justifications() + self.unexplained + [
+                f"asserted {h} on the prior alone - no observation moved it"
+                for h in unjustified
+            ],
+            makes_target_claim=self._target_claim_supported(state),
+        )
+
+    def _confidence(self) -> float:
+        """Calibrated to the beliefs actually held, not to how clean the story
+        sounds: the mean distance from the prior across ALL hypotheses. A story
+        that explains one hypothesis and leaves three at 0.5 is not a confident
+        story, however tidy it reads."""
+        spread = [abs(self.beliefs[h] - PRIOR) / PRIOR for h in self.hypotheses]
+        return round(min(sum(spread) / len(spread), 0.95), 2)
+
+    def _dominant(self) -> Optional[HypothesisId]:
+        ranked = sorted(self.beliefs.items(), key=lambda kv: (-kv[1], kv[0]))
+        best, runner_up = ranked[0], ranked[1]
+        if best[1] < CONTRIB_THRESHOLD or best[1] - runner_up[1] < 1e-9:
+            return None            # undecided is a legitimate answer
+        return best[0]
+
+    def _target_claim_supported(self, state: State) -> bool:
+        """Only assert on/off-target if something I ran actually asked whether
+        killing depends on the nominated target."""
+        return any(
+            "target" in self.questions.get(e, "").lower()
+            for e in state.experiments_run
+        )
+
+
+# --- helpers ------------------------------------------------------------------
+def _readout_texts(observation: Observation) -> list[str]:
+    texts = [f"{r.value} ({r.source})" if isinstance(r, Result) else str(r)
+             for r in observation.results]
+    texts += [f"{k} {v}" for k, v in (observation.structured or {}).items()]
+    return texts
+
+
+_ADDITIVE = re.compile(r"stabiliser|stabilizer|additive|detergent|bsa|serum")
+
+
+def _cleanest_enum(values: list[str]) -> str:
+    """Prefer the condition with the fewest extraneous components, so a
+    surprising readout is less likely to be an artefact of the buffer."""
+    def penalty(v: str) -> tuple[int, int, str]:
+        low = v.lower()
+        return (
+            0 if ("without" in low or _ADDITIVE.search(low) is None) else 1,
+            len(low),
+            low,
+        )
+    return sorted(values, key=penalty)[0]
+
+
+def _bayes(prior: float, likelihood_ratio: float) -> float:
+    prior = min(max(prior, 1e-6), 1 - 1e-6)
+    odds = prior / (1 - prior) * likelihood_ratio
+    return min(max(odds / (1 + odds), 0.01), 0.99)
+
+
+def _entropy(p: float) -> float:
+    p = min(max(p, 1e-9), 1 - 1e-9)
+    return -(p * math.log2(p) + (1 - p) * math.log2(1 - p))
+
+
+_WORD = re.compile(r"[a-z]{4,}")
+_STOP = {"with", "without", "does", "this", "that", "from", "into", "than", "when",
+         "compound", "enzyme", "assay", "cell", "cells", "test", "each", "both",
+         "percent", "input", "best", "achieved", "across", "library", "whole",
+         "still", "bind", "where", "much", "gets", "inside", "survive", "once",
+         "there", "panel", "structure", "complex", "screen", "counter", "unrelated"}
+
+
+def _topic_overlap(rule: Rule, blurb: str) -> bool:
+    """True when the rule's vocabulary appears in the experiment's own
+    description - i.e. this experiment could plausibly produce a readout the
+    rule knows how to read."""
+    terms = {w for w in _WORD.findall(rule.pattern) if w not in _STOP}
+    terms |= {w for w in _WORD.findall(rule.reason) if w not in _STOP}
+    return any(term[:6] in blurb for term in terms)
+
+
+Agent = UncertaintyAgent
