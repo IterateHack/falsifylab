@@ -27,7 +27,7 @@ AUDIT = r"metabolis|biotransform|uptake|efflux|permeab|degrad|\bH[1-4]\b|\bE[1-6
 # Scenario vocabulary the original regex misses: the experiments' subject
 # matter and the hypotheses' names, written the way a prompt would phrase them.
 SCENARIO_TERMS = [
-    r"thermal", r"\bshift", r"crystal", r"\bMIC", r"strain", r"pharmacokin", r"\bPK\b",
+    r"thermal", r"crystal", r"\bMIC", r"strain", r"pharmacokin", r"\bPK\b",
     r"counter-?screen", r"\bCoA\b", r"potency", r"\bIC50", r"artefact", r"artifact",
     r"substrate", r"competition", r"\baccess", r"PptT", r"engagement", r"intrabacterial",
     r"whole-cell", r"on-target", r"off-target", r"\bpanel\b",
