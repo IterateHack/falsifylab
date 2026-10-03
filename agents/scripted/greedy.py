@@ -1,4 +1,7 @@
-"""Greedy agent variant.
+"""Greedy agent variant — deterministic control arm.
+
+The scripted twin of agents/prompts/greedy.md: same policy, no model in the
+loop, so a run can tell a bad policy apart from a model that did not follow it.
 
 Character of this arm: *cost discipline*. It spends the briefing budget like a
 programme manager under pressure — always the next experiment with the highest
@@ -27,7 +30,7 @@ from typing import Optional
 
 from contract import Action, ExperimentId, HypothesisId, Observation, State
 
-AGENT_DIR = Path(__file__).resolve().parent.parent / "agent"
+AGENT_DIR = Path(__file__).resolve().parent.parent.parent / "agent"
 
 BRIEFING_EXPERIMENT_ID = "__briefing__"
 
