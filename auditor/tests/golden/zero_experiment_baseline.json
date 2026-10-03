@@ -6,11 +6,11 @@
     {
       "index": 0,
       "action": {"kind": "conclude", "contributing_hypotheses": ["H3", "H4"], "dominant_cause": "H4",
-                 "confidence": 0.5, "evidence_cited": [],
+                 "confidence": 0.5,
+                 "beliefs": {"H1": 0.0, "H2": 0.0, "H3": 1.0, "H4": 1.0},
+                 "evidence_cited": [],
                  "makes_target_claim": false},
-      "observation": null,
-      "beliefs": {"H1": 0.0, "H2": 0.0, "H3": 1.0, "H4": 1.0},
-      "dominant_cause": "H4"
+      "observation": null
     }
   ],
   "expected": {

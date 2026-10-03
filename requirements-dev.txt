@@ -1,0 +1,4 @@
+# Dev-only dependencies. Runs the golden acceptance tests:
+#   pip install -r requirements-dev.txt
+#   pytest auditor/tests/golden
+pytest>=9,<10
