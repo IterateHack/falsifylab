@@ -16,6 +16,7 @@ export default function App() {
   const [runId, setRunId] = useState<string | null>(null);
   const [notebook, setNotebook] = useState<Notebook | null>(null);
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const [openCalibration, setOpenCalibration] = useState(false);
   const params = useMemo(
     () => new URLSearchParams(typeof window === "undefined" ? "" : window.location.search),
     [],
@@ -113,6 +114,20 @@ export default function App() {
     },
     [runId, experimentIds, enqueue],
   );
+
+  // ?notebook=3 or ?notebook=cal deep-links straight to a notebook page, which
+  // is handy mid-presentation and in a headless check.
+  useEffect(() => {
+    const want = params.get("notebook");
+    if (!want) return;
+    if (want === "cal" || want === "calibration") {
+      setOpenCalibration(true);
+      setOpenIndex(0);
+      return;
+    }
+    const n = Number(want);
+    if (Number.isInteger(n) && n >= 1 && n <= 6) setOpenIndex(n - 1);
+  }, [params]);
 
   // ?autostart=1 begins playback once the curriculum and run are loaded. Used
   // for recording the demo, and to drive the UI in a headless browser check.
@@ -269,8 +284,15 @@ export default function App() {
         data={notebook}
         openIndex={openIndex}
         titles={titles}
-        onClose={() => setOpenIndex(null)}
-        onSelect={setOpenIndex}
+        showCalibration={openCalibration}
+        onClose={() => {
+          setOpenIndex(null);
+          setOpenCalibration(false);
+        }}
+        onSelect={(i) => {
+          setOpenCalibration(false);
+          setOpenIndex(i);
+        }}
       />
     </div>
   );

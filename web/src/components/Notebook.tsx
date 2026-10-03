@@ -6,12 +6,18 @@ interface Props {
   data: NotebookData | null;
   openIndex: number | null;
   titles: string[];
+  showCalibration?: boolean;
   onClose: () => void;
   onSelect: (index: number) => void;
 }
 
-export function NotebookOverlay({ data, openIndex, titles, onClose, onSelect }: Props) {
-  const [showCalibration, setShowCalibration] = useState(false);
+export function NotebookOverlay({
+  data, openIndex, titles, showCalibration: initialCalibration, onClose, onSelect,
+}: Props) {
+  const [showCalibration, setShowCalibration] = useState(!!initialCalibration);
+  useEffect(() => {
+    setShowCalibration(!!initialCalibration);
+  }, [initialCalibration]);
 
   useEffect(() => {
     if (openIndex === null) return;
