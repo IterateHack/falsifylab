@@ -10,11 +10,16 @@ prompts.
                      model_client=client)
     action = agent.act(observation, env.state)
 
-`model_client` is duck-typed. Anything works that is either
-  * callable:            client(system_prompt, user_prompt) -> str, or
-  * has `.complete(...)`: client.complete(system_prompt, user_prompt) -> str,
-  * or `.generate(...)` with the same shape,
-so a provider SDK, a cached replayer or a stub in a test all drop in unchanged.
+`model_client` is anything with `.complete(system, messages) -> str` (see
+`ModelClient`). `messages` is the episode so far as a list of
+{"role": "user"|"assistant", "content": str}, oldest first: an episode is
+multi-turn and both provider chat APIs take a message list natively, so a
+provider SDK wrapper, a cached replayer or a stub in a test all drop in
+unchanged. The first user message carries the briefing, hypotheses, menu,
+budget and reply schema; each later user message carries only what the last
+experiment returned and the budget now. Every reply the model gave, rejected
+ones included, stays in the conversation, so the model always sees exactly
+what it said.
 
 ## Invariant: this harness enforces SHAPE, never CONTENT
 
@@ -65,7 +70,7 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Optional, Protocol
 
 from contract import Action, HypothesisId, Observation, State
 
@@ -113,6 +118,16 @@ class ParseFailure(ValueError):
     """The model's reply could not be read as a legal Action."""
 
 
+class ModelClient(Protocol):
+    """Anything that turns (system prompt, conversation) into one text reply.
+
+    `messages` is a list of {"role": "user"|"assistant", "content": str},
+    oldest first, always ending on a user message. The harness passes a fresh
+    list each call, so a client may keep it."""
+
+    def complete(self, system: str, messages: list[dict]) -> str: ...
+
+
 PARSE_FAILURE = "parse_failure"   # Action.abstain_reason when the harness built the conclude
 
 
@@ -122,7 +137,7 @@ class LLMAgent:
     def __init__(
         self,
         system_prompt: str,
-        model_client: Any,
+        model_client: ModelClient,
         *,
         base_dir: Optional[Path] = None,
         max_retries: int = 1,
@@ -142,21 +157,27 @@ class LLMAgent:
         self.model_name = model_name
         self.model_calls = 0              # replies asked for, retries included
         self.parse_failures = 0           # replies that were not a legal Action
-        self.history: list[dict] = []     # rendered turns, oldest first
+        self.history: list[dict] = []     # actions and observations, oldest first
+        self.messages: list[dict] = []    # the episode conversation sent to the model
         self.transcript: list[dict] = []  # {prompt, reply, error} per model call, for the log
         self.last_beliefs: dict[HypothesisId, float] = {h: 0.5 for h in self.hypothesis_ids}
         self.abstained = False
 
     # --- contract entry point -------------------------------------------------
     def act(self, observation: Observation, state: State) -> Action:
-        self._remember(observation)
-        user_prompt = self.render(state)
+        new_observation = self._remember(observation)
+        if not self.messages:
+            self._say(self.render(state))
+        else:
+            self._say(self.render_turn(new_observation, state))
 
         error: Optional[str] = None
         for attempt in range(self.max_retries + 1):
-            prompt = user_prompt if error is None else _retry_prompt(user_prompt, error)
-            reply = self._call_model(prompt)
+            if error is not None:
+                self._say(_retry_message(error))
+            reply = self._call_model()
             self.model_calls += 1
+            self.messages.append({"role": "assistant", "content": reply})
             try:
                 action = self.parse(reply, state)
             except ParseFailure as exc:
@@ -170,10 +191,13 @@ class LLMAgent:
             return action
         return self.abstain(reason=error or "no reply")
 
+    def _say(self, content: str) -> None:
+        self.messages.append({"role": "user", "content": content})
+
     # --- prompt rendering -----------------------------------------------------
     def render(self, state: State) -> str:
-        """The user-side prompt for this turn: question, hypotheses, menu, what
-        has been bought and what it showed, and the reply spec."""
+        """The opening user message: question, hypotheses, menu, budget and the
+        reply spec. Later turns are `render_turn`."""
         parts = [
             "# Question",
             self.briefing["question"],
@@ -192,9 +216,6 @@ class LLMAgent:
             f"the whole menu costs {self.briefing['budget']['menu_total']}. You cannot run everything.",
             f"- spent so far: {state.total_cost}",
             f"- bought so far: {', '.join(state.experiments_run) or 'nothing'}",
-            "",
-            "# Turn history",
-            self._render_history(),
             "",
             "# Your reply",
             RESPONSE_SPEC,
@@ -220,41 +241,46 @@ class LLMAgent:
                 line += f" ({spec['note']})"
         return line
 
-    def _render_history(self) -> str:
-        if not self.history:
-            return "- nothing yet; this is your first turn."
-        lines: list[str] = []
-        for item in self.history:
-            if item["role"] == "action":
-                a: Action = item["action"]
-                lines.append(f"- you bought {a.experiment_id} with parameters {json.dumps(a.parameters)}")
-            else:
-                obs: Observation = item["observation"]
-                lines.append(f"- {obs.experiment_id} returned (cost {obs.cost}):")
-                lines += [f"    - {r.value}  [{r.source}]" for r in obs.results]
-                if obs.structured:
-                    lines.append(f"    - machine-readable: {json.dumps(obs.structured)}")
-        return "\n".join(lines)
+    def render_turn(self, observation: Optional[Observation], state: State) -> str:
+        """A later user message: what the last experiment returned, if anything
+        new came back, and the budget now."""
+        parts: list[str] = []
+        if observation is not None:
+            parts.append(f"# {observation.experiment_id} returned (cost {observation.cost})")
+            parts += [f"- {r.value}  [{r.source}]" for r in observation.results]
+            if observation.structured:
+                parts.append(f"- machine-readable: {json.dumps(observation.structured)}")
+        else:
+            parts.append("# No new result")
+        parts += [
+            "",
+            "# Budget",
+            f"- {state.budget_remaining} of {self.briefing['budget']['units']} units remain",
+            f"- spent so far: {state.total_cost}",
+            f"- bought so far: {', '.join(state.experiments_run) or 'nothing'}",
+            "",
+            "Reply with one JSON object, in the shape given in the first message.",
+        ]
+        return "\n".join(parts)
 
-    def _remember(self, observation: Optional[Observation]) -> None:
-        """Record an observation for the next prompt. The briefing is already in
-        `starting_facts`, so it is not repeated into the history, and
-        `informativeness` is never carried across: it is auditor-view metadata
-        and a live Env reports it as UNRATED anyway."""
+    def _remember(self, observation: Optional[Observation]) -> Optional[Observation]:
+        """Record an observation and return it if it is new to the model. The
+        briefing is already in the opening message, the same observation handed
+        back twice is not repeated, and `informativeness` is never rendered: it
+        is auditor-view metadata and a live Env reports it as UNRATED anyway."""
         if observation is None or observation.experiment_id == BRIEFING_EXPERIMENT_ID:
-            return
+            return None
+        if any(item.get("observation") is observation for item in self.history):
+            return None
         self.history.append({"role": "observation", "observation": observation})
+        return observation
 
     # --- model call -----------------------------------------------------------
-    def _call_model(self, user_prompt: str) -> str:
-        client = self.model_client
-        for attr in ("complete", "generate", "__call__"):
-            fn: Optional[Callable] = getattr(client, attr, None)
-            if callable(fn):
-                return str(fn(self.system_prompt, user_prompt))
-        raise TypeError(
-            "model_client must be callable or expose .complete(system, user) / .generate(system, user)"
-        )
+    def _call_model(self) -> str:
+        complete = getattr(self.model_client, "complete", None)
+        if not callable(complete):
+            raise TypeError("model_client must expose .complete(system, messages) -> str")
+        return str(complete(self.system_prompt, [dict(m) for m in self.messages]))
 
     # --- reply parsing --------------------------------------------------------
     def parse(self, reply: str, state: State) -> Action:
@@ -468,12 +494,11 @@ def parse_failure_report(agents: "list[LLMAgent]") -> dict:
     return per_model
 
 
-def _retry_prompt(user_prompt: str, error: str) -> str:
+def _retry_message(error: str) -> str:
     """The retry restates the structural error and the schema, and adds nothing
     else. No hint about which citations, which confidence or which experiment —
     see the SHAPE-not-CONTENT invariant at the top of this module."""
     return (
-        f"{user_prompt}\n\n"
         "## Your previous reply could not be parsed\n"
         f"{error}\n\n"
         "Reply again with one JSON object only, in this shape:\n"
