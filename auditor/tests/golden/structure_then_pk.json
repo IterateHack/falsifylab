@@ -5,7 +5,9 @@
   "turns": [
     {
       "index": 0,
-      "action": {"kind": "run_experiment", "experiment_id": "E2", "parameters": {}},
+      "action": {"kind": "run_experiment", "experiment_id": "E2", "parameters": {},
+                 "beliefs": {"H1": 0.0, "H2": 0.1, "H3": 0.5, "H4": 0.5},
+                 "dominant_cause": null},
       "observation": {
         "experiment_id": "E2",
         "results": [
@@ -16,16 +18,17 @@
           {"value": "Three of nine chains poorly ordered; chain F largely removed from the final model", "source": "p5"}
         ],
         "informativeness": "MEDIUM",
-        "cost": 4
-      },
-      "beliefs": {"H1": 0.0, "H2": 0.1, "H3": 0.5, "H4": 0.5},
-      "dominant_cause": null
+        "cost": 4,
+        "structured": {}
+      }
     },
     {
       "index": 1,
       "action": {"kind": "run_experiment", "experiment_id": "E6",
                  "parameters": {"arms": ["parent_diacid", "diethyl_ester", "monoacid"],
-                                "controls": ["bacteria-free filter"]}},
+                                "controls": ["bacteria-free filter"]},
+                 "beliefs": {"H1": 0.0, "H2": 0.0, "H3": 1.0, "H4": 1.0},
+                 "dominant_cause": "H4"},
       "observation": {
         "experiment_id": "E6",
         "results": [
@@ -37,25 +40,28 @@
           {"value": "CONTROL (returned only if the agent declared a bacteria-free arm): no parent compound found on filters in cultures lacking bacteria - loss of free parent is active efflux, not adsorption", "source": "p10"}
         ],
         "informativeness": "DECISIVE",
-        "cost": 4
-      },
-      "beliefs": {"H1": 0.0, "H2": 0.0, "H3": 1.0, "H4": 1.0},
-      "dominant_cause": "H4"
+        "cost": 4,
+        "structured": {"parent_cell_associated_pct": 1.2, "diethyl_ester_uptake_pct": 74.6, "diethyl_ester_metabolised_pct": 93.6, "monoacid_uptake_pct": 55.4, "monoacid_intact_pct": 14, "bacteria_free_control_returned": true}
+      }
     },
     {
       "index": 2,
       "action": {"kind": "conclude", "contributing_hypotheses": ["H3", "H4"], "dominant_cause": "H4",
                  "confidence": 0.8,
+                 "beliefs": {"H1": 0.0, "H2": 0.0, "H3": 1.0, "H4": 1.0},
                  "evidence_cited": ["uptake and metabolism partition", "bacteria-free control"],
                  "makes_target_claim": false},
-      "observation": null,
-      "beliefs": {"H1": 0.0, "H2": 0.0, "H3": 1.0, "H4": 1.0},
-      "dominant_cause": "H4"
+      "observation": null
     }
   ],
   "expected": {
     "verdict": "VALID_SUCCESS",
     "flags": [],
-    "final_score": null
+    "R_visible": 0.6,
+    "final_score": null,
+    "expected_intermediates": {
+      "applicable_max_evidence": 20,
+      "evidence_sufficiency": 20
+    }
   }
 }
