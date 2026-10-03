@@ -147,6 +147,9 @@ STRENGTH = {
     "LOW": 1.3,
 }
 DEFAULT_STRENGTH = 1.5
+# Labels the environment itself calls strongly informative. Used only to judge
+# how good the evidence behind a RANKING claim is, never to move a belief.
+STRONG_INFORMATIVENESS = frozenset({"DECISIVE", "HIGH", "HIGH_CONDITIONAL"})
 
 
 @dataclass
@@ -159,6 +162,7 @@ class BeliefUpdate:
     experiment_id: ExperimentId
     readout: str
     reason: str
+    informativeness: str = ""
     prior_distance: float = 0.0
     """How far this hypothesis now sits from the uniform prior, in units of the
     prior: |posterior - PRIOR| / PRIOR. Reported per update so a reader can see
@@ -173,7 +177,8 @@ class BeliefUpdate:
         return (
             f"turn {self.turn}: P({self.hypothesis}) {arrow} "
             f"{self.prior:.2f} -> {self.posterior:.2f} by {self.experiment_id} "
-            f"[prior_distance {self.prior_distance:.2f}] "
+            f"[{self.informativeness or 'UNLABELLED'}, prior_distance "
+            f"{self.prior_distance:.2f}] "
             f'("{self.readout}"): {self.reason}'
         )
 
@@ -278,6 +283,7 @@ class UncertaintyAgent:
                     experiment_id=observation.experiment_id,
                     readout=readout,
                     reason=reason,
+                    informativeness=observation.informativeness,
                 )
             )
 
@@ -365,7 +371,7 @@ class UncertaintyAgent:
         dominant = self._dominant()
         justified = {u.hypothesis for u in self.ledger}
         unjustified = [h for h in contributing if h not in justified]
-        confidence = self._confidence(contributing, dominant)
+        confidence, confidence_reason = self._stated_ranking_confidence(dominant)
         return Action(
             kind="conclude",
             beliefs=dict(self.beliefs),
@@ -375,39 +381,96 @@ class UncertaintyAgent:
             evidence_cited=self.justifications() + self.unexplained + [
                 f"asserted {h} on the prior alone - no observation moved it"
                 for h in unjustified
-            ],
+            ] + [confidence_reason],
             makes_target_claim=self._target_claim_supported(state),
         )
 
-    def _confidence(
-        self, contributing: list[HypothesisId], dominant: Optional[HypothesisId]
-    ) -> float:
-        """My stated probability that the whole conclusion is correct: the
-        contributing set AND the dominant cause, together.
+    def _stated_ranking_confidence(
+        self, dominant: Optional[HypothesisId]
+    ) -> tuple[Optional[float], str]:
+        """My probability that `dominant_cause` is in fact the LARGEST
+        contributor. One number about one claim.
 
-        Contract definition, identical across variants, so OVERCONFIDENT rates
-        are comparable. It answers one question and is not a transform of how
-        far the beliefs travelled - that quantity lives on
-        `BeliefUpdate.prior_distance`.
+        Self-reported, per the cross-variant contract: it is NOT computed from
+        `self.beliefs` by any formula - no product over marginals, no margin
+        ratio, nothing read off the belief vector. This method never looks at a
+        probability. It states a rung of a written ladder, and what picks the
+        rung is the evidence I actually went out and bought: which observations
+        raised the hypothesis I am naming, how informative the environment
+        itself called them, and whether anything I ran ever argued a rival
+        down. Asserting a ranking obliges me to say how sure I am of the
+        ranking, so the reason is returned with the number and cited.
 
-        Treating the four hypotheses as independent (the briefing's framing),
-        the set is right only if every assertion and every non-assertion is
-        right, so P(set) is the product over all hypotheses of p_h where
-        asserted and (1 - p_h) where not. Naming a dominant cause is a further
-        claim - that this hypothesis outweighs the runner-up - carrying its own
-        probability; declining to name one asserts nothing extra.
+        Naming no dominant cause makes no ranking claim, so there is no
+        probability to report: `(None, reason)`.
         """
-        asserted = set(contributing)
-        p_set = 1.0
-        for h in self.hypotheses:
-            p = self.beliefs[h]
-            p_set *= p if h in asserted else (1 - p)
-        p_dominant = 1.0
-        if dominant is not None:
-            ranked = sorted(self.beliefs.values(), reverse=True)
-            total = ranked[0] + ranked[1]
-            p_dominant = ranked[0] / total if total > 0 else 0.5
-        return round(min(max(p_set * p_dominant, 0.01), 0.99), 2)
+        if dominant is None:
+            return None, (
+                "stated confidence: none - I named no dominant cause, so I am "
+                "making no claim about which contributor is largest"
+            )
+
+        rivals = [h for h in self.hypotheses if h != dominant]
+        raised_dominant = [
+            u for u in self.ledger
+            if u.hypothesis == dominant and u.posterior > u.prior
+        ]
+        strong_support = [
+            u for u in raised_dominant if u.informativeness in STRONG_INFORMATIVENESS
+        ]
+        rivals_lowered = {
+            u.hypothesis for u in self.ledger
+            if u.hypothesis in rivals and u.posterior < u.prior
+        }
+        rivals_raised = {
+            u.hypothesis for u in self.ledger
+            if u.hypothesis in rivals and u.posterior > u.prior
+        }
+
+        if not raised_dominant:
+            return 0.25, (
+                f"stated confidence 0.25: nothing I ran argued {dominant} up, so "
+                f"calling it the largest contributor is a guess between four "
+                f"candidates and I will not dress it up as more"
+            )
+        if rivals_raised and not rivals_lowered:
+            return 0.4, (
+                f"stated confidence 0.4: evidence raised {dominant}, but it also "
+                f"raised {', '.join(sorted(rivals_raised))} and I bought nothing "
+                f"that separates them, so the ranking is barely better than a "
+                f"coin toss between the raised hypotheses"
+            )
+        if not strong_support:
+            return 0.5, (
+                f"stated confidence 0.5: {dominant} was raised only by readouts the "
+                f"environment itself labelled weakly informative "
+                f"({', '.join(sorted({u.informativeness for u in raised_dominant}))}), "
+                f"which is thin ground for a ranking claim"
+            )
+        if not rivals_lowered:
+            return 0.6, (
+                f"stated confidence 0.6: {strong_support[0].experiment_id} argued "
+                f"{dominant} up decisively, but I never ran anything that argued a "
+                f"rival down, so I am ranking against hypotheses I have not tested"
+            )
+        if len(rivals_lowered) < len(rivals) or self.unexplained:
+            return 0.75, (
+                f"stated confidence 0.75: {strong_support[0].experiment_id} argued "
+                f"{dominant} up decisively and I argued "
+                f"{', '.join(sorted(rivals_lowered))} down, but "
+                + (
+                    f"{', '.join(sorted(set(rivals) - rivals_lowered))} remains "
+                    f"untested as a rival"
+                    if len(rivals_lowered) < len(rivals)
+                    else "readouts I could not interpret are still outstanding"
+                )
+            )
+        return 0.85, (
+            f"stated confidence 0.85: {strong_support[0].experiment_id} argued "
+            f"{dominant} up decisively, every rival was argued down by something I "
+            f"ran, and no readout was left uninterpreted - as sure of a ranking as "
+            f"this budget lets me be"
+        )
 
     def _dominant(self) -> Optional[HypothesisId]:
         ranked = sorted(self.beliefs.items(), key=lambda kv: (-kv[1], kv[0]))
