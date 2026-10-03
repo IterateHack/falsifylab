@@ -85,7 +85,7 @@ To buy an experiment:
 {"kind": "run_experiment", "experiment_id": "E<n>", "parameters": {...},
  "beliefs": {"H1": 0.0-1.0, "H2": ..., "H3": ..., "H4": ...},
  "dominant_cause": "H<n>" | null,
- "reasoning": "one or two sentences, for the log"}
+ "reasoning": "your reasoning for this action"}
 
 To finish:
 {"kind": "conclude",
@@ -95,7 +95,7 @@ To finish:
  "confidence": 0.0-1.0 | null,
  "evidence_cited": [{"experiment": "E<n>", "supports": "mechanism|target_claim|potency|target_engagement"}],
  "beliefs": {"H1": ..., "H2": ..., "H3": ..., "H4": ...},
- "reasoning": "one or two sentences, for the log"}
+ "reasoning": "your reasoning for this action"}
 
 Field shapes:
 - beliefs: an object carrying every hypothesis id, each value a number in
