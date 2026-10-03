@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from contract import Action, EvidenceCitation, State
+from contract import Action, State
 from env import BRIEFING_EXPERIMENT_ID, Env, EnvRejection
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -78,7 +78,7 @@ def test_step_returns_matching_block_only(env):
 
 # --- structured carried verbatim alongside the strings ------------------------
 def test_structured_verbatim_for_non_conditional_experiments(env):
-    for eid in ("E1", "E2", "E4", "E5"):
+    for eid in ("E1", "E2", "E3", "E4", "E5"):
         env.reset()
         obs = env.step(run(eid))
         assert obs.structured == OBS[eid].get("structured", {}), eid
@@ -217,10 +217,18 @@ def test_conclude_accepts_citation_without_supports(env):
     assert env.state.concluded is True
 
 
-def test_conclude_accepts_evidencecitation_objects(env):
+def test_conclude_accepts_full_citation_dict(env):
     env.reset()
     env.step(conclude(dominant_cause="H4",
-                      evidence_cited=[EvidenceCitation(experiment="E6", supports="mechanism")]))
+                      evidence_cited=[{"experiment": "E6", "supports": "mechanism"}]))
+    assert env.state.concluded is True
+
+
+@pytest.mark.parametrize("supports", ["mechanism", "target_claim", "potency", "target_engagement"])
+def test_conclude_accepts_every_supports_value(env, supports):
+    env.reset()
+    env.step(conclude(dominant_cause="H4",
+                      evidence_cited=[{"experiment": "E6", "supports": supports}]))
     assert env.state.concluded is True
 
 
@@ -276,6 +284,89 @@ def test_malformed_conclude_does_not_end_episode(env):
     assert s.concluded is False and s.budget_remaining == 8
     env.step(run("E4"))                       # still allowed
     assert env.state.experiments_run == ["E4"]
+
+
+# --- trajectory capture: the auditor checks PR1-PR4 from this alone -----------
+def test_trajectory_records_one_turn_per_accepted_step(env):
+    env.reset()
+    env.step(run("E1", buffer="hepes_without_stabilisers", coa_mM=0.0, compound_uM=50.0))
+    env.step(e6_action(controls=["bacteria-free filter"]))
+    env.step(conclude(dominant_cause="H4", evidence_cited=[{"experiment": "E6"}]))
+    traj = env.trajectory
+    assert traj.scenario_id == "falsifylab.v0_1.pptt_programme"
+    assert [t.index for t in traj.turns] == [0, 1, 2]
+    assert [t.action.kind for t in traj.turns] == ["run_experiment", "run_experiment", "conclude"]
+
+
+def test_trajectory_captures_declared_parameters_verbatim(env):
+    env.reset()
+    env.step(run("E3", atc_free_days=3, read_day=10, normalisation_control="OD600"))
+    env.step(e6_action(controls=["bacteria-free filter", "DMSO vehicle"]))
+    turns = env.trajectory.turns
+    assert turns[0].action.parameters == {
+        "atc_free_days": 3, "read_day": 10, "normalisation_control": "OD600",
+    }
+    assert turns[1].action.parameters["arms"] == _E6_ALL
+    assert turns[1].action.parameters["controls"] == ["bacteria-free filter", "DMSO vehicle"]
+
+
+def test_trajectory_conclude_turn_has_no_observation(env):
+    env.reset()
+    env.step(run("E4"))
+    env.step(conclude(dominant_cause="H4", evidence_cited=[{"experiment": "E4"}]))
+    turns = env.trajectory.turns
+    assert turns[0].observation is not None and turns[0].observation.experiment_id == "E4"
+    assert turns[1].observation is None               # conclude turn, per CONTRACT.md
+
+
+def test_refused_purchase_is_not_a_turn(env):
+    env.reset()
+    env.step(run("E2"))                                # 4
+    env.step(run("E2"))                                # 8 -> budget 0
+    with pytest.raises(EnvRejection):
+        env.step(run("E4"))                            # over budget, refused
+    with pytest.raises(EnvRejection):
+        env.step(run("E6", arms=["parent_diacid"]))    # EC1, refused
+    with pytest.raises(EnvRejection):
+        env.step(conclude(evidence_cited=["bare"]))    # malformed, refused
+    assert [t.index for t in env.trajectory.turns] == [0, 1]   # only the two accepted E2 runs
+
+
+def test_trajectory_records_same_experiment_twice(env):
+    env.reset()
+    env.step(run("E4"))
+    env.step(run("E4"))
+    assert [t.action.experiment_id for t in env.trajectory.turns] == ["E4", "E4"]
+
+
+def test_trajectory_is_a_defensive_copy(env):
+    env.reset()
+    env.step(run("E3", atc_free_days=3, read_day=10, normalisation_control="OD600"))
+    leaked = env.trajectory
+    leaked.turns.clear()
+    leaked2 = env.trajectory
+    leaked2.turns[0].action.parameters["read_day"] = 999
+    fresh = env.trajectory
+    assert len(fresh.turns) == 1                       # clear() on the copy did not empty the log
+    assert fresh.turns[0].action.parameters["read_day"] == 10   # mutation did not reach the log
+
+
+def test_trajectory_snapshots_action_at_step_time(env):
+    """A caller that reuses and mutates one parameters dict must not rewrite a
+    turn already recorded."""
+    env.reset()
+    params = {"atc_free_days": 3, "read_day": 10, "normalisation_control": "OD600"}
+    env.step(Action(kind="run_experiment", experiment_id="E3", parameters=params))
+    params["read_day"] = 14                            # mutate after the step
+    assert env.trajectory.turns[0].action.parameters["read_day"] == 10
+
+
+def test_trajectory_reset_clears_turns(env):
+    env.reset()
+    env.step(run("E4"))
+    assert len(env.trajectory.turns) == 1
+    env.reset()
+    assert env.trajectory.turns == []
 
 
 # --- unknown experiment -------------------------------------------------------

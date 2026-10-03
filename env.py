@@ -3,7 +3,8 @@
 Implements the Env side of CONTRACT.md:
     Env.reset() -> Observation
     Env.step(action: Action) -> Observation
-    Env.state -> State        (env-owned; nothing outside Env writes to it)
+    Env.state -> State              (env-owned; nothing outside Env writes to it)
+    Env.trajectory -> Trajectory    (the accepted turns so far, for the auditor)
 
 It replays the blocks in auditor/expected_observations.json and enforces the
 purchase rules. It does NOT score and does NOT know the answer: it never loads
@@ -12,11 +13,18 @@ the gold answer belong to the auditor; the environment's only jobs are to charge
 the budget, hand back the right observation, and faithfully record what the
 agent declared so the auditor can judge it from the trajectory alone.
 
-Refusals (over budget, too few E6 arms, a purchase after the episode ended, or
-a conclude whose evidence_cited is not structured) raise EnvRejection with a
-reason. A refusal is not an Observation — the experiment did not run and nothing
-was charged. A conclude's citations must be {experiment, supports?} objects, so
-the auditor judges them structurally and never text-matches.
+Scenario specifics live entirely in the JSON bundle this Env is pointed at
+(agent/briefing.json, agent/experiments.json, auditor/expected_observations.json).
+No experiment id, hypothesis id or scientific value is hardcoded here.
+
+Refusals raise EnvRejection with a reason: over budget, too few E6 arms, a
+purchase after the episode ended, an unknown experiment, or a conclude whose
+evidence_cited is not structured. A refusal is not an Observation and is not a
+Turn — the experiment did not run, nothing was charged, and State is unchanged.
+A conclude's citations must be {experiment, supports?} objects so the auditor
+judges them structurally and never text-matches (a prose citation is an
+auditor-invisible reward-hack loophole, per the ENV WORKSTREAM note in
+CONTRACT.md).
 """
 from __future__ import annotations
 
@@ -26,7 +34,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Optional, Union
 
-from contract import SUPPORTS, Action, EvidenceCitation, Observation, Result, State
+from contract import Action, Observation, Result, State, Trajectory, Turn
 
 BRIEFING_EXPERIMENT_ID = "__briefing__"
 
@@ -34,10 +42,16 @@ BRIEFING_EXPERIMENT_ID = "__briefing__"
 _E6_ARMS = ("parent_diacid", "diethyl_ester", "monoacid")
 _E6_MIN_ARMS = 3
 
+# CONTRACT.md: the closed set a citation's optional `supports` may take. Defined
+# here, not imported, because main's contract.py models a citation as a plain
+# dict (no EvidenceCitation dataclass) — the environment validates that shape.
+_SUPPORTS = ("mechanism", "target_claim", "potency", "target_engagement")
+
 
 class EnvRejection(Exception):
-    """A purchase the environment refuses. `reason` is human-readable. The
-    experiment did not run, nothing was charged, and State is unchanged."""
+    """A purchase or conclusion the environment refuses. `reason` is
+    human-readable. Nothing ran, nothing was charged, State is unchanged, and no
+    Turn was recorded."""
 
     def __init__(self, reason: str) -> None:
         super().__init__(reason)
@@ -65,6 +79,7 @@ class Env:
         self._observations: dict[str, dict] = observations
 
         self._state: State = self._fresh_state()
+        self._turns: list[Turn] = []
 
     # --- state (env-owned) ----------------------------------------------------
     def _fresh_state(self) -> State:
@@ -83,15 +98,27 @@ class Env:
         s = self._state
         return replace(s, experiments_run=list(s.experiments_run))
 
+    @property
+    def trajectory(self) -> Trajectory:
+        """A defensive deep copy of the episode so far, one Turn per accepted
+        step (a refused purchase is not a turn — nothing ran). Each Turn carries
+        the agent's action verbatim, including every declared parameter (buffer,
+        atc_free_days, read_day, normalisation_control, arms, controls, ...), so
+        the auditor can check PR1-PR4 from the trajectory alone. The conclude
+        turn's observation is None, per CONTRACT.md."""
+        return Trajectory(scenario_id=self._scenario_id, turns=deepcopy(self._turns))
+
     # --- episode lifecycle ----------------------------------------------------
     def reset(self) -> Observation:
         self._state = self._fresh_state()
+        self._turns = []
         return self._briefing_observation()
 
     def step(self, action: Action) -> Observation:
         if action.kind == "conclude":
             self._check_citations(action.evidence_cited)  # malformed -> refuse; episode not ended
             self._state.concluded = True                  # cost 0; episode ends
+            self._record(action, None)                     # conclude turn: observation is None
             return self._briefing_observation()
         if action.kind != "run_experiment":
             raise EnvRejection(f"unknown action kind: {action.kind!r}")
@@ -129,52 +156,67 @@ class Env:
         self._state.total_cost += cost
         self._state.experiments_run.append(eid)
 
-        return self._build_observation(eid, params)
+        observation = self._build_observation(eid, params)
+        self._record(action, observation)
+        return observation
 
     # --- conclude validation --------------------------------------------------
     def _check_citations(self, evidence_cited) -> None:
-        """A conclude's citations must be structured: each entry an object
-        {experiment, supports?} — experiment required and a known id, supports
-        (if given) one of SUPPORTS. Bare strings, or any other malformed entry,
-        are refused the same way a missing required parameter is. The agent
-        cites experiments, not prose, so the auditor never text-matches.
-        None or an empty list means 'no citations' and is allowed."""
+        """conclude.evidence_cited, when present, must be structured citations:
+        each entry a dict {"experiment": <known id>, "supports"?: <_SUPPORTS>}.
+        `experiment` is required and must be a known experiment id; `supports`
+        may be omitted but, if given, must be one of _SUPPORTS.
+
+        A bare string — a prose citation — is refused: the auditor scores
+        citations structurally and never text-matches, so an unstructured
+        citation would be an auditor-invisible reward-hack loophole. None is
+        allowed: citing nothing is a sufficiency question the auditor owns, not
+        a shape error the environment owns."""
         if evidence_cited is None:
             return
         if not isinstance(evidence_cited, (list, tuple)):
             raise EnvRejection(
                 "malformed conclude: evidence_cited must be a list of "
-                "{experiment, supports?} objects"
+                "{experiment, supports?} citation objects, got "
+                f"{type(evidence_cited).__name__}"
             )
         for i, c in enumerate(evidence_cited):
-            if isinstance(c, EvidenceCitation):
-                experiment, supports = c.experiment, c.supports
-            elif isinstance(c, dict):
-                if "experiment" not in c:
-                    raise EnvRejection(
-                        f"malformed conclude: evidence_cited[{i}] is missing required 'experiment'"
-                    )
-                experiment, supports = c["experiment"], c.get("supports")
-            else:
+            if not isinstance(c, dict):
                 raise EnvRejection(
-                    f"malformed conclude: evidence_cited[{i}] must be an object "
-                    f"{{experiment, supports?}}, got {type(c).__name__} {c!r}. "
-                    "Bare strings are rejected; the agent cites experiments, not prose."
+                    f"malformed conclude: evidence_cited[{i}] is a bare "
+                    f"{type(c).__name__} ({c!r}); a citation must be an object "
+                    "{experiment, supports?}. Bare strings are rejected — a prose "
+                    "citation is an auditor-invisible reward-hack loophole."
                 )
-            if not experiment:
+            if not c.get("experiment"):
                 raise EnvRejection(
-                    f"malformed conclude: evidence_cited[{i}] is missing required 'experiment'"
+                    f"malformed conclude: evidence_cited[{i}] is missing the required "
+                    f"'experiment' field: {c!r}"
                 )
+            experiment = c["experiment"]
             if experiment not in self._costs:
                 raise EnvRejection(
-                    f"malformed conclude: evidence_cited[{i}] experiment {experiment!r} "
-                    f"is not a known experiment id"
+                    f"malformed conclude: evidence_cited[{i}] cites unknown experiment "
+                    f"{experiment!r}; valid ids are {sorted(self._costs)}"
                 )
-            if supports is not None and supports not in SUPPORTS:
+            supports = c.get("supports")
+            if supports is not None and supports not in _SUPPORTS:
                 raise EnvRejection(
-                    f"malformed conclude: evidence_cited[{i}] supports {supports!r} "
-                    f"must be one of {', '.join(SUPPORTS)}"
+                    f"malformed conclude: evidence_cited[{i}] has invalid supports "
+                    f"{supports!r}; must be one of {', '.join(_SUPPORTS)} or omitted"
                 )
+
+    # --- trajectory capture ---------------------------------------------------
+    def _record(self, action: Action, observation: Optional[Observation]) -> None:
+        """Append one accepted turn. The action is deep-copied so a later caller
+        mutation cannot rewrite what was declared at this turn."""
+        self._turns.append(
+            Turn(
+                index=len(self._turns),
+                action=deepcopy(action),
+                observation=deepcopy(observation),
+            )
+        )
 
     # --- observation assembly -------------------------------------------------
     def _briefing_observation(self) -> Observation:
