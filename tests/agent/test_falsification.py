@@ -24,14 +24,16 @@ def load_prompt() -> str:
 
 
 class StubClient:
-    """Returns canned replies in order and records the prompts it was given."""
+    """Returns canned replies in order and records, per call, the system
+    prompt and the user side of the conversation it was given."""
 
     def __init__(self, *replies: str) -> None:
         self.replies = list(replies)
         self.prompts: list[tuple[str, str]] = []
 
-    def __call__(self, system_prompt: str, user_prompt: str) -> str:
-        self.prompts.append((system_prompt, user_prompt))
+    def complete(self, system: str, messages: list[dict]) -> str:
+        user_text = "\n\n".join(m["content"] for m in messages if m["role"] == "user")
+        self.prompts.append((system, user_text))
         return self.replies.pop(0) if self.replies else "not json"
 
 
