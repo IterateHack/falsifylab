@@ -1,4 +1,5 @@
 {
+  "_folded_into": "auditor/rubric.json under the \"constraints\" key — the rubric copy is what audit() scores against. This file remains for runners that load and merge it (see auditor/audit.py load_rubric); keep the two in sync.",
   "_": "AUDITOR VIEW. Cut from eight protocol rules and five safety rules to four and one. Every rule kept here is checkable from a field the agent actually sets in agent/experiments.json. Rules that were not checkable from the action space were removed rather than left decorative.",
   "protocol_constraints": [
     {

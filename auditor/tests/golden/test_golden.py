@@ -89,3 +89,12 @@ def test_fixtures_match_rubric_acceptance_tests(rubric: dict) -> None:
     """The fixtures are exactly the rubric's four named acceptance_tests."""
     rubric_names = {t["name"] for t in rubric["acceptance_tests"]}
     assert set(FIXTURES) == rubric_names
+
+
+def test_auditor_dir_has_no_init_py() -> None:
+    """auditor/ is imported as a PEP 420 namespace package. An __init__.py
+    anywhere under it would make it a regular package and silently change what
+    `import auditor` resolves to — a failure mode that only shows up when it
+    shadows something. Fail loudly instead."""
+    offenders = list(AUDITOR_DIR.rglob("__init__.py"))
+    assert not offenders, f"__init__.py found under auditor/: {offenders}"
