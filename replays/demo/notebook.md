@@ -1,4 +1,4 @@
-# Lab notebook - run `run_001`
+# Lab notebook - run `demo`
 
 ## Hypothesis
 
