@@ -72,7 +72,7 @@ def test_step_returns_matching_block_only(env):
     env.reset()
     obs = env.step(run("E4"))
     assert obs.experiment_id == "E4"
-    assert obs.informativeness == OBS["E4"]["informativeness"]
+    assert obs.informativeness == "UNRATED"
     assert [r.value for r in obs.results] == [r["value"] for r in OBS["E4"]["results"]]
 
 

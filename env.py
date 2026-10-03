@@ -223,7 +223,7 @@ class Env:
         return Observation(
             experiment_id=BRIEFING_EXPERIMENT_ID,
             results=[Result(value=f, source="agent/briefing.json") for f in self._starting_facts],
-            informativeness="NONE",
+            informativeness="UNRATED",
             cost=0,
             structured={},
         )
@@ -244,7 +244,12 @@ class Env:
         return Observation(
             experiment_id=eid,
             results=results,
-            informativeness=block["informativeness"],
+            # "UNRATED", not block["informativeness"]: the rating is auditor-view
+            # metadata in expected_observations.json and must never reach the
+            # agent — it names which experiments matter. It is also withheld
+            # from the recorded trajectory, which must reflect what the agent
+            # actually saw. The auditor scores on `structured`, never this field.
+            informativeness="UNRATED",
             cost=self._costs[eid],
             structured=structured,
         )

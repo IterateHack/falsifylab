@@ -62,7 +62,10 @@ class Observation:
     """
     experiment_id: ExperimentId
     results: list[Result]
-    informativeness: str          # HIGH|MEDIUM|LOW|DECISIVE|HIGH_CONDITIONAL|MEDIUM_CONDITIONAL
+    informativeness: str          # "UNRATED" from a live Env — the ratings in
+                                  # expected_observations.json are auditor-view and
+                                  # never reach the agent. Logged episodes may carry
+                                  # the real rating; the auditor ignores the field.
     cost: int
     structured: dict = field(default_factory=dict)
 

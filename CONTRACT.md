@@ -17,7 +17,10 @@ Result(value: str, source: str)                      # one readout line (agent/U
 Observation(                                         # Env.step output
     experiment_id: ExperimentId,                     # "__briefing__" from reset()
     results: list[Result],
-    informativeness: str,   # HIGH|MEDIUM|LOW|DECISIVE|HIGH_CONDITIONAL|MEDIUM_CONDITIONAL
+    informativeness: str,   # "UNRATED" from a live Env. The HIGH|...|DECISIVE ratings
+                            # in expected_observations.json are auditor-view and never
+                            # reach the agent — they name which experiments matter.
+                            # The auditor ignores the field.
     cost: int,
     structured: dict = {})  # machine-readable numbers the auditor scores on, e.g.
                             # E4 -> {"best_IC50_nM": 18}. Auditor reads this, never
