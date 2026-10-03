@@ -48,7 +48,9 @@ def run_curriculum(
 
     run_dir = Path(runs_dir) / run_id
     # The API creates the log up front so an SSE client can subscribe before the
-    # first event is appended; the CLI lets us make it here.
+    # first event is appended; the CLI lets us make it here. Only close what we
+    # opened - the API keeps its log alive to serve the stream.
+    owns_log = existing_log is None
     log = existing_log or EventLog(run_dir, run_id)
     notebook = Notebook(run_id=run_id, hypothesis=curriculum.hypothesis)
 
@@ -115,6 +117,8 @@ def run_curriculum(
         cal = notebook.calibration_summary()
         log.append("run_finished", {"calibration": cal})
         _persist(run_dir, notebook)
+        if owns_log:
+            log.close()          # releases the run-directory lock
 
     return RunResult(run_id=run_id, run_dir=run_dir, notebook=notebook, log=log)
 
