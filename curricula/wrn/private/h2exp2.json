@@ -1,0 +1,252 @@
+{
+  "min_lines_per_tissue": 5,
+  "penalties": [
+    {
+      "any_of": [
+        "because it is colorectal",
+        "colorectal cancer causes",
+        "the tissue itself drives",
+        "lineage causes the dependency",
+        "tissue of origin is the cause"
+      ],
+      "id": "tissue_as_cause",
+      "weight": 2.0,
+      "why": "lineage correlates with MSI status; it is not the cause"
+    }
+  ],
+  "ranking_most_to_least_dependent": [
+    "uterus",
+    "hepatopancreatic ampulla",
+    "intestine",
+    "liver",
+    "internal female genitalia",
+    "kidney",
+    "renal system",
+    "prostate gland",
+    "subdivision of digestive tract",
+    "Peripheral Nervous System",
+    "bone tissue",
+    "pancreas",
+    "uterine cervix",
+    "other",
+    "breast",
+    "lymphoid tissue",
+    "bile duct",
+    "skin of body",
+    "craniocervical region",
+    "lung",
+    "external soft tissue zone",
+    "thyroid gland",
+    "testis",
+    "eye",
+    "hematopoietic tissue",
+    "pleura"
+  ],
+  "rubric": [
+    {
+      "any_of": [
+        "microsatellite instability",
+        "msi",
+        "mismatch repair",
+        "mmr-deficient",
+        "mmr deficient"
+      ],
+      "id": "msi",
+      "points": "names microsatellite instability / mismatch-repair deficiency as the underlying state, not the tissue itself",
+      "weight": 3.0
+    },
+    {
+      "any_of": [
+        "confound",
+        "lineage is a proxy",
+        "proxy for",
+        "not the tissue",
+        "within-lineage",
+        "within lineage",
+        "stratif",
+        "enriched in"
+      ],
+      "id": "lineage_confound",
+      "points": "treats lineage as a proxy for the real variable rather than the cause",
+      "weight": 2.5
+    },
+    {
+      "any_of": [
+        "synthetic lethal",
+        "synthetic-lethal",
+        "synthetic lethality"
+      ],
+      "id": "synthetic_lethal",
+      "points": "frames the relationship as synthetic lethality",
+      "weight": 2.0
+    },
+    {
+      "any_of": [
+        "ta repeat",
+        "ta-repeat",
+        "repeat expansion",
+        "cruciform",
+        "secondary structure",
+        "helicase"
+      ],
+      "id": "mechanism",
+      "points": "offers a mechanism (expanded TA repeats forming secondary structure that WRN helicase resolves)",
+      "weight": 1.5
+    },
+    {
+      "any_of": [
+        "msi status",
+        "msi-h",
+        "msi high",
+        "stratify",
+        "annotate",
+        "label the lines",
+        "test within"
+      ],
+      "id": "next_test",
+      "points": "proposes testing MSI status directly rather than stopping at lineage",
+      "weight": 1.0
+    }
+  ],
+  "scoring": "Rank correlation on tissues ordered by the fraction of cell lines with WRN gene_effect <= -0.5, plus a mechanism rubric.",
+  "source": "Open Targets Platform depMapEssentiality, WRN (ENSG00000165392)",
+  "tissue_stats": {
+    "Peripheral Nervous System": {
+      "fraction_dependent": 0.0833,
+      "median_gene_effect": -0.1461,
+      "n_lines": 48
+    },
+    "bile duct": {
+      "fraction_dependent": 0.027,
+      "median_gene_effect": -0.2006,
+      "n_lines": 37
+    },
+    "bone tissue": {
+      "fraction_dependent": 0.0678,
+      "median_gene_effect": -0.1327,
+      "n_lines": 59
+    },
+    "breast": {
+      "fraction_dependent": 0.037,
+      "median_gene_effect": -0.0857,
+      "n_lines": 54
+    },
+    "craniocervical region": {
+      "fraction_dependent": 0.0253,
+      "median_gene_effect": -0.1099,
+      "n_lines": 79
+    },
+    "external soft tissue zone": {
+      "fraction_dependent": 0.0185,
+      "median_gene_effect": -0.127,
+      "n_lines": 54
+    },
+    "eye": {
+      "fraction_dependent": 0.0,
+      "median_gene_effect": -0.2523,
+      "n_lines": 16
+    },
+    "hematopoietic tissue": {
+      "fraction_dependent": 0.0,
+      "median_gene_effect": -0.0498,
+      "n_lines": 50
+    },
+    "hepatopancreatic ampulla": {
+      "fraction_dependent": 0.2,
+      "median_gene_effect": -0.1206,
+      "n_lines": 5
+    },
+    "internal female genitalia": {
+      "fraction_dependent": 0.1186,
+      "median_gene_effect": -0.1923,
+      "n_lines": 59
+    },
+    "intestine": {
+      "fraction_dependent": 0.1875,
+      "median_gene_effect": -0.1266,
+      "n_lines": 64
+    },
+    "kidney": {
+      "fraction_dependent": 0.1143,
+      "median_gene_effect": -0.1709,
+      "n_lines": 35
+    },
+    "liver": {
+      "fraction_dependent": 0.12,
+      "median_gene_effect": -0.125,
+      "n_lines": 25
+    },
+    "lung": {
+      "fraction_dependent": 0.0221,
+      "median_gene_effect": -0.1017,
+      "n_lines": 136
+    },
+    "lymphoid tissue": {
+      "fraction_dependent": 0.0309,
+      "median_gene_effect": -0.0657,
+      "n_lines": 97
+    },
+    "other": {
+      "fraction_dependent": 0.0421,
+      "median_gene_effect": -0.1154,
+      "n_lines": 95
+    },
+    "pancreas": {
+      "fraction_dependent": 0.06,
+      "median_gene_effect": -0.1595,
+      "n_lines": 50
+    },
+    "pleura": {
+      "fraction_dependent": 0.0,
+      "median_gene_effect": -0.1482,
+      "n_lines": 21
+    },
+    "prostate gland": {
+      "fraction_dependent": 0.1,
+      "median_gene_effect": -0.061,
+      "n_lines": 10
+    },
+    "renal system": {
+      "fraction_dependent": 0.1143,
+      "median_gene_effect": -0.0974,
+      "n_lines": 35
+    },
+    "skin of body": {
+      "fraction_dependent": 0.0256,
+      "median_gene_effect": -0.1156,
+      "n_lines": 78
+    },
+    "subdivision of digestive tract": {
+      "fraction_dependent": 0.0909,
+      "median_gene_effect": -0.1089,
+      "n_lines": 77
+    },
+    "testis": {
+      "fraction_dependent": 0.0,
+      "median_gene_effect": -0.0917,
+      "n_lines": 5
+    },
+    "thyroid gland": {
+      "fraction_dependent": 0.0,
+      "median_gene_effect": -0.1023,
+      "n_lines": 11
+    },
+    "uterine cervix": {
+      "fraction_dependent": 0.0526,
+      "median_gene_effect": -0.0932,
+      "n_lines": 19
+    },
+    "uterus": {
+      "fraction_dependent": 0.4,
+      "median_gene_effect": -0.1754,
+      "n_lines": 35
+    }
+  },
+  "top_tissues": [
+    "uterus",
+    "hepatopancreatic ampulla",
+    "intestine",
+    "liver",
+    "internal female genitalia"
+  ]
+}
