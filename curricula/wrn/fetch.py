@@ -138,7 +138,6 @@ def main() -> None:
 
     print("resolving symbols")
     ids = resolve(PANEL)
-    by_id = {v: k for k, v in ids.items()}
 
     print("fetching DepMap screens")
     rows: list[dict[str, Any]] = []
