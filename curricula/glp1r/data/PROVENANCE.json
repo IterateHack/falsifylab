@@ -12,18 +12,6 @@
     "source": "computed from 7KI0"
   },
   {
-    "dataset": "exp3_analogues.csv",
-    "detail": "native GLP-1 sequence anchored to the reviewed record: HAEGTFTSDVSS...",
-    "kind": "fetched",
-    "source": "UniProt P01275 (proglucagon)"
-  },
-  {
-    "dataset": "exp3_analogues.csv",
-    "detail": "9 analogues; sequence modifications transcribed",
-    "kind": "transcribed",
-    "source": "primary literature + product labels"
-  },
-  {
     "dataset": "exp5_ortholog_alignment.csv",
     "detail": "human GLP1R, 463 aa",
     "kind": "fetched",
@@ -54,6 +42,36 @@
     "source": "computed from UniProt orthologues"
   },
   {
+    "dataset": "exp4_chembl_activities.csv",
+    "detail": "2365 EC50 records across 1720 molecules",
+    "kind": "fetched",
+    "source": "ChEMBL REST activity (CHEMBL1784, EC50)"
+  },
+  {
+    "dataset": "exp4_dose_response.csv",
+    "detail": "570 points for 14 molecules; curve points are a deterministic four-parameter-logistic rendering (seed 20261003) of the real potencies, because ChEMBL stores summary EC50s not raw curves",
+    "kind": "derived",
+    "source": "simulated from real ChEMBL consensus pEC50"
+  },
+  {
+    "dataset": "private/exp4.json",
+    "detail": "consensus pEC50 for 14 molecules",
+    "kind": "computed",
+    "source": "computed from ChEMBL"
+  },
+  {
+    "dataset": "exp3_analogues.csv",
+    "detail": "native GLP-1 sequence reused because UniProt was unreachable: HAEGTFTSDVSS...",
+    "kind": "reused",
+    "source": "UniProt P01275 (via previous build)"
+  },
+  {
+    "dataset": "exp3_analogues.csv",
+    "detail": "9 analogues; sequence modifications transcribed",
+    "kind": "transcribed",
+    "source": "primary literature + product labels"
+  },
+  {
     "dataset": "exp1_gwas_targets.csv",
     "detail": "body mass index: top 90 of 6549 associated targets",
     "kind": "fetched",
@@ -76,23 +94,5 @@
     "detail": "30 of 174 candidate genes have an approved drug",
     "kind": "fetched",
     "source": "Open Targets Platform"
-  },
-  {
-    "dataset": "exp4_chembl_activities.csv",
-    "detail": "2365 EC50 records across 1720 molecules",
-    "kind": "fetched",
-    "source": "ChEMBL REST activity (CHEMBL1784, EC50)"
-  },
-  {
-    "dataset": "exp4_dose_response.csv",
-    "detail": "570 points for 14 molecules; curve points are a deterministic four-parameter-logistic rendering (seed 20261003) of the real potencies, because ChEMBL stores summary EC50s not raw curves",
-    "kind": "derived",
-    "source": "simulated from real ChEMBL consensus pEC50"
-  },
-  {
-    "dataset": "private/exp4.json",
-    "detail": "consensus pEC50 for 14 molecules",
-    "kind": "computed",
-    "source": "computed from ChEMBL"
   }
 ]

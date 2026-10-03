@@ -13,6 +13,7 @@ Run:  python -m curricula.wrn.fetch
 from __future__ import annotations
 
 import json
+import random
 import time
 from collections import defaultdict
 from pathlib import Path
@@ -68,21 +69,49 @@ query($ids: [String!]!) {
 """
 
 
-def gql(query: str, variables: dict[str, Any], retries: int = 3) -> dict[str, Any]:
+class UpstreamUnavailable(RuntimeError):
+    """A public data source is down. Not a bug in this repository."""
+
+
+RETRYABLE_STATUS = {408, 425, 429, 500, 502, 503, 504}
+
+
+def gql(query: str, variables: dict[str, Any], retries: int = 5) -> dict[str, Any]:
+    last = ""
     for attempt in range(retries):
         try:
             r = requests.post(OT_URL, json={"query": query, "variables": variables},
                               headers=UA, timeout=120)
+            if r.status_code in RETRYABLE_STATUS:
+                last = f"HTTP {r.status_code}"
+                raise requests.HTTPError(last, response=r)
             r.raise_for_status()
             body = r.json()
             if "errors" in body:
-                raise RuntimeError(body["errors"])
+                # A GraphQL error is a bad query, not an outage - fail fast.
+                raise UpstreamUnavailable(f"Open Targets rejected the query: {body['errors']}")
             return body["data"]
-        except Exception:
-            if attempt == retries - 1:
-                raise
-            time.sleep(2 * (attempt + 1))
-    raise AssertionError("unreachable")
+        except UpstreamUnavailable:
+            raise
+        except requests.HTTPError as exc:
+            status = getattr(exc.response, "status_code", None)
+            if status is not None and status not in RETRYABLE_STATUS:
+                raise UpstreamUnavailable(
+                    f"Open Targets returned HTTP {status}. Not a transient failure."
+                ) from exc
+            last = f"HTTP {status}"
+        except requests.RequestException as exc:
+            last = type(exc).__name__
+        if attempt < retries - 1:
+            delay = min(30.0, 2.0 * (2 ** attempt)) * (0.5 + random.random())
+            print(f"  [Open Targets] {last}; retrying in {delay:.0f}s "
+                  f"({attempt + 2}/{retries})", flush=True)
+            time.sleep(delay)
+    raise UpstreamUnavailable(
+        f"Open Targets is unavailable ({last}) after {retries} attempts.\n"
+        f"  This is an outage at the data provider, not a problem with this repo.\n"
+        f"  The committed datasets remain valid; retry later."
+    )
 
 
 def resolve(symbols: list[str]) -> dict[str, str]:

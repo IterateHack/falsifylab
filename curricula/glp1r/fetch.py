@@ -19,6 +19,7 @@ import argparse
 import csv
 import json
 import math
+import random
 import time
 from collections import defaultdict
 from pathlib import Path
@@ -45,34 +46,86 @@ def note(dataset: str, source: str, detail: str, kind: str = "fetched") -> None:
     print(f"  [{kind}] {dataset}: {detail}")
 
 
-def gql(query: str, variables: dict[str, Any], retries: int = 3) -> dict[str, Any]:
+class UpstreamUnavailable(RuntimeError):
+    """A public data source is down. Not a bug in this repository."""
+
+
+# 5xx and 429 are worth waiting out; 404 means the identifier is wrong and no
+# amount of retrying will help.
+RETRYABLE_STATUS = {408, 425, 429, 500, 502, 503, 504}
+
+
+def gql(query: str, variables: dict[str, Any], retries: int = 5) -> dict[str, Any]:
+    last = ""
     for attempt in range(retries):
         try:
             r = requests.post(OT_URL, json={"query": query, "variables": variables},
                               headers=UA, timeout=120)
+            if r.status_code in RETRYABLE_STATUS:
+                last = f"HTTP {r.status_code}"
+                raise requests.HTTPError(last, response=r)
             r.raise_for_status()
             body = r.json()
             if "errors" in body:
-                raise RuntimeError(f"GraphQL errors: {body['errors']}")
+                # A GraphQL error is a bad query, not an outage - fail fast.
+                raise UpstreamUnavailable(f"Open Targets rejected the query: {body['errors']}")
             return body["data"]
-        except Exception:
-            if attempt == retries - 1:
-                raise
-            time.sleep(2 * (attempt + 1))
-    raise AssertionError("unreachable")
+        except UpstreamUnavailable:
+            raise
+        except requests.HTTPError as exc:
+            status = getattr(exc.response, "status_code", None)
+            if status is not None and status not in RETRYABLE_STATUS:
+                raise UpstreamUnavailable(
+                    f"Open Targets returned HTTP {status}. Not a transient failure."
+                ) from exc
+            last = f"HTTP {status}"
+        except requests.RequestException as exc:
+            last = type(exc).__name__
+        if attempt < retries - 1:
+            delay = min(30.0, 2.0 * (2 ** attempt)) * (0.5 + random.random())
+            print(f"  [Open Targets] {last}; retrying in {delay:.0f}s "
+                  f"({attempt + 2}/{retries})", flush=True)
+            time.sleep(delay)
+    raise UpstreamUnavailable(
+        f"Open Targets is unavailable ({last}) after {retries} attempts.\n"
+        f"  This is an outage at the data provider, not a problem with this repo.\n"
+        f"  The committed datasets remain valid; retry later."
+    )
 
 
-def get_json(url: str, params: dict[str, Any] | None = None, retries: int = 3) -> dict[str, Any]:
+def get_json(url: str, params: dict[str, Any] | None = None,
+             retries: int = 5, service: str = "upstream") -> dict[str, Any]:
+    last = ""
     for attempt in range(retries):
         try:
             r = requests.get(url, params=params, headers=UA, timeout=120)
+            if r.status_code in RETRYABLE_STATUS:
+                last = f"HTTP {r.status_code}"
+                raise requests.HTTPError(last, response=r)
             r.raise_for_status()
             return r.json()
-        except Exception:
-            if attempt == retries - 1:
-                raise
-            time.sleep(2 * (attempt + 1))
-    raise AssertionError("unreachable")
+        except requests.HTTPError as exc:
+            status = getattr(exc.response, "status_code", None)
+            if status is not None and status not in RETRYABLE_STATUS:
+                raise UpstreamUnavailable(
+                    f"{service} returned HTTP {status} for {url}. That is not a "
+                    f"transient failure - check the identifier."
+                ) from exc
+            last = f"HTTP {status}"
+        except requests.RequestException as exc:
+            last = type(exc).__name__
+        if attempt < retries - 1:
+            delay = min(30.0, 2.0 * (2 ** attempt)) * (0.5 + random.random())
+            print(f"  [{service}] {last}; retrying in {delay:.0f}s "
+                  f"({attempt + 2}/{retries})", flush=True)
+            time.sleep(delay)
+    raise UpstreamUnavailable(
+        f"{service} is unavailable ({last}) after {retries} attempts: {url}\n"
+        f"  This is an outage at the data provider, not a problem with this repo.\n"
+        f"  The datasets in curricula/glp1r/data/ are already committed and valid -\n"
+        f"  you only need this script to rebuild them from source. Try again later,\n"
+        f"  or rebuild just the parts you need with --only."
+    )
 
 
 def write_csv(path: Path, rows: list[dict[str, Any]], fieldnames: list[str]) -> None:
@@ -374,21 +427,41 @@ DURATION_RANK = {"minutes": 0, "twice_daily": 1, "once_daily": 2, "once_weekly":
 def build_exp3() -> None:
     print("exp3: peptide engineering")
     # Ground the native sequence in a real record rather than retyping it.
-    j = get_json(f"{UNIPROT}/P01275.json",
-                 {"fields": "accession,sequence,ft_peptide"})
-    proglucagon = j["sequence"]["value"]
     glp1_7_37 = ""
-    for f in j.get("features", []):
-        desc = (f.get("description") or "").lower()
-        if f["type"] == "Peptide" and "glucagon-like peptide 1" in desc:
-            s, e = f["location"]["start"]["value"], f["location"]["end"]["value"]
-            cand = proglucagon[s - 1:e]
-            if cand.startswith("HA") and len(cand) >= 30:
-                glp1_7_37 = cand
-    if not glp1_7_37:                      # UniProt annotates GLP-1(7-36/37)
-        glp1_7_37 = proglucagon[97:128]
-    note("exp3_analogues.csv", "UniProt P01275 (proglucagon)",
-         f"native GLP-1 sequence anchored to the reviewed record: {glp1_7_37[:12]}...")
+    try:
+        j = get_json(f"{UNIPROT}/P01275.json",
+                     {"fields": "accession,sequence,ft_peptide"},
+                     service="UniProt")
+        proglucagon = j["sequence"]["value"]
+        for f in j.get("features", []):
+            desc = (f.get("description") or "").lower()
+            if f["type"] == "Peptide" and "glucagon-like peptide 1" in desc:
+                start, end = f["location"]["start"]["value"], f["location"]["end"]["value"]
+                cand = proglucagon[start - 1:end]
+                if cand.startswith("HA") and len(cand) >= 30:
+                    glp1_7_37 = cand
+        if not glp1_7_37:                  # UniProt annotates GLP-1(7-36/37)
+            glp1_7_37 = proglucagon[97:128]
+        note("exp3_analogues.csv", "UniProt P01275 (proglucagon)",
+             f"native GLP-1 sequence anchored to the reviewed record: {glp1_7_37[:12]}...")
+    except UpstreamUnavailable as exc:
+        # This call only anchors one sequence, and everything else in this
+        # experiment is transcribed anyway. Reuse what a previous build fetched
+        # rather than failing - but never invent it.
+        previous = PRIVATE / "exp3.json"
+        if not previous.exists():
+            raise UpstreamUnavailable(
+                f"{exc}\n  exp3 additionally has no previously built "
+                f"private/exp3.json to fall back on."
+            ) from exc
+        glp1_7_37 = json.loads(previous.read_text()).get("native_glp1_7_37", "")
+        if not glp1_7_37:
+            raise
+        print("  [UniProt] unavailable; reusing the native GLP-1 sequence recorded "
+              "by the previous build")
+        note("exp3_analogues.csv", "UniProt P01275 (via previous build)",
+             f"native GLP-1 sequence reused because UniProt was unreachable: "
+             f"{glp1_7_37[:12]}...", kind="reused")
 
     rows = []
     for name, backbone, pos8, acyl, cls, t_half, why in ANALOGUES:
@@ -643,7 +716,8 @@ def build_exp5() -> None:
     feats: list[dict[str, Any]] = []
     for acc, species in ORTHOLOGS:
         j = get_json(f"{UNIPROT}/{acc}.json",
-                     {"fields": "accession,id,sequence,ft_transmem,ft_topo_dom,organism_name"})
+                     {"fields": "accession,id,sequence,ft_transmem,ft_topo_dom,organism_name"},
+                     service="UniProt")
         if "sequence" not in j:
             raise RuntimeError(
                 f"UniProt {acc} ({species}) returned no sequence - the accession is "
@@ -815,15 +889,28 @@ def main() -> None:
     wanted = args.only.split(",") if args.only else list(BUILDERS)
     DATA.mkdir(parents=True, exist_ok=True)
     PRIVATE.mkdir(parents=True, exist_ok=True)
+    built, failed = [], []
     for key in wanted:
         key = key.strip()
         if key not in BUILDERS:
             raise SystemExit(f"unknown experiment {key!r}; choose from {list(BUILDERS)}")
-        BUILDERS[key]()
+        try:
+            BUILDERS[key]()
+            built.append(key)
+        except UpstreamUnavailable as exc:
+            # One provider being down should not discard the datasets the other
+            # providers just returned.
+            print(f"\n!! {key} could not be rebuilt:\n{exc}\n")
+            failed.append(key)
     prov_path = DATA / "PROVENANCE.json"
     existing = json.loads(prov_path.read_text()) if prov_path.exists() else []
     merged = [p for p in existing if p["dataset"] not in {q["dataset"] for q in PROVENANCE}]
     write_json(prov_path, merged + PROVENANCE)
+    if failed:
+        print(f"\nbuilt {built or 'nothing'}; could not rebuild {failed}.")
+        print("Existing files for those experiments are untouched and still valid.")
+        print(f"Retry later with:  python -m curricula.glp1r.fetch --only {','.join(failed)}")
+        raise SystemExit(1)
     print("\ndone. agent-visible data in data/, ground truth in private/")
 
 
