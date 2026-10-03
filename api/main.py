@@ -8,6 +8,7 @@ events over SSE as they are appended to the log.
 from __future__ import annotations
 
 import json
+import os
 import queue
 import threading
 import uuid
@@ -25,7 +26,7 @@ from engine.runner import run_curriculum
 from engine.specs import load_curriculum
 
 ROOT = Path(__file__).resolve().parent.parent
-RUNS_DIR = Path(__import__("os").environ.get("FL_RUNS_DIR", ROOT / "runs"))
+RUNS_DIR = Path(os.environ.get("FL_RUNS_DIR", ROOT / "runs"))
 REPLAYS_DIR = ROOT / "replays"
 CURRICULUM = ROOT / "curricula" / "glp1r"
 WEB_DIST = ROOT / "web" / "dist"

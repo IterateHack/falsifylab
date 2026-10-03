@@ -30,7 +30,6 @@ def _num(v: Any) -> float | None:
 
 def score(answer: Any, ground_truth: dict[str, Any]) -> dict[str, Any]:
     curves = ground_truth["curves"]
-    consensus = ground_truth["consensus_pec50"]
     truth_order = ground_truth["ranking_most_to_least_potent"]
 
     if not isinstance(answer, dict):
@@ -100,5 +99,6 @@ def score(answer: Any, ground_truth: dict[str, Any]) -> dict[str, Any]:
             "tolerance_log_units": TOLERANCE_LOG,
             "protocol": ground_truth["protocol"],
             "truncated_curves": [m for m, c in curves.items() if c["curve_truncated"]],
+            "consensus_pec50": ground_truth["consensus_pec50"],
         },
     }

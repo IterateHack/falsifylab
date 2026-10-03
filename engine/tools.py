@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .events import EventLog
-from .notebook import NotebookEntry, SECTION_ORDER, SECTION_TITLES
+from .notebook import NotebookEntry, SECTION_TITLES
 from .specs import ExperimentSpec
 
 ATTEMPT_SECTIONS = ("hypothesis_and_prediction", "plan", "what_i_did",

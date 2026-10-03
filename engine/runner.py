@@ -10,7 +10,7 @@ from typing import Any
 from .events import EventLog
 from .notebook import Notebook, NotebookEntry
 from .provider import AnthropicProvider, ModelConfig, Provider
-from .specs import Curriculum, load_curriculum
+from .specs import load_curriculum
 from .agent import run_experiment
 
 
