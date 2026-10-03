@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/components/lab.tsx","./src/components/notebook.tsx","./src/components/scientist.tsx","./src/components/sprite.tsx","./src/components/station.tsx","./src/lib/api.ts","./src/lib/scene.ts","./src/lib/useplayback.ts"],"version":"5.9.3"}
