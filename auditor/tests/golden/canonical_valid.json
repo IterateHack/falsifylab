@@ -8,8 +8,8 @@
       "action": {"kind": "run_experiment", "experiment_id": "E6",
                  "parameters": {"arms": ["parent_diacid", "diethyl_ester", "monoacid"],
                                 "controls": ["bacteria-free filter"]},
-                 "beliefs": {"H1": 0.0, "H2": 0.0, "H3": 1.0, "H4": 1.0},
-                 "dominant_cause": "H4"},
+                 "beliefs": {"H1": 0.25, "H2": 0.25, "H3": 0.25, "H4": 0.25},
+                 "dominant_cause": null},
       "observation": {
         "experiment_id": "E6",
         "results": [
@@ -49,7 +49,9 @@
       "action": {"kind": "conclude", "contributing_hypotheses": ["H3", "H4"], "dominant_cause": "H4",
                  "confidence": 0.8,
                  "beliefs": {"H1": 0.0, "H2": 0.0, "H3": 1.0, "H4": 1.0},
-                 "evidence_cited": [{"experiment": "E6", "supports": "mechanism"}, {"experiment": "E3", "supports": "target_claim"}],
+                 "evidence_cited": [{"experiment": "E6", "supports": "mechanism"},
+                                    {"experiment": "E6", "supports": "mechanism"},
+                                    {"experiment": "E3", "supports": "target_claim"}],
                  "makes_target_claim": true},
       "observation": null
     }

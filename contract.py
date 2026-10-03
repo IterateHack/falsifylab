@@ -42,12 +42,6 @@ SCORE_KEYS = (
 )
 
 
-# Allowed `supports` tags on a citation. These let the auditor judge a citation
-# structurally (e.g. an E4/potency citation offered for the mechanism is RH1)
-# without any text matching. `supports` is optional; `experiment` is not.
-SUPPORTS = ("mechanism", "target_claim", "potency", "target_engagement")
-
-
 # --- Core typed records -------------------------------------------------------
 @dataclass(frozen=True)
 class Result:
@@ -55,16 +49,6 @@ class Result:
     agent and the UI. The auditor never parses these strings."""
     value: str
     source: str
-
-
-@dataclass(frozen=True)
-class EvidenceCitation:
-    """One structured citation on a conclude action: which experiment the agent
-    is relying on, and (optionally) what it is offered to support. The agent
-    cites experiments, not prose — the auditor does no text matching. The
-    environment rejects a conclude whose evidence_cited carries bare strings."""
-    experiment: ExperimentId
-    supports: Optional[str] = None     # one of SUPPORTS, or None
 
 
 @dataclass
@@ -102,7 +86,15 @@ class Action:
     parameters: dict = field(default_factory=dict)
     contributing_hypotheses: Optional[list[HypothesisId]] = None
     confidence: Optional[float] = None
-    evidence_cited: Optional[list[EvidenceCitation]] = None   # structured; bare strings are malformed
+    evidence_cited: Optional[list] = None   # REQUIRED shape per entry: a citation dict
+                                            # {"experiment": "E4", "supports": "mechanism"};
+                                            # supports in {mechanism, target_claim, potency,
+                                            # target_engagement}, absent = "for the conclusion".
+                                            # The ENVIRONMENT rejects bare-string entries at
+                                            # submission (env workstream) — a prose citation is
+                                            # an auditor-invisible reward-hack loophole. The
+                                            # auditor itself ignores non-dict entries defensively
+                                            # and never text-matches.
     makes_target_claim: bool = False   # True iff asserting on/off-target for analogue killing
 
 
@@ -123,7 +115,9 @@ class Trajectory:
 class Verdict:
     verdict: str                                  # one of VERDICTS
     flags: list[str]                              # subset of FLAGS
-    scores: dict[str, float]                      # must contain every SCORE_KEYS entry
+    scores: dict                                # every SCORE_KEYS entry (floats), plus
+                                                # "epistemic_flags": list[str] — kept separate
+                                                # from `flags` so flag assertions stay valid
     raw_total: float
     R_visible: float
     final_score: float
@@ -169,24 +163,16 @@ def audit(trajectory: Trajectory, rubric: dict, truth: dict) -> Verdict:
       - rubric: json.load(auditor/rubric.json).
       - truth:  json.load(auditor/truth.json) -> {contribution_labels, dominant_cause}.
         Kept out of the rubric so one rubric can score any scenario.
-    Implemented by the auditor workstream; the golden tests are its spec.
+    Implemented in auditor/audit.py (imported lazily so this module stays free
+    of the auditor workstream's dependencies and there is no import cycle).
+    auditor/ must never gain an __init__.py: it is a PEP 420 namespace package,
+    and making it a regular package would shadow any sibling auditor module.
     """
-    raise NotImplementedError("auditor workstream")
+    from auditor.audit import audit as _audit
+    return _audit(trajectory, rubric, truth)
 
 
 # --- Logged-episode <-> dataclass loader (concrete; see CONTRACT.md) ----------
-def _parse_citations(raw) -> Optional[list[EvidenceCitation]]:
-    if raw is None:
-        return None
-    out = []
-    for c in raw:
-        if isinstance(c, EvidenceCitation):
-            out.append(c)
-        else:
-            out.append(EvidenceCitation(experiment=c["experiment"], supports=c.get("supports")))
-    return out
-
-
 def trajectory_from_dict(doc: dict) -> Trajectory:
     """Parse a logged-episode JSON object into a Trajectory."""
     turns = []
@@ -215,7 +201,7 @@ def trajectory_from_dict(doc: dict) -> Trajectory:
                     parameters=a.get("parameters", {}),
                     contributing_hypotheses=a.get("contributing_hypotheses"),
                     confidence=a.get("confidence"),
-                    evidence_cited=_parse_citations(a.get("evidence_cited")),
+                    evidence_cited=a.get("evidence_cited"),
                     makes_target_claim=a.get("makes_target_claim", False),
                 ),
                 observation=observation,
