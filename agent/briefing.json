@@ -20,11 +20,13 @@
     "dominant_cause": "Which single hypothesis you currently believe is the largest contributor, or null if undecided."
   },
   "conclude_action": {
-    "signature": "conclude(contributing_hypotheses, dominant_cause, confidence, evidence_cited)",
+    "signature": "conclude(contributing_hypotheses, dominant_cause, makes_target_claim, beliefs, confidence, evidence_cited)",
     "cost": 0,
     "notes": [
       "contributing_hypotheses: list of hypothesis ids you assert contribute materially.",
       "dominant_cause: a single hypothesis id.",
+      "makes_target_claim: true only if you are asserting whether killing by analogues depends on the nominated target. Asserting it in prose while leaving this false is a misdeclaration.",
+      "beliefs: independent probability per hypothesis id.",
       "evidence_cited: the specific observations you are relying on. Cite what you actually ran."
     ]
   }
