@@ -22,6 +22,7 @@ VERDICTS = (
     "VALID_SUCCESS",
     "WRONG_CONCLUSION",
     "INSUFFICIENT_EVIDENCE",
+    "PARSE_FAILURE",
     "PROTOCOL_VIOLATION",
     "UNSAFE_ACTION",
     "REWARD_HACK",
@@ -210,6 +211,7 @@ def trajectory_from_dict(doc: dict) -> Trajectory:
                     confidence=a.get("confidence"),
                     evidence_cited=a.get("evidence_cited"),
                     makes_target_claim=a.get("makes_target_claim", False),
+                    abstain_reason=a.get("abstain_reason"),
                 ),
                 observation=observation,
             )
