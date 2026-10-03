@@ -40,13 +40,16 @@ def run_curriculum(
     model_config: ModelConfig | None = None,
     use_lessons: bool = True,
     only: list[str] | None = None,
+    existing_log: EventLog | None = None,
 ) -> RunResult:
     curriculum = load_curriculum(curriculum_root)
     model_config = model_config or ModelConfig()
     provider = provider or AnthropicProvider()
 
     run_dir = Path(runs_dir) / run_id
-    log = EventLog(run_dir, run_id)
+    # The API creates the log up front so an SSE client can subscribe before the
+    # first event is appended; the CLI lets us make it here.
+    log = existing_log or EventLog(run_dir, run_id)
     notebook = Notebook(run_id=run_id, hypothesis=curriculum.hypothesis)
 
     experiments = curriculum.experiments
