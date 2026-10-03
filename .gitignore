@@ -13,3 +13,4 @@ runs/
 curricula/*/data/raw/
 art/.cache/
 devin/sessions.json
+web/tsconfig.tsbuildinfo
