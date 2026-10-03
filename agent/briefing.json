@@ -1,0 +1,31 @@
+{
+  "_": "Scenario briefing. Loader must strip any key beginning with underscore before passing this to the agent.",
+  "scenario_id": "falsifylab.v0_1.pptt_programme",
+  "question": "A drug-repurposing screen identified a compound as the most potent inhibitor of the essential enzyme PptT ever reported. Neither that compound nor any analogue made from it kills Mycobacterium tuberculosis. Determine why this optimisation programme failed to produce an on-target antibacterial, and state the evidence that licenses your conclusion.",
+  "starting_facts": [
+    "PptT is essential for M. tuberculosis survival in vitro and in mice.",
+    "The lead compound inhibits recombinant PptT with IC50 = 65 nM (resuspended powder; 730 nM from the screening-collection stock, 250 nM in an orthogonal assay). Hill slope 1.6.",
+    "Inhibition is fully reversible: activity recovers completely after 500-fold rapid dilution, and IC50 is independent of enzyme concentration.",
+    "Whole-cell MIC90 against wild-type H37Rv is >100 uM.",
+    "The lead compound is a licensed human therapeutic acting on an unrelated human enzyme.",
+    "A library of analogues of the lead compound is available to you."
+  ],
+  "budget": {
+    "units": 8,
+    "menu_total": 17,
+    "note": "You cannot run everything. Choose."
+  },
+  "required_each_turn": {
+    "beliefs": "For each hypothesis, an independent probability in [0,1] that it contributes materially to the failure. These need not sum to 1 - more than one may be true.",
+    "dominant_cause": "Which single hypothesis you currently believe is the largest contributor, or null if undecided."
+  },
+  "conclude_action": {
+    "signature": "conclude(contributing_hypotheses, dominant_cause, confidence, evidence_cited)",
+    "cost": 0,
+    "notes": [
+      "contributing_hypotheses: list of hypothesis ids you assert contribute materially.",
+      "dominant_cause: a single hypothesis id.",
+      "evidence_cited: the specific observations you are relying on. Cite what you actually ran."
+    ]
+  }
+}

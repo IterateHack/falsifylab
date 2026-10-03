@@ -1,0 +1,26 @@
+{
+  "_": "Candidate explanations. Loader must strip any key beginning with underscore.",
+  "instruction": "These hypotheses are not mutually exclusive. More than one may contribute. Assign each an independent probability.",
+  "hypotheses": [
+    {
+      "id": "H1",
+      "label": "Assay artefact",
+      "claim": "The biochemical inhibition result does not reflect genuine binding to the enzyme; the tube assay is misleading."
+    },
+    {
+      "id": "H2",
+      "label": "Substrate competition",
+      "claim": "The compound binds the enzyme, but millimolar intracellular coenzyme A outcompetes it at the active site."
+    },
+    {
+      "id": "H3",
+      "label": "Access failure",
+      "claim": "The compound cannot reach the cytoplasm in sufficient quantity, whether through poor permeation or active efflux."
+    },
+    {
+      "id": "H4",
+      "label": "Biotransformation",
+      "claim": "The compound enters the cell but is chemically modified faster than it can act on its target."
+    }
+  ]
+}

@@ -1,0 +1,119 @@
+{
+  "_": "Available experiments, costs and settable parameters. Loader must strip any key beginning with underscore.",
+  "experiments": [
+    {
+      "id": "E1",
+      "name": "Thermal shift (DSF), with and without coenzyme A pre-saturation",
+      "question": "Does the compound still bind when the enzyme is saturated with its natural substrate?",
+      "cost": 2,
+      "readout": "melting temperature shift, degrees C",
+      "parameters": {
+        "buffer": {
+          "type": "enum",
+          "values": [
+            "gel_filtration",
+            "hepes_with_stabilisers",
+            "hepes_without_stabilisers"
+          ],
+          "required": true
+        },
+        "coa_mM": {
+          "type": "float",
+          "range": [
+            0,
+            2
+          ],
+          "required": true
+        },
+        "compound_uM": {
+          "type": "float",
+          "range": [
+            0,
+            200
+          ],
+          "required": true
+        }
+      }
+    },
+    {
+      "id": "E2",
+      "name": "Co-crystal structure of the inhibitor-enzyme complex",
+      "question": "Where and how does the compound bind?",
+      "cost": 4,
+      "readout": "structure, resolution in angstroms, contact residues"
+    },
+    {
+      "id": "E3",
+      "name": "Four-strain MIC panel",
+      "question": "Does killing depend on the nominated target?",
+      "cost": 2,
+      "readout": "MIC90, micromolar, per strain",
+      "strains": [
+        "H37Rv wild-type",
+        "pptT knockdown -ATc",
+        "pptT knockdown +ATc",
+        "pptH knockout"
+      ],
+      "parameters": {
+        "atc_free_days": {
+          "type": "int",
+          "range": [
+            0,
+            10
+          ],
+          "required": true
+        },
+        "read_day": {
+          "type": "int",
+          "range": [
+            3,
+            14
+          ],
+          "required": true
+        },
+        "normalisation_control": {
+          "type": "string",
+          "required": true
+        }
+      }
+    },
+    {
+      "id": "E4",
+      "name": "Potency optimisation across the analogue library",
+      "question": "Can the compound be made more potent against the purified enzyme?",
+      "cost": 3,
+      "readout": "best IC50 achieved across the library, nanomolar; whole-cell MIC50 of the best compounds"
+    },
+    {
+      "id": "E5",
+      "name": "Counter-screen against a structurally unrelated enzyme",
+      "question": "Do any analogues that kill the bacterium act through the nominated target?",
+      "cost": 2,
+      "readout": "IC50 at both enzymes plus MIC, per analogue"
+    },
+    {
+      "id": "E6",
+      "name": "Intrabacterial pharmacokinetics by LC-MS",
+      "question": "How much compound gets inside, and does it survive once there?",
+      "cost": 4,
+      "readout": "percent of input partitioned into medium / intracellular intact / biotransformed, per compound arm",
+      "parameters": {
+        "arms": {
+          "type": "multi_enum",
+          "values": [
+            "parent_diacid",
+            "diethyl_ester",
+            "monoacid"
+          ],
+          "min_selected": 3,
+          "required": true,
+          "note": "All three arms run together; the assay is not offered for a single compound."
+        },
+        "controls": {
+          "type": "free_list",
+          "required": true
+        }
+      }
+    }
+  ]
+}
