@@ -212,3 +212,26 @@ def _open_gate(ctx) -> None:
         "section": "hypothesis_and_prediction", "text": "prediction",
         "confidence": 0.5})
     dispatch(ctx, "write_notebook_section", {"section": "plan", "text": "plan"})
+
+
+def test_a_second_writer_is_refused(tmp_path):
+    """Two processes in one run directory interleave seqs and corrupt the log."""
+    import json
+    import os
+    from engine.events import RunLockedError
+
+    log = EventLog(tmp_path / "run", "run_x")
+    log.append("run_started", {})
+    (tmp_path / "run" / "run.lock").write_text(
+        json.dumps({"pid": 1, "run_id": "run_x"}))      # pid 1 is always alive
+    with pytest.raises(RunLockedError):
+        EventLog(tmp_path / "run", "run_x")
+    # a stale lock from a dead process must not block a legitimate re-open
+    (tmp_path / "run" / "run.lock").write_text(
+        json.dumps({"pid": 999_999, "run_id": "run_x"}))
+    reopened = EventLog(tmp_path / "run", "run_x")
+    reopened.append("run_finished", {})
+    assert [e.seq for e in reopened.all()] == [1, 2]
+    reopened.close()
+    assert not (tmp_path / "run" / "run.lock").exists()
+    os.environ.pop("FL_UNUSED", None)

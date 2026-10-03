@@ -6,6 +6,7 @@ durable record; SQLite is an index for querying without replaying the file.
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import threading
 import time
@@ -73,18 +74,40 @@ CREATE INDEX IF NOT EXISTS idx_events_exp ON events(experiment_id, seq);
 """
 
 
+class RunLockedError(RuntimeError):
+    """Another live process is already writing this run directory."""
+
+
+def _pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
 class EventLog:
     """Append-only log with a JSONL file of record and a SQLite index.
 
     Thread-safe: the agent loop appends from a worker thread while the SSE
     endpoint reads. Subscribers are notified synchronously after the write
     lands on disk, so a subscriber never sees an event that is not durable.
+
+    Process-safe by refusing to share: a lock file records the owning pid, and
+    opening a directory a live process already owns raises. Two writers in one
+    run directory interleave their sequence numbers and silently corrupt the
+    log - which happened here when a run was relaunched before the previous one
+    had actually exited.
     """
 
     def __init__(self, run_dir: str | Path, run_id: str):
         self.run_dir = Path(run_dir)
         self.run_dir.mkdir(parents=True, exist_ok=True)
         self.run_id = run_id
+        self._lock_path = self.run_dir / "run.lock"
+        self._claim_lock()
         self.jsonl_path = self.run_dir / "events.jsonl"
         self.db_path = self.run_dir / "events.db"
         self._lock = threading.Lock()
@@ -93,6 +116,31 @@ class EventLog:
         self._db.executescript(_SCHEMA)
         self._db.commit()
         self._seq = self._max_seq()
+
+    def _claim_lock(self) -> None:
+        if self._lock_path.exists():
+            try:
+                owner = json.loads(self._lock_path.read_text())
+                pid = int(owner.get("pid", -1))
+            except (json.JSONDecodeError, ValueError, OSError):
+                pid = -1
+            if pid > 0 and pid != os.getpid() and _pid_alive(pid):
+                raise RunLockedError(
+                    f"{self.run_dir} is being written by pid {pid}. Wait for it to "
+                    f"finish, or choose another --run-id. Two writers in one run "
+                    f"directory corrupt the event log."
+                )
+        self._lock_path.write_text(
+            json.dumps({"pid": os.getpid(), "run_id": self.run_id, "ts": utc_now()}),
+            encoding="utf-8")
+
+    def _release_lock(self) -> None:
+        try:
+            owner = json.loads(self._lock_path.read_text())
+            if int(owner.get("pid", -1)) == os.getpid():
+                self._lock_path.unlink(missing_ok=True)
+        except (json.JSONDecodeError, ValueError, OSError):
+            pass
 
     def _max_seq(self) -> int:
         row = self._db.execute("SELECT COALESCE(MAX(seq), 0) FROM events").fetchone()
@@ -162,6 +210,7 @@ class EventLog:
 
     def close(self) -> None:
         self._db.close()
+        self._release_lock()
 
 
 def read_jsonl(path: str | Path) -> list[Event]:
