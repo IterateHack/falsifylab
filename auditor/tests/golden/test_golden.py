@@ -29,6 +29,7 @@ FIXTURES = [
     "canonical_valid",
     "structure_then_pk",
     "zero_experiment_baseline",
+    "no_conclusion_rejected",
 ]
 
 
