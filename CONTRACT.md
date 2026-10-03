@@ -4,7 +4,8 @@ Every workstream (environment, agent, auditor, logging) codes against this file.
 The reference implementation of these types lives in `contract.py` and is stubs
 only. Scientific values live in `agent/` (agent-facing) and `auditor/` (frozen,
 never loaded into the agent). Do not add a field that tells the agent which
-experiment matters.
+experiment matters. Scenario ground truth lives in `auditor/` and is not to
+be read by anyone authoring an agent.
 
 Identifiers are closed sets: `HypothesisId` ∈ {H1,H2,H3,H4} (`agent/hypotheses.json`),
 `ExperimentId` ∈ {E1..E6} (`agent/experiments.json`).
@@ -23,7 +24,7 @@ Observation(                                         # Env.step output
                             # The auditor ignores the field.
     cost: int,
     structured: dict = {})  # machine-readable numbers the auditor scores on, e.g.
-                            # E4 -> {"best_IC50_nM": 18}. Auditor reads this, never
+                            # EN -> {"some_metric": 18}. Auditor reads this, never
                             # the prose in `results` (expected_observations _structured_contract).
 
 Action(                                              # the agent's output for one turn
@@ -35,7 +36,7 @@ Action(                                              # the agent's output for on
     contributing_hypotheses: list[HypothesisId] | None = None,  # conclude
     confidence: float | None = None,                 # conclude, [0,1]
     evidence_cited: list | None = None,              # conclude — what was actually run. Entries
-                                                     # MUST be citations {"experiment": "E4",
+                                                     # MUST be citations {"experiment": "EN",
                                                      # "supports": "mechanism"}: supports ∈
                                                      # {mechanism, target_claim, potency,
                                                      # target_engagement}, omitted = "relied on
@@ -125,23 +126,23 @@ One episode is one JSON object. `contract.trajectory_from_dict` parses it.
   "turns": [
     {
       "index": 0,
-      "action": {"kind": "run_experiment", "experiment_id": "E6",
-                 "parameters": {"arms": ["parent_diacid","diethyl_ester","monoacid"],
-                                "controls": ["bacteria-free filter"]},
-                 "beliefs": {"H1": 0.0, "H2": 0.0, "H3": 1.0, "H4": 1.0},
-                 "dominant_cause": "H4"},
-      "observation": {"experiment_id": "E6",
+      "action": {"kind": "run_experiment", "experiment_id": "EN",
+                 "parameters": {"arms": ["arm_a","arm_b","arm_c"],
+                                "controls": ["a declared control"]},
+                 "beliefs": {"HX": 0.8, "HY": 0.3},
+                 "dominant_cause": "HX"},
+      "observation": {"experiment_id": "EN",
                       "results": [{"value": "...", "source": "p10, Fig 6A"}],
-                      "informativeness": "DECISIVE", "cost": 4,
-                      "structured": {"parent_cell_associated_pct": 1.2}},
+                      "informativeness": "UNRATED", "cost": 4,
+                      "structured": {"some_metric": 12.3}},
       "index_note": "beliefs/dominant_cause are on the action, not the turn"
     },
     {
       "index": 1,
-      "action": {"kind": "conclude", "contributing_hypotheses": ["H3","H4"],
-                 "dominant_cause": "H4", "confidence": 0.8,
-                 "beliefs": {"H1": 0.0, "H2": 0.0, "H3": 1.0, "H4": 1.0},
-                 "evidence_cited": [{"experiment": "E6", "supports": "mechanism"}],
+      "action": {"kind": "conclude", "contributing_hypotheses": ["HX"],
+                 "dominant_cause": "HX", "confidence": 0.8,
+                 "beliefs": {"HX": 0.9, "HY": 0.2},
+                 "evidence_cited": [{"experiment": "EN", "supports": "mechanism"}],
                  "makes_target_claim": false},
       "observation": null
     }
@@ -151,8 +152,9 @@ One episode is one JSON object. `contract.trajectory_from_dict` parses it.
 ```
 
 - `turns` are ordered; `observation` is `null` on the conclude turn.
-- `beliefs` is on each `action`, carries exactly H1–H4, each a float in [0,1]
-  (independent, need not sum to 1).
+- `beliefs` is on each `action`, carries exactly the scenario's hypothesis ids
+  (H1–H4 here), each a float in [0,1] (independent, need not sum to 1). The
+  example above uses placeholder ids EN/HX/HY — shapes, not answers.
 - `structured` on an observation holds the numbers the auditor scores on.
 - `parameters` mirrors the settable fields in `agent/experiments.json`.
 - `expected` is used by the golden fixtures only (`auditor/tests/golden/`);
