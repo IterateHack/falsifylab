@@ -1,5 +1,5 @@
-"""Deterministic, hand-coded control arms. One module per variant.
+"""Deterministic control arms: hand-coded policies, no model in the loop.
 
-These are not prompts: they are fixed policies used as the control against
-which the prompt-defined variants in agents/prompts/ are compared.
+Each module here is the scripted twin of a prompt variant in agents/prompts/,
+so a run can separate "the policy is good" from "the model follows the policy".
 """
