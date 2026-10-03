@@ -70,6 +70,13 @@ from the article PDF and carry a figure, table or page reference. The verified
 value list and the corrections against the upstream analysis live in
 `auditor/NOTES.md` — they include the answer.
 
+## Scenario generality
+
+Two scenarios load through one unmodified engine. Building the second surfaced two
+scenario-specific branches in `env.py` and one silent default in `audit.py`; see
+`scenarios/b_cd5_affinity/FINDINGS.md`. We report these rather than patch them — the
+second scenario was built as a test of generality, and a test that fails is a result.
+
 ## Known weaknesses — state these rather than hide them
 
 - **Contamination is not established as low.** The paper is from March 2024 and may be

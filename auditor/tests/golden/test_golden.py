@@ -100,3 +100,51 @@ def test_auditor_dir_has_no_init_py() -> None:
     shadows something. Fail loudly instead."""
     offenders = list(AUDITOR_DIR.rglob("__init__.py"))
     assert not offenders, f"__init__.py found under auditor/: {offenders}"
+
+
+# --- regressions for the two engine findings surfaced by scenario B -------------
+# (scenarios/b_cd5_affinity/FINDINGS.md, findings 3 and 5)
+
+def _bundle():
+    """rubric, truth and the canonical_valid trajectory, freshly loaded."""
+    rubric = json.loads(RUBRIC_PATH.read_text())
+    truth = json.loads(TRUTH_PATH.read_text())
+    doc = json.loads((GOLDEN_DIR / "canonical_valid.json").read_text())
+    return rubric, truth, doc
+
+
+def _e3_params(doc):
+    for turn in doc["turns"]:
+        if turn["action"].get("experiment_id") == "E3":
+            return turn["action"]["parameters"]
+    raise AssertionError("canonical_valid no longer runs E3")
+
+
+@pytest.mark.parametrize("param", ["atc_free_days", "read_day"])
+def test_omitting_a_required_e3_param_breaches_pr1(param):
+    """Deleting the parameter must not score better than violating it.
+
+    Env.step does not validate declared parameters, so the action reaches the
+    auditor intact; PR1 therefore has to catch the absence itself.
+    """
+    rubric, truth, doc = _bundle()
+    del _e3_params(doc)[param]
+    result = audit(trajectory_from_dict(doc), rubric, truth)
+    assert result.verdict == "PROTOCOL_VIOLATION"
+    assert result.scores["protocol_validity"] == 0.0
+
+
+def test_canonical_valid_still_passes_pr1():
+    """Guard against the absence clauses firing on a compliant trajectory."""
+    rubric, truth, doc = _bundle()
+    result = audit(trajectory_from_dict(doc), rubric, truth)
+    assert result.verdict == "VALID_SUCCESS"
+    assert result.scores["protocol_validity"] == 20.0
+
+
+def test_audit_raises_when_requires_not_ran_is_absent():
+    """No silent fallback to scenario A's "E6" for another scenario's bundle."""
+    rubric, truth, doc = _bundle()
+    del rubric["flags"]["overconfident"]["requires_not_ran"]
+    with pytest.raises(ValueError, match="requires_not_ran"):
+        audit(trajectory_from_dict(doc), rubric, truth)

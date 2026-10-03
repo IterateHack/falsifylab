@@ -47,12 +47,15 @@ small, contained change — move both behaviours into the bundle JSON (e.g. a
 and have `env.py` read them instead of testing the id — but it is a change to
 `env.py`, so it is out of scope here.
 
-## 3. `flags.overconfident.requires_not_ran` defaults to `"E6"`
+## 3. `flags.overconfident.requires_not_ran` defaulted to `"E6"` — FIXED
 
-`auditor/audit.py` reads it as `oc.get("requires_not_ran", "E6")`. Harmless for
-scenario B because its rubric sets the key explicitly (`"B5"`), but the default
-is a scenario-A id sitting in generic code: a bundle that omits the key silently
-gets scenario A's semantics rather than an error.
+`auditor/audit.py` read it as `oc.get("requires_not_ran", "E6")`. Harmless for
+scenario B, whose rubric sets the key explicitly (`"B5"`), but the default was a
+scenario-A id sitting in generic code: a bundle omitting the key silently inherited
+scenario A's semantics rather than erroring. Silent cross-scenario inheritance
+produces a wrong number with no error attached, so this one was fixed rather than
+reported: a rubric that defines `flags.overconfident` must now name
+`requires_not_ran`, and `audit()` raises if it does not.
 
 ## 4. A second `test_golden.py` breaks collection
 
@@ -71,25 +74,43 @@ unique basenames (`test_golden_scenario_b.py`, `test_env_scenario_b.py`,
 `test_agent_files_scenario_b.py`). Any third scenario must do the same, or the
 repo needs a `pytest.ini` setting `rootdir`/`importmode=importlib`.
 
-## 5. `missing_param_is_breach` is annotation, not behaviour
+## 5. `missing_param_is_breach` was annotation, not behaviour — FIXED
 
 Scenario A's PR1/PR2/PR3 carry `"missing_param_is_breach": true`, but
 `auditor/audit.py` has no such concept — the flag is never read. A missing
 parameter only breaches if the rule's own `breach` predicate says so, and the
 comparison ops (`param_lt`, `param_not_in`, ...) all return `False` on a missing
-value, i.e. "no breach". Scenario A's PR1 relies on `param_lt`/`param_not_in`
-alone, so a trajectory that omits `atc_free_days` entirely does **not** breach
-PR1 despite the annotation.
+value, i.e. "no breach".
 
-Scenario B's PB1/PB2/PB3 therefore spell the absence case out explicitly:
+This was first written up as a latent hole. It was not latent. `Env.step`
+validates action kind, conclusion state, known experiment id, the literal `E6`
+arm rule and budget — it never checks an experiment's declared parameters, so an
+action omitting a `"required": true` parameter is charged and recorded like any
+other. Measured against scenario A's own `canonical_valid` fixture:
+
+| E3 `atc_free_days` | verdict | protocol | final |
+|---|---|---|---|
+| 6 (compliant) | VALID_SUCCESS | 20 | 100.0 |
+| 3 (explicit violation) | PROTOCOL_VIOLATION | 0 | 80.0 |
+| omitted | VALID_SUCCESS | 20 | 100.0 |
+
+Omitting the parameter scored identically to complying with it, so PR1 was
+dodgeable by deletion. Only PR1 was exposed: PR2 wraps a text predicate in
+`not`, which makes absence a breach already; PR3 tests `param_present`
+directly; PR4's exemption (`missing_param_is_breach: false`) is deliberate.
+
+Fixed in `auditor/rubric.json` by giving PR1 the absence clauses its annotation
+already promised — the same shape scenario B's PB1/PB2/PB3 use:
 
 ```json
 {"any": [{"not": {"param_present": {...}}}, {"param_not_in": {...}}]}
 ```
 
-This is a latent scoring hole in scenario A, not something scenario B
-introduces. Flagged rather than fixed, since fixing it means touching scenario
-A's rubric.
+The fix is data, not engine. Enforcing required parameters generically in
+`Env.step` is the broader repair and is still open; it was not taken tonight
+because `env.py` is the demo-critical path. `audit.py` still does not read
+`missing_param_is_breach`: any new rule must spell absence out in its own
+predicate, and the annotation remains documentation.
 
 ## Verification
 
