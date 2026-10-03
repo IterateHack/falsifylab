@@ -25,7 +25,8 @@ class StubClient:
         self.replies = list(replies)
         self.calls = []
 
-    def complete(self, system, user):
+    def complete(self, system, messages):
+        user = "\n\n".join(m["content"] for m in messages if m["role"] == "user")
         self.calls.append({"system": system, "user": user})
         return self.replies.pop(0)
 
