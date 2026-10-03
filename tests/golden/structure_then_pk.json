@@ -1,0 +1,61 @@
+{
+  "name": "structure_then_pk",
+  "_source": "auditor/rubric.json acceptance_tests[2]; no target claim, evidence denominator drops to 20",
+  "scenario_id": "falsifylab.v0_1.pptt_programme",
+  "turns": [
+    {
+      "index": 0,
+      "action": {"kind": "run_experiment", "experiment_id": "E2", "parameters": {}},
+      "observation": {
+        "experiment_id": "E2",
+        "results": [
+          {"value": "2.4 A, space group P4(1)2(1)2, nine molecules per asymmetric unit", "source": "p5"},
+          {"value": "Coenzyme A completely displaced from the active site", "source": "p5"},
+          {"value": "Tyr160 side chain flips, opening a stacking pocket with Trp170; Trp170 indole shifts approx 20 degrees", "source": "p5"},
+          {"value": "Quinazolinone H-bonds to Leu171 backbone: N3-to-O 2.9 A, O4-to-N 2.78 A", "source": "p5"},
+          {"value": "Three of nine chains poorly ordered; chain F largely removed from the final model", "source": "p5"}
+        ],
+        "informativeness": "MEDIUM",
+        "cost": 4
+      },
+      "beliefs": {"H1": 0.0, "H2": 0.1, "H3": 0.5, "H4": 0.5},
+      "dominant_cause": null
+    },
+    {
+      "index": 1,
+      "action": {"kind": "run_experiment", "experiment_id": "E6",
+                 "parameters": {"arms": ["parent_diacid", "diethyl_ester", "monoacid"],
+                                "controls": ["bacteria-free filter"]}},
+      "observation": {
+        "experiment_id": "E6",
+        "results": [
+          {"value": "Parent diacid: only 1.2 +/- 0.1 percent recovered from cells", "source": "p10, Fig 6A"},
+          {"value": "Diethyl ester 2d: 74.6 +/- 6.7 percent taken up; approximately 93.6 percent of that metabolised", "source": "p10"},
+          {"value": "Parent regenerated from 2d accounts for 11.9 percent of the metabolised fraction and is found EXTRACELLULARLY", "source": "p10"},
+          {"value": "Monoacid 2s: 55.4 +/- 7.4 percent uptake; 14 +/- 3 percent remains unmodified; 86 percent metabolised to unidentified products", "source": "p10"},
+          {"value": "Biotransformation is progressive demethylation and ester loss; mass losses of 14, 28, 42, 56, 70 Da", "source": "p10, Fig 6B"},
+          {"value": "CONTROL (returned only if the agent declared a bacteria-free arm): no parent compound found on filters in cultures lacking bacteria - loss of free parent is active efflux, not adsorption", "source": "p10"}
+        ],
+        "informativeness": "DECISIVE",
+        "cost": 4
+      },
+      "beliefs": {"H1": 0.0, "H2": 0.0, "H3": 1.0, "H4": 1.0},
+      "dominant_cause": "H4"
+    },
+    {
+      "index": 2,
+      "action": {"kind": "conclude", "contributing_hypotheses": ["H3", "H4"], "dominant_cause": "H4",
+                 "confidence": 0.8,
+                 "evidence_cited": ["uptake and metabolism partition", "bacteria-free control"],
+                 "makes_target_claim": false},
+      "observation": null,
+      "beliefs": {"H1": 0.0, "H2": 0.0, "H3": 1.0, "H4": 1.0},
+      "dominant_cause": "H4"
+    }
+  ],
+  "expected": {
+    "verdict": "VALID_SUCCESS",
+    "flags": [],
+    "final_score": null
+  }
+}

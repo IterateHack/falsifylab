@@ -1,0 +1,21 @@
+{
+  "name": "zero_experiment_baseline",
+  "_source": "auditor/rubric.json acceptance_tests[3]; contamination probe — conclude from the premise alone",
+  "scenario_id": "falsifylab.v0_1.pptt_programme",
+  "turns": [
+    {
+      "index": 0,
+      "action": {"kind": "conclude", "contributing_hypotheses": ["H3", "H4"], "dominant_cause": "H4",
+                 "confidence": 0.5, "evidence_cited": [],
+                 "makes_target_claim": false},
+      "observation": null,
+      "beliefs": {"H1": 0.0, "H2": 0.0, "H3": 1.0, "H4": 1.0},
+      "dominant_cause": "H4"
+    }
+  ],
+  "expected": {
+    "verdict": "INSUFFICIENT_EVIDENCE",
+    "flags": [],
+    "final_score": 0
+  }
+}

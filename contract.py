@@ -1,0 +1,165 @@
+"""FalsifyLab shared interfaces — the single source every workstream codes against.
+
+This module is STUBS ONLY. It fixes the types and signatures described in
+CONTRACT.md so the environment, the agent and the auditor can be built
+independently and the golden tests in tests/golden/ have something to import.
+
+Do NOT implement env/agent/audit logic here — those land in their own
+workstreams. The dataclasses and the `trajectory_from_dict` loader are concrete
+because they define the wire format and nothing scientific lives in them.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Optional
+
+# --- Identifiers (closed sets, defined by agent/ and auditor/) ----------------
+HypothesisId = str   # one of "H1", "H2", "H3", "H4"   (agent/hypotheses.json)
+ExperimentId = str   # one of "E1".."E6"                (agent/experiments.json)
+
+VERDICTS = (
+    "VALID_SUCCESS",
+    "WRONG_CONCLUSION",
+    "INSUFFICIENT_EVIDENCE",
+    "PROTOCOL_VIOLATION",
+    "UNSAFE_ACTION",
+    "REWARD_HACK",
+)
+FLAGS = ("OVERCONFIDENT",)
+REWARD_HACKS = ("RH1", "RH2", "RH3")
+DIMENSIONS = ("scientific_correctness", "evidence_sufficiency", "protocol_validity", "safety")
+
+
+# --- Core typed records -------------------------------------------------------
+@dataclass(frozen=True)
+class Result:
+    """One readout line from auditor/expected_observations.json."""
+    value: str
+    source: str
+
+
+@dataclass
+class Observation:
+    """What Env.step returns for a run_experiment action. reset() returns the
+    briefing as experiment_id='__briefing__' with starting_facts as results."""
+    experiment_id: ExperimentId
+    results: list[Result]
+    informativeness: str          # HIGH|MEDIUM|LOW|DECISIVE|HIGH_CONDITIONAL|MEDIUM_CONDITIONAL
+    cost: int
+
+
+@dataclass
+class Action:
+    """kind='run_experiment' -> experiment_id + parameters;
+    kind='conclude'          -> the conclude(...) fields (cost 0)."""
+    kind: str                     # "run_experiment" | "conclude"
+    experiment_id: Optional[ExperimentId] = None
+    parameters: dict = field(default_factory=dict)
+    contributing_hypotheses: Optional[list[HypothesisId]] = None
+    dominant_cause: Optional[HypothesisId] = None
+    confidence: Optional[float] = None
+    evidence_cited: Optional[list[str]] = None
+    makes_target_claim: bool = False   # True if the conclusion asserts on/off-target for analogues
+
+
+@dataclass
+class Turn:
+    index: int
+    action: Action
+    observation: Optional[Observation]            # None on a conclude turn
+    beliefs: dict[HypothesisId, float]            # independent P(contributes) in [0,1] per H
+    dominant_cause: Optional[HypothesisId]
+
+
+@dataclass
+class Trajectory:
+    scenario_id: str
+    turns: list[Turn]
+
+
+@dataclass
+class Verdict:
+    verdict: str                                  # one of VERDICTS
+    flags: list[str]                              # subset of FLAGS
+    scores: dict[str, float]                      # per DIMENSIONS points
+    raw_total: float
+    R_visible: float
+    final_score: float
+    reward_hacks: list[str] = field(default_factory=list)   # subset of REWARD_HACKS
+
+
+@dataclass
+class State:
+    """Env.state — advanced by Env.step, never mutated by the auditor."""
+    scenario_id: str
+    budget_remaining: int                         # starts at briefing.budget.units (8)
+    total_cost: int
+    experiments_run: list[ExperimentId]
+    beliefs: dict[HypothesisId, float]
+    dominant_cause: Optional[HypothesisId]
+    concluded: bool
+
+
+# --- Protocols (STUBS — implemented in their own workstreams) -----------------
+class Env:
+    """Stateful simulator. Replays auditor/expected_observations.json blocks."""
+    state: State
+
+    def reset(self) -> Observation:               # -> briefing Observation
+        raise NotImplementedError("env workstream")
+
+    def step(self, action: Action) -> Observation:
+        raise NotImplementedError("env workstream")
+
+
+class Agent:
+    def act(self, observation: Observation, state: State) -> Action:
+        raise NotImplementedError("agent workstream")
+
+
+def audit(trajectory: Trajectory, rubric: dict) -> Verdict:
+    """PURE scoring of a completed trajectory against auditor/rubric.json.
+
+    No Env, no Agent, no I/O, no hidden state: everything needed is in
+    `trajectory` plus the `rubric` dict (json.load of auditor/rubric.json).
+    Implemented by the auditor workstream; the golden tests are its spec.
+    """
+    raise NotImplementedError("auditor workstream")
+
+
+# --- Logged-episode <-> dataclass loader (concrete; see CONTRACT.md) ----------
+def trajectory_from_dict(doc: dict) -> Trajectory:
+    """Parse a logged-episode JSON object into a Trajectory."""
+    turns = []
+    for t in doc["turns"]:
+        obs = t.get("observation")
+        observation = (
+            Observation(
+                experiment_id=obs["experiment_id"],
+                results=[Result(**r) for r in obs["results"]],
+                informativeness=obs["informativeness"],
+                cost=obs["cost"],
+            )
+            if obs is not None
+            else None
+        )
+        a = t["action"]
+        turns.append(
+            Turn(
+                index=t["index"],
+                action=Action(
+                    kind=a["kind"],
+                    experiment_id=a.get("experiment_id"),
+                    parameters=a.get("parameters", {}),
+                    contributing_hypotheses=a.get("contributing_hypotheses"),
+                    dominant_cause=a.get("dominant_cause"),
+                    confidence=a.get("confidence"),
+                    evidence_cited=a.get("evidence_cited"),
+                    makes_target_claim=a.get("makes_target_claim", False),
+                ),
+                observation=observation,
+                beliefs=t["beliefs"],
+                dominant_cause=t.get("dominant_cause"),
+            )
+        )
+    return Trajectory(scenario_id=doc["scenario_id"], turns=turns)
