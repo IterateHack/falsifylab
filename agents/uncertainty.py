@@ -32,6 +32,18 @@ from contract import Action, ExperimentId, HypothesisId, Observation, Result, St
 
 AGENT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "agent")
 
+# CONTRACT.md: `supports` is a closed set. Which one an experiment supports is
+# read off the experiment's OWN question text (agent/experiments.json), so no
+# experiment is special-cased and an unmatched question falls back to the
+# generic "relied on for the conclusion" reading.
+SUPPORTS_FROM_QUESTION = (
+    ("target_claim", ("does killing depend", "killing depend", "depend on the nominated target")),
+    ("target_engagement", ("act through the nominated target", "through the nominated target")),
+    ("potency", ("more potent", "potency", "potent against")),
+    ("mechanism", ("where and how", "still bind", "how much", "get inside", "gets inside",
+                   "survive once")),
+)
+
 PRIOR = 0.5                 # the briefing supplies no base rates; stay uniform
 CONTRIB_THRESHOLD = 0.6     # assert "contributes materially" above this
 RESOLVED_MARGIN = 0.15      # |p - 0.5| above which a hypothesis is informative no more
@@ -136,20 +148,21 @@ RULES: tuple[Rule, ...] = (
          -1, "intact recovery is evidence against biotransformation"),
 )
 
-# How strongly a matched rule moves a belief, by the environment's own
-# declared informativeness of the observation. Generic, not per-experiment.
-STRENGTH = {
-    "DECISIVE": 12.0,
-    "HIGH": 5.0,
-    "HIGH_CONDITIONAL": 3.5,
-    "MEDIUM": 2.5,
-    "MEDIUM_CONDITIONAL": 2.0,
-    "LOW": 1.3,
-}
-DEFAULT_STRENGTH = 1.5
-# Labels the environment itself calls strongly informative. Used only to judge
-# how good the evidence behind a RANKING claim is, never to move a belief.
-STRONG_INFORMATIVENESS = frozenset({"DECISIVE", "HIGH", "HIGH_CONDITIONAL"})
+# How strongly a matched readout moves a belief. `Observation.informativeness`
+# is NOT consulted: a live Env reports "UNRATED", and the HIGH/DECISIVE ratings
+# it used to carry were auditor-view - they named which experiments mattered.
+# What is left is what the agent can see for itself: whether the deciding
+# readout is a measured number or a prose assertion.
+QUANTITATIVE_LR = 3.5
+QUALITATIVE_LR = 2.0
+# A readout is graded quantitative when the matched text carries a measurement:
+# a `structured` entry, or a number with a unit in the prose.
+GRADE_QUANTITATIVE = "QUANTITATIVE"
+GRADE_QUALITATIVE = "QUALITATIVE"
+_MEASUREMENT = re.compile(r"\d")
+# Moving a belief this far from where it started counts as a substantial move;
+# used to judge the evidence behind a RANKING claim, not to make an update.
+SUBSTANTIAL_MOVE = 0.25
 
 
 @dataclass
@@ -162,7 +175,15 @@ class BeliefUpdate:
     experiment_id: ExperimentId
     readout: str
     reason: str
-    informativeness: str = ""
+    grade: str = GRADE_QUALITATIVE
+    """Whether the deciding readout was a measurement or a prose assertion.
+    Judged from the readout itself - `Observation.informativeness` is a leaked
+    auditor rating and is never read."""
+    contested: bool = False
+    """True when other readouts in the same observation pointed the other way
+    and this update is the net of them."""
+    cost: int = 0
+    """What the observation behind this update cost, from the env's own figure."""
     prior_distance: float = 0.0
     """How far this hypothesis now sits from the uniform prior, in units of the
     prior: |posterior - PRIOR| / PRIOR. Reported per update so a reader can see
@@ -177,8 +198,8 @@ class BeliefUpdate:
         return (
             f"turn {self.turn}: P({self.hypothesis}) {arrow} "
             f"{self.prior:.2f} -> {self.posterior:.2f} by {self.experiment_id} "
-            f"[{self.informativeness or 'UNLABELLED'}, prior_distance "
-            f"{self.prior_distance:.2f}] "
+            f"[{self.grade.lower()}{', contested' if self.contested else ''}, "
+            f"cost {self.cost}, prior_distance {self.prior_distance:.2f}] "
             f'("{self.readout}"): {self.reason}'
         )
 
@@ -190,6 +211,8 @@ class UncertaintyAgent:
     beliefs: dict[HypothesisId, float] = field(default_factory=dict)
     ledger: list[BeliefUpdate] = field(default_factory=list)
     unexplained: list[str] = field(default_factory=list)
+    confidence: Optional[float] = None
+    confidence_reason: str = ""
     _turn: int = 0
     _seen: set[ExperimentId] = field(default_factory=set)
 
@@ -237,7 +260,9 @@ class UncertaintyAgent:
             return
         self._seen.add(observation.experiment_id)
 
-        strength = STRENGTH.get(observation.informativeness, DEFAULT_STRENGTH)
+        measured = {
+            text for text in _readout_texts(observation, structured_only=True)
+        }
         evidence: dict[HypothesisId, list[tuple[int, str, str]]] = {}
         for text in _readout_texts(observation):
             for rule in RULES:
@@ -262,13 +287,20 @@ class UncertaintyAgent:
                 )
                 continue
             direction = 1 if net > 0 else -1
+            contested = any(d != direction for d, _, _ in hits)
             # Prefer a rule whose plain reading already points this way, so the
             # justification is not a double negative.
             agreeing = sorted(
                 (h for h in hits if h[0] == direction), key=lambda h: bool(h[2].endswith(")"))
             )
             _, readout, reason = agreeing[0]
-            ratio = strength ** min(abs(net), 3)
+            grade = (
+                GRADE_QUANTITATIVE
+                if readout in measured or _MEASUREMENT.search(readout)
+                else GRADE_QUALITATIVE
+            )
+            weight = QUANTITATIVE_LR if grade == GRADE_QUANTITATIVE else QUALITATIVE_LR
+            ratio = weight ** min(abs(net), 3)
             prior = self.beliefs[hypothesis]
             posterior = _bayes(prior, ratio if direction > 0 else 1.0 / ratio)
             if abs(posterior - prior) < 1e-9:
@@ -283,7 +315,9 @@ class UncertaintyAgent:
                     experiment_id=observation.experiment_id,
                     readout=readout,
                     reason=reason,
-                    informativeness=observation.informativeness,
+                    grade=grade,
+                    contested=contested,
+                    cost=observation.cost,
                 )
             )
 
@@ -369,21 +403,56 @@ class UncertaintyAgent:
     def _conclude(self, state: State) -> Action:
         contributing = sorted(h for h, p in self.beliefs.items() if p >= CONTRIB_THRESHOLD)
         dominant = self._dominant()
-        justified = {u.hypothesis for u in self.ledger}
-        unjustified = [h for h in contributing if h not in justified]
-        confidence, confidence_reason = self._stated_ranking_confidence(dominant)
+        self.confidence, self.confidence_reason = self._stated_ranking_confidence(dominant)
         return Action(
             kind="conclude",
             beliefs=dict(self.beliefs),
             dominant_cause=dominant,
             contributing_hypotheses=contributing,
-            confidence=confidence,
-            evidence_cited=self.justifications() + self.unexplained + [
-                f"asserted {h} on the prior alone - no observation moved it"
-                for h in unjustified
-            ] + [confidence_reason],
-            makes_target_claim=self._target_claim_supported(state),
+            confidence=self.confidence,
+            evidence_cited=self._citations(),
+            makes_target_claim=self._target_claim_supported(),
         )
+
+    def _citations(self) -> list[dict]:
+        """`evidence_cited` as structured citations, one per experiment that
+        actually moved a belief: `{"experiment": id, "supports": tag}`.
+
+        Bare strings are rejected by the env as malformed - a prose citation is
+        invisible to the auditor - so the written justifications live on
+        `narrative()` instead, and what is cited here is only what did work.
+        An experiment I bought that moved nothing is not "relied on", so it is
+        recorded in `narrative()` and left uncited.
+        """
+        cited: list[dict] = []
+        for experiment_id in dict.fromkeys(u.experiment_id for u in self.ledger):
+            citation = {"experiment": experiment_id}
+            supports = self._supports(experiment_id)
+            if supports is not None:
+                citation["supports"] = supports
+            cited.append(citation)
+        return cited
+
+    def _supports(self, experiment_id: ExperimentId) -> Optional[str]:
+        question = self.questions.get(experiment_id, "").lower()
+        for tag, phrases in SUPPORTS_FROM_QUESTION:
+            if any(phrase in question for phrase in phrases):
+                return tag
+        return None            # omitted = "relied on for the conclusion"
+
+    def narrative(self) -> list[str]:
+        """Everything I would have cited in prose if citations allowed prose:
+        the belief ledger, the readouts that moved nothing, any hypothesis
+        asserted on the prior alone, and the stated-confidence reason."""
+        justified = {u.hypothesis for u in self.ledger}
+        asserted = [h for h, p in self.beliefs.items() if p >= CONTRIB_THRESHOLD]
+        lines = self.justifications() + self.unexplained + [
+            f"asserted {h} on the prior alone - no observation moved it"
+            for h in sorted(set(asserted) - justified)
+        ]
+        if self.confidence_reason:
+            lines.append(self.confidence_reason)
+        return lines
 
     def _stated_ranking_confidence(
         self, dominant: Optional[HypothesisId]
@@ -397,9 +466,13 @@ class UncertaintyAgent:
         probability. It states a rung of a written ladder, and what picks the
         rung is the evidence I actually went out and bought: which observations
         raised the hypothesis I am naming, how informative the environment
-        itself called them, and whether anything I ran ever argued a rival
-        down. Asserting a ranking obliges me to say how sure I am of the
-        ranking, so the reason is returned with the number and cited.
+        own: whether the deciding readouts were measurements or prose, whether
+        they were contested within their own observation, how far they actually
+        moved the belief, and what they cost. The env's `informativeness` rating
+        is deliberately not consulted - a live Env reports "UNRATED", and the
+        ratings it once carried named which experiments mattered. Asserting a
+        ranking obliges me to say how sure I am of the ranking, so the reason is
+        returned with the number.
 
         Naming no dominant cause makes no ranking claim, so there is no
         probability to report: `(None, reason)`.
@@ -416,7 +489,10 @@ class UncertaintyAgent:
             if u.hypothesis == dominant and u.posterior > u.prior
         ]
         strong_support = [
-            u for u in raised_dominant if u.informativeness in STRONG_INFORMATIVENESS
+            u for u in raised_dominant
+            if u.grade == GRADE_QUANTITATIVE
+            and not u.contested
+            and abs(u.posterior - u.prior) >= SUBSTANTIAL_MOVE
         ]
         rivals_lowered = {
             u.hypothesis for u in self.ledger
@@ -442,21 +518,34 @@ class UncertaintyAgent:
             )
         if not strong_support:
             return 0.5, (
-                f"stated confidence 0.5: {dominant} was raised only by readouts the "
-                f"environment itself labelled weakly informative "
-                f"({', '.join(sorted({u.informativeness for u in raised_dominant}))}), "
-                f"which is thin ground for a ranking claim"
+                f"stated confidence 0.5: {dominant} was raised only by readouts I "
+                f"would not lean on for a ranking - "
+                + "; ".join(
+                    sorted({
+                        f"{u.experiment_id} {u.grade.lower()}"
+                        + (", contested" if u.contested else "")
+                        + (
+                            f", moved it only {abs(u.posterior - u.prior):.2f}"
+                            if abs(u.posterior - u.prior) < SUBSTANTIAL_MOVE
+                            else ""
+                        )
+                        for u in raised_dominant
+                    })
+                )
+                + " - which is thin ground for a ranking claim"
             )
         if not rivals_lowered:
             return 0.6, (
-                f"stated confidence 0.6: {strong_support[0].experiment_id} argued "
-                f"{dominant} up decisively, but I never ran anything that argued a "
+                f"stated confidence 0.6: {strong_support[0].experiment_id} "
+                f"(cost {strong_support[0].cost}) argued {dominant} up on a measured "
+                f"readout, but I never ran anything that argued a "
                 f"rival down, so I am ranking against hypotheses I have not tested"
             )
         if len(rivals_lowered) < len(rivals) or self.unexplained:
             return 0.75, (
-                f"stated confidence 0.75: {strong_support[0].experiment_id} argued "
-                f"{dominant} up decisively and I argued "
+                f"stated confidence 0.75: {strong_support[0].experiment_id} "
+                f"(cost {strong_support[0].cost}) argued {dominant} up on a measured "
+                f"readout and I argued "
                 f"{', '.join(sorted(rivals_lowered))} down, but "
                 + (
                     f"{', '.join(sorted(set(rivals) - rivals_lowered))} remains "
@@ -466,8 +555,9 @@ class UncertaintyAgent:
                 )
             )
         return 0.85, (
-            f"stated confidence 0.85: {strong_support[0].experiment_id} argued "
-            f"{dominant} up decisively, every rival was argued down by something I "
+            f"stated confidence 0.85: {strong_support[0].experiment_id} "
+            f"(cost {strong_support[0].cost}) argued {dominant} up on a measured "
+            f"readout, every rival was argued down by something I "
             f"ran, and no readout was left uninterpreted - as sure of a ranking as "
             f"this budget lets me be"
         )
@@ -479,21 +569,24 @@ class UncertaintyAgent:
             return None            # undecided is a legitimate answer
         return best[0]
 
-    def _target_claim_supported(self, state: State) -> bool:
-        """Only assert on/off-target if something I ran actually asked whether
-        killing depends on the nominated target."""
+    def _target_claim_supported(self) -> bool:
+        """Only assert on/off-target if an experiment that actually moved a
+        belief is one I can cite for the target claim - otherwise the
+        declaration would have no citation standing behind it."""
         return any(
-            "target" in self.questions.get(e, "").lower()
-            for e in state.experiments_run
+            self._supports(c["experiment"]) in ("target_claim", "target_engagement")
+            for c in self._citations()
         )
 
 
 # --- helpers ------------------------------------------------------------------
-def _readout_texts(observation: Observation) -> list[str]:
-    texts = [f"{r.value} ({r.source})" if isinstance(r, Result) else str(r)
+def _readout_texts(observation: Observation, structured_only: bool = False) -> list[str]:
+    measured = [f"{k} {v}" for k, v in (observation.structured or {}).items()]
+    if structured_only:
+        return measured
+    prose = [f"{r.value} ({r.source})" if isinstance(r, Result) else str(r)
              for r in observation.results]
-    texts += [f"{k} {v}" for k, v in (observation.structured or {}).items()]
-    return texts
+    return prose + measured
 
 
 _ADDITIVE = re.compile(r"stabiliser|stabilizer|additive|detergent|bsa|serum")
