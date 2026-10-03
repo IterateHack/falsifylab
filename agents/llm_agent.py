@@ -33,6 +33,11 @@ to measure, and every arm would silently be measuring the harness instead of
 its prompt. If you are tempted to add a "helpful" fix here, add it to a prompt
 in agents/prompts/ instead — that is the layer where content lives.
 
+The one field the harness writes itself is `Action.abstain_reason`, and only
+on the conclude it builds after two unusable replies ("parse_failure"). That
+records provenance, not a correction; the model can never set it, because no
+`abstain_reason` key is read from a reply.
+
 The same rule governs the retry: a rejected reply is sent back with the
 structural error and the schema, and nothing else. No hint about which
 citations would be appropriate, what a sensible confidence looks like, or which
@@ -59,7 +64,6 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -109,16 +113,7 @@ class ParseFailure(ValueError):
     """The model's reply could not be read as a legal Action."""
 
 
-@dataclass
-class ParseFailureAbstention(Action):
-    """A conclude emitted because the model could not produce a legal Action,
-    not because it judged the evidence thin.
-
-    It is an `Action`, so the Env accepts it and the auditor scores it like any
-    other conclude — the distinction is for the runner, which must not count a
-    harness failure as a deliberate abstention. `parse_failure_reason` carries
-    the last parse error."""
-    parse_failure_reason: str = ""
+PARSE_FAILURE = "parse_failure"   # Action.abstain_reason when the harness built the conclude
 
 
 class LLMAgent:
@@ -397,23 +392,23 @@ class LLMAgent:
         ]
 
     # --- abstention -----------------------------------------------------------
-    def abstain(self, reason: str) -> "ParseFailureAbstention":
+    def abstain(self, reason: str) -> Action:
         """The model failed to emit a legal Action twice running. The episode
         ends asserting nothing: no dominant cause, no contributing hypotheses,
         no confidence, no citations.
 
         This is NOT the same event as a model that read the evidence and chose
-        to name no dominant cause, even though the two serialise to the same
-        JSON. One is thin evidence handled well; the other is a model that
-        could not work the action space. Conflating them corrupts the
-        abstention rate, so this returns a `ParseFailureAbstention` — an Action
-        subclass, so the Env and the auditor treat it exactly like any other
-        conclude — and the runner splits the two with
-        `is_parse_failure_abstention(action)`.
+        to name no dominant cause. One is thin evidence handled well; the other
+        is a model that could not work the action space, and conflating them
+        corrupts the abstention rate. So the action carries
+        `abstain_reason="parse_failure"` (contract field; None on every action
+        the model itself produced). That records that the harness built the
+        action — it changes nothing the model said. The parse error stays in
+        `transcript`.
         """
         self.abstained = True
-        self.transcript.append({"abstained": True, "kind": "parse_failure", "reason": reason})
-        return ParseFailureAbstention(
+        self.transcript.append({"abstained": True, "kind": PARSE_FAILURE, "reason": reason})
+        return Action(
             kind="conclude",
             beliefs=dict(self.last_beliefs),
             dominant_cause=None,
@@ -421,7 +416,7 @@ class LLMAgent:
             confidence=None,
             evidence_cited=[],
             makes_target_claim=False,
-            parse_failure_reason=reason,
+            abstain_reason=PARSE_FAILURE,
         )
 
     # --- reliability reporting ---------------------------------------------
@@ -442,9 +437,9 @@ class LLMAgent:
 
 def is_parse_failure_abstention(action: Action) -> bool:
     """True iff this conclude came from two unusable replies rather than from a
-    model deciding not to name a cause. Both look identical in the logged JSON,
-    so a runner that cares about the abstention rate must ask here."""
-    return isinstance(action, ParseFailureAbstention)
+    model deciding not to name a cause. Reads the serialised contract field, so
+    it works on a replayed trajectory as well as a live action."""
+    return getattr(action, "abstain_reason", None) == PARSE_FAILURE
 
 
 def parse_failure_report(agents: "list[LLMAgent]") -> dict:
