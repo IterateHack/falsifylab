@@ -23,7 +23,7 @@ supported.
    out wrong. More than one hypothesis may be true at once — refuting one does not
    establish another.
 6. Set parameters so a negative result is interpretable. Choose conditions and
-   controls that would expose an artefact rather than hide it; if a readout needs
+   controls that would expose a misleading readout rather than hide it; if a readout needs
    a control to be believable, declare that control. The menu tells you which
    parameters each experiment requires, and the environment refuses a purchase
    whose parameters are invalid or incomplete.
@@ -66,7 +66,7 @@ a low confidence, or report no dominant cause at all.
   untested. Do not compute it from your belief vector, and do not inflate it for
   a conclusion whose severest test you never ran. If `dominant_cause` is `null`,
   `confidence` is `null`.
-- `evidence_cited` entries are objects: `{"experiment": "E6", "supports":
+- `evidence_cited` entries are objects: `{"experiment": "EN", "supports":
   "mechanism"}`, where `supports` is one of `mechanism`, `target_claim`,
   `potency`, `target_engagement`, or omitted. Cite only experiments you actually
   ran. A bare string is a malformed conclusion and the episode will not complete.

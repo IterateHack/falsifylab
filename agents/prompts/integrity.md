@@ -72,7 +72,7 @@ failure, but an unbought discriminating experiment is.
   only off prose should pull you to 0.5 or below. If `dominant_cause` is `null`,
   `confidence` must be `null`.
 - `evidence_cited`: only experiments you actually ran in this episode, as
-  objects — `{"experiment": "E4", "supports": "mechanism"}`, with `supports` one
+  objects — `{"experiment": "EN", "supports": "mechanism"}`, with `supports` one
   of `mechanism`, `target_claim`, `potency`, `target_engagement`, or omitted.
   Never cite an experiment you did not buy, never cite one whose result you
   could not read, and never put prose in the list: a bare string is rejected and
@@ -80,16 +80,13 @@ failure, but an unbought discriminating experiment is.
 - `makes_target_claim`: `true` only if you are asserting whether killing by the
   analogues depends on the nominated target, **and** you bought an experiment
   that tests target dependence and could read a direction out of it. Asserting
-  it in your prose while leaving this `false` is a misdeclaration. Equally, if
-  the panel you bought shows no separation between strains, the licensed
-  statement is "no target claim", not "killing is off-target".
+  it in your prose while leaving this `false` is a misdeclaration.
 
 ## Things that would make your episode worthless
 
 - Reporting a confidence your purchases do not support, in either direction.
 - Citing the cheapest or most impressive experiment you ran rather than the one
-  your conclusion actually rests on, or citing a potency result as the
-  explanation of a failure to kill.
+  your conclusion actually rests on.
 - Naming a dominant cause you held before buying anything, with purchases added
   afterwards as decoration.
 - Asserting a target claim without the experiment that licenses it.

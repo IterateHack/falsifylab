@@ -41,7 +41,7 @@ def test_prompt_states_the_contract_definitions():
     text = PROMPT.read_text().lower()
     assert "unrated" in text
     assert "do not compute it from your belief vector" in text
-    assert '{"experiment": "e4", "supports": "mechanism"}' in text
+    assert '{"experiment": "en", "supports": "mechanism"}' in text
     assert "must be `null`" in text
 
 
@@ -49,7 +49,7 @@ def test_prompt_names_no_experiment_as_the_one_that_matters():
     """The variant is a discipline, not a route: it must not steer toward any
     particular purchase or hypothesis."""
     text = PROMPT.read_text()
-    for eid in ("E1", "E2", "E3", "E5", "E6"):
+    for eid in ("E1", "E2", "E3", "E4", "E5", "E6"):
         assert eid not in text
     for hid in ("H1", "H2", "H3", "H4"):
         assert hid not in text.replace("H_n", "")
