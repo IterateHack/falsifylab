@@ -99,6 +99,10 @@ class Action:
                                             # auditor itself ignores non-dict entries defensively
                                             # and never text-matches.
     makes_target_claim: bool = False   # True iff asserting on/off-target for analogue killing
+    abstain_reason: Optional[str] = None
+    # None            -> the model chose to abstain. Epistemic restraint; counts as abstention.
+    # "parse_failure" -> the harness constructed this action after two unparseable replies.
+    #                    A harness/model reliability failure, NOT an abstention.
 
 
 @dataclass
