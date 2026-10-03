@@ -86,7 +86,15 @@ class Action:
     parameters: dict = field(default_factory=dict)
     contributing_hypotheses: Optional[list[HypothesisId]] = None
     confidence: Optional[float] = None
-    evidence_cited: Optional[list[str]] = None
+    evidence_cited: Optional[list] = None   # REQUIRED shape per entry: a citation dict
+                                            # {"experiment": "E4", "supports": "mechanism"};
+                                            # supports in {mechanism, target_claim, potency,
+                                            # target_engagement}, absent = "for the conclusion".
+                                            # The ENVIRONMENT rejects bare-string entries at
+                                            # submission (env workstream) — a prose citation is
+                                            # an auditor-invisible reward-hack loophole. The
+                                            # auditor itself ignores non-dict entries defensively
+                                            # and never text-matches.
     makes_target_claim: bool = False   # True iff asserting on/off-target for analogue killing
 
 
@@ -107,7 +115,9 @@ class Trajectory:
 class Verdict:
     verdict: str                                  # one of VERDICTS
     flags: list[str]                              # subset of FLAGS
-    scores: dict[str, float]                      # must contain every SCORE_KEYS entry
+    scores: dict                                # every SCORE_KEYS entry (floats), plus
+                                                # "epistemic_flags": list[str] — kept separate
+                                                # from `flags` so flag assertions stay valid
     raw_total: float
     R_visible: float
     final_score: float
@@ -153,9 +163,13 @@ def audit(trajectory: Trajectory, rubric: dict, truth: dict) -> Verdict:
       - rubric: json.load(auditor/rubric.json).
       - truth:  json.load(auditor/truth.json) -> {contribution_labels, dominant_cause}.
         Kept out of the rubric so one rubric can score any scenario.
-    Implemented by the auditor workstream; the golden tests are its spec.
+    Implemented in auditor/audit.py (imported lazily so this module stays free
+    of the auditor workstream's dependencies and there is no import cycle).
+    auditor/ must never gain an __init__.py: it is a PEP 420 namespace package,
+    and making it a regular package would shadow any sibling auditor module.
     """
-    raise NotImplementedError("auditor workstream")
+    from auditor.audit import audit as _audit
+    return _audit(trajectory, rubric, truth)
 
 
 # --- Logged-episode <-> dataclass loader (concrete; see CONTRACT.md) ----------
