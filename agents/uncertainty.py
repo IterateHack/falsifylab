@@ -159,12 +159,21 @@ class BeliefUpdate:
     experiment_id: ExperimentId
     readout: str
     reason: str
+    prior_distance: float = 0.0
+    """How far this hypothesis now sits from the uniform prior, in units of the
+    prior: |posterior - PRIOR| / PRIOR. Reported per update so a reader can see
+    which beliefs the evidence actually moved and which are still sitting on the
+    prior. It is NOT the conclusion's confidence."""
+
+    def __post_init__(self) -> None:
+        self.prior_distance = abs(self.posterior - PRIOR) / PRIOR
 
     def as_text(self) -> str:
         arrow = "raised" if self.posterior > self.prior else "lowered"
         return (
             f"turn {self.turn}: P({self.hypothesis}) {arrow} "
             f"{self.prior:.2f} -> {self.posterior:.2f} by {self.experiment_id} "
+            f"[prior_distance {self.prior_distance:.2f}] "
             f'("{self.readout}"): {self.reason}'
         )
 
@@ -356,7 +365,7 @@ class UncertaintyAgent:
         dominant = self._dominant()
         justified = {u.hypothesis for u in self.ledger}
         unjustified = [h for h in contributing if h not in justified]
-        confidence = self._confidence()
+        confidence = self._confidence(contributing, dominant)
         return Action(
             kind="conclude",
             beliefs=dict(self.beliefs),
@@ -370,13 +379,35 @@ class UncertaintyAgent:
             makes_target_claim=self._target_claim_supported(state),
         )
 
-    def _confidence(self) -> float:
-        """Calibrated to the beliefs actually held, not to how clean the story
-        sounds: the mean distance from the prior across ALL hypotheses. A story
-        that explains one hypothesis and leaves three at 0.5 is not a confident
-        story, however tidy it reads."""
-        spread = [abs(self.beliefs[h] - PRIOR) / PRIOR for h in self.hypotheses]
-        return round(min(sum(spread) / len(spread), 0.95), 2)
+    def _confidence(
+        self, contributing: list[HypothesisId], dominant: Optional[HypothesisId]
+    ) -> float:
+        """My stated probability that the whole conclusion is correct: the
+        contributing set AND the dominant cause, together.
+
+        Contract definition, identical across variants, so OVERCONFIDENT rates
+        are comparable. It answers one question and is not a transform of how
+        far the beliefs travelled - that quantity lives on
+        `BeliefUpdate.prior_distance`.
+
+        Treating the four hypotheses as independent (the briefing's framing),
+        the set is right only if every assertion and every non-assertion is
+        right, so P(set) is the product over all hypotheses of p_h where
+        asserted and (1 - p_h) where not. Naming a dominant cause is a further
+        claim - that this hypothesis outweighs the runner-up - carrying its own
+        probability; declining to name one asserts nothing extra.
+        """
+        asserted = set(contributing)
+        p_set = 1.0
+        for h in self.hypotheses:
+            p = self.beliefs[h]
+            p_set *= p if h in asserted else (1 - p)
+        p_dominant = 1.0
+        if dominant is not None:
+            ranked = sorted(self.beliefs.values(), reverse=True)
+            total = ranked[0] + ranked[1]
+            p_dominant = ranked[0] / total if total > 0 else 0.5
+        return round(min(max(p_set * p_dominant, 0.01), 0.99), 2)
 
     def _dominant(self) -> Optional[HypothesisId]:
         ranked = sorted(self.beliefs.items(), key=lambda kv: (-kv[1], kv[0]))
