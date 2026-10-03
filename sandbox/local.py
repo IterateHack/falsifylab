@@ -77,7 +77,10 @@ class LocalExecutor:
 
     # ---- lifecycle -------------------------------------------------------
     def start(self) -> None:
-        self._dir = Path(tempfile.mkdtemp(prefix=f"falsifylab-{self.name}-"))
+        # resolve() matters on macOS, where the temp dir lives under a /var ->
+        # /private/var symlink: without it, paths built by rglob() and paths
+        # built from self.root disagree and relative_to() raises.
+        self._dir = Path(tempfile.mkdtemp(prefix=f"falsifylab-{self.name}-")).resolve()
         (self._dir / "work").mkdir()
         (self._dir / "data").mkdir()
 
@@ -132,13 +135,14 @@ class LocalExecutor:
         return p.read_text(encoding="utf-8", errors="replace")
 
     def list_files(self, rel_path: str = ".") -> list[str]:
-        base = (self.root / rel_path).resolve()
+        root = self.root.resolve()
+        base = (root / rel_path).resolve()
         if not base.exists():
             return []
         out = []
         for p in sorted(base.rglob("*")):
             if p.is_file():
-                out.append(str(p.relative_to(self.root)))
+                out.append(str(p.resolve().relative_to(root)))
         return out
 
     # ---- execution -------------------------------------------------------

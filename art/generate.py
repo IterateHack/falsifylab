@@ -320,6 +320,7 @@ def station_prop(kind: str) -> Image.Image:
         rect(d, 6, base_y - 1, 14, base_y, C["steel_dark"])
     elif kind == "structure":               # exp2 - cryo-EM / model
         rect(d, 4, base_y - 3, 20, base_y, C["steel_dark"])
+        rect(d, 11, 14, 12, base_y - 4, C["steel_dark"])   # stand post
         for cx, cy, col in [(9, 12, "liquid_cyan"), (14, 9, "liquid_amber"),
                             (19, 13, "liquid_green"), (12, 5, "liquid_pink")]:
             rect(d, cx - 1, cy - 1, cx + 1, cy + 1, C[col])

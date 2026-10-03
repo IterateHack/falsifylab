@@ -1,7 +1,7 @@
 import { Sprite } from "./Sprite";
 import {
-  STATION_W, STATION_PROP_Y, STATION_LIGHT_Y, STATUS_FRAME, stationX,
-  type StationStatus,
+  SCORE_BADGE_Y, STATION_LIGHT_Y, STATION_PLATE_Y, STATION_PROP_Y, STATION_W,
+  STATUS_FRAME, stationX, type StationStatus,
 } from "../lib/scene";
 
 interface Props {
@@ -39,13 +39,13 @@ export function Station({
         y={STATION_LIGHT_Y}
         className={status === "running" ? "status-light blink" : "status-light"}
       />
-      <div className="station-plate" style={{ left: x, top: STATION_LIGHT_Y + 10 }}>
+      <div className="station-plate" style={{ left: x, top: STATION_PLATE_Y }}>
         {index + 1}
       </div>
       {score !== null && (
         <div
           className={"score-badge " + (score >= 0.6 ? "good" : "poor")}
-          style={{ left: x - 4, top: STATION_LIGHT_Y - 14 }}
+          style={{ left: x - 4, top: SCORE_BADGE_Y }}
         >
           {score.toFixed(2)}
         </div>
@@ -57,7 +57,12 @@ export function Station({
           (clickable ? " clickable" : "") +
           (active ? " active" : "")
         }
-        style={{ left: x - 2, top: STATION_PROP_Y - 2, width: STATION_W + 4, height: 40 }}
+        style={{
+          left: x - 2,
+          top: STATION_PROP_Y - 2,
+          width: STATION_W + 4,
+          height: STATION_PLATE_Y + 10 - STATION_PROP_Y,
+        }}
         onClick={clickable ? onOpen : undefined}
         disabled={!clickable}
         aria-label={

@@ -16,8 +16,16 @@ export const BENCH = { x: 40, y: 88, w: 304, h: 64 };
 export const STATION_W = 32;
 export const STATION_GAP = 16;
 export const STATION_X0 = 56;
-export const STATION_PROP_Y = 82;
-export const STATION_LIGHT_Y = 66;
+/**
+ * The bench worktop's top edge is at y=104 (BENCH.y + 16). A 32px prop therefore
+ * starts at 72 so its base rests on the worktop rather than sinking into the
+ * front face. Decor is 16px and starts at 88 for the same reason.
+ */
+export const WORKTOP_Y = BENCH.y + 16;
+export const STATION_PROP_Y = WORKTOP_Y - 32;
+export const STATION_LIGHT_Y = 58;
+export const STATION_PLATE_Y = WORKTOP_Y + 4;
+export const SCORE_BADGE_Y = 44;
 
 export function stationX(index: number): number {
   return STATION_X0 + index * (STATION_W + STATION_GAP);
@@ -34,7 +42,7 @@ export const SCIENTIST = { y: 140, w: 16, h: 24, homeX: 20 };
  * Decor sits in the gaps between stations and on the end caps, never over a
  * station's footprint or its click target.
  */
-export const DECOR_Y = 88;
+export const DECOR_Y = WORKTOP_Y - 16;
 export const DECOR_SLOTS: { x: number; sprite: string }[] = [
   { x: 40, sprite: "decor_tubes" },
   { x: stationX(0) + STATION_W, sprite: "decor_beaker" },
