@@ -74,3 +74,34 @@ Targets genetic evidence either way.
 - **Lesson cards are paraphrases with citations, never excerpts**, per the plan's
   copyright mitigation. Three of the six sources are not open access; the cards
   carry the citation and DOI so a reader can go to the source.
+
+---
+
+# WRN curriculum (H2) references
+
+Verified against Europe PMC on **2026-10-03**.
+
+| # | Reference | Status |
+|---|---|---|
+| 1 | Tsherniak A, Vazquez F, Montgomery PG, et al. *Defining a Cancer Dependency Map.* Cell. 2017;170(3):564-576.e16. doi:10.1016/j.cell.2017.06.010 | **Verified.** Not open access |
+| 2 | Chan EM, Shibue T, McFarland JM, et al. *WRN helicase is a synthetic lethal target in microsatellite unstable cancers.* Nature. 2019;568(7753):551-556. doi:10.1038/s41586-019-1102-x | **Verified.** Open access |
+| 3 | van Wietmarschen N, Sridharan S, Nathan WJ, et al. *Repeat expansions confer WRN dependence in microsatellite-unstable cancers.* Nature. 2020;586(7828):292-298. doi:10.1038/s41586-020-2769-8 | **Verified.** Not open access |
+
+Behan et al. Nature 2019, listed in the plan for H2 experiment 2, is not used:
+the two experiments built here are the dependency-class distinction and the
+lineage confounder, and those are covered by Tsherniak and Chan.
+
+## Data
+
+All DepMap CRISPR gene-effect values come from the Open Targets Platform field
+`target.depMapEssentiality`, which exposes per-cell-line Chronos scores
+(21,108 measurements, 17 genes, ~1250 lines). Nothing is transcribed.
+
+**Known soft spot: no MSI annotation.** Open Targets exposes tissue and disease
+name per cell line but not microsatellite-instability status, so experiment 2
+asks about the *lineage* distribution of WRN dependency and about what that
+distribution stands for, rather than scoring an MSI-stratified analysis
+directly. The lesson card says so explicitly, and the rubric rewards proposing
+MSI annotation as the next measurement. A fuller version would pull the DepMap
+sample-info table and score the within-lineage MSI comparison, which is the
+actual Chan et al. result.

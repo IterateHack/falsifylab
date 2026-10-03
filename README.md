@@ -28,7 +28,17 @@ non-peptide agonism is feasible.**
 | 6 | Capstone | An evidence-weighted verdict on H1 | Rubric against the ATTAIN-1 phase 3 result | 1-5 |
 
 The curriculum is a config folder, not code, so the engine is
-hypothesis-agnostic: add `curricula/<id>/` and the lab runs it.
+hypothesis-agnostic. That claim is tested rather than asserted: `curricula/wrn/`
+is a second hypothesis - **WRN helicase as a synthetic-lethal target in MSI-high
+cancers** - built on 21,108 real DepMap CRISPR measurements, with its own
+scorers and lesson cards and **no change to anything under `engine/` or
+`sandbox/`**.
+
+```bash
+./.venv/bin/python -m curricula.wrn.fetch
+./.venv/bin/python -m engine.cli validate --curriculum curricula/wrn
+./.venv/bin/python -m engine.cli run --curriculum curricula/wrn --run-id wrn_run
+```
 
 ## Quick start
 
@@ -36,7 +46,7 @@ hypothesis-agnostic: add `curricula/<id>/` and the lab runs it.
 python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
 ./.venv/bin/python -m curricula.glp1r.fetch      # build datasets from primary sources
 ./.venv/bin/python -m engine.cli validate        # check specs, data, scorers, lessons
-./.venv/bin/python -m pytest -q                  # 42 tests
+./.venv/bin/python -m pytest -q                  # 52 tests
 
 export ANTHROPIC_API_KEY=...
 ./.venv/bin/python -m engine.cli run --run-id my_run
@@ -126,6 +136,8 @@ usually is.
 engine/       event log, specs, agent loop, tool gating, scoring, notebook, CLI
 sandbox/      Executor contract; local and Modal backends
 curricula/    one folder per hypothesis: specs, scorers, ground truth, lessons, fetch
+              glp1r/ the six-experiment GLP-1R curriculum (H1)
+              wrn/   a second hypothesis, to prove the engine is agnostic (H2)
 api/          FastAPI (replay + SSE) and the Modal deployment
 web/          Vite + React pixel lab and notebook overlay
 art/          generates every spritesheet with Pillow
