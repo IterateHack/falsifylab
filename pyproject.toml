@@ -1,0 +1,9 @@
+[project]
+name = "falsifylab"
+version = "0.1.0"
+description = "A virtual lab where an AI scientist is scored on its own predictions, then taught from the literature."
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["curricula/glp1r/tests", "engine/tests"]
+pythonpath = ["."]
