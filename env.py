@@ -12,9 +12,11 @@ the gold answer belong to the auditor; the environment's only jobs are to charge
 the budget, hand back the right observation, and faithfully record what the
 agent declared so the auditor can judge it from the trajectory alone.
 
-Refusals (over budget, too few E6 arms, a purchase after the episode ended)
-raise EnvRejection with a reason. A refusal is not an Observation — the
-experiment did not run and nothing was charged.
+Refusals (over budget, too few E6 arms, a purchase after the episode ended, or
+a conclude whose evidence_cited is not structured) raise EnvRejection with a
+reason. A refusal is not an Observation — the experiment did not run and nothing
+was charged. A conclude's citations must be {experiment, supports?} objects, so
+the auditor judges them structurally and never text-matches.
 """
 from __future__ import annotations
 
@@ -24,7 +26,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Optional, Union
 
-from contract import Action, Observation, Result, State
+from contract import SUPPORTS, Action, EvidenceCitation, Observation, Result, State
 
 BRIEFING_EXPERIMENT_ID = "__briefing__"
 
@@ -88,7 +90,8 @@ class Env:
 
     def step(self, action: Action) -> Observation:
         if action.kind == "conclude":
-            self._state.concluded = True              # cost 0; episode ends
+            self._check_citations(action.evidence_cited)  # malformed -> refuse; episode not ended
+            self._state.concluded = True                  # cost 0; episode ends
             return self._briefing_observation()
         if action.kind != "run_experiment":
             raise EnvRejection(f"unknown action kind: {action.kind!r}")
@@ -127,6 +130,51 @@ class Env:
         self._state.experiments_run.append(eid)
 
         return self._build_observation(eid, params)
+
+    # --- conclude validation --------------------------------------------------
+    def _check_citations(self, evidence_cited) -> None:
+        """A conclude's citations must be structured: each entry an object
+        {experiment, supports?} — experiment required and a known id, supports
+        (if given) one of SUPPORTS. Bare strings, or any other malformed entry,
+        are refused the same way a missing required parameter is. The agent
+        cites experiments, not prose, so the auditor never text-matches.
+        None or an empty list means 'no citations' and is allowed."""
+        if evidence_cited is None:
+            return
+        if not isinstance(evidence_cited, (list, tuple)):
+            raise EnvRejection(
+                "malformed conclude: evidence_cited must be a list of "
+                "{experiment, supports?} objects"
+            )
+        for i, c in enumerate(evidence_cited):
+            if isinstance(c, EvidenceCitation):
+                experiment, supports = c.experiment, c.supports
+            elif isinstance(c, dict):
+                if "experiment" not in c:
+                    raise EnvRejection(
+                        f"malformed conclude: evidence_cited[{i}] is missing required 'experiment'"
+                    )
+                experiment, supports = c["experiment"], c.get("supports")
+            else:
+                raise EnvRejection(
+                    f"malformed conclude: evidence_cited[{i}] must be an object "
+                    f"{{experiment, supports?}}, got {type(c).__name__} {c!r}. "
+                    "Bare strings are rejected; the agent cites experiments, not prose."
+                )
+            if not experiment:
+                raise EnvRejection(
+                    f"malformed conclude: evidence_cited[{i}] is missing required 'experiment'"
+                )
+            if experiment not in self._costs:
+                raise EnvRejection(
+                    f"malformed conclude: evidence_cited[{i}] experiment {experiment!r} "
+                    f"is not a known experiment id"
+                )
+            if supports is not None and supports not in SUPPORTS:
+                raise EnvRejection(
+                    f"malformed conclude: evidence_cited[{i}] supports {supports!r} "
+                    f"must be one of {', '.join(SUPPORTS)}"
+                )
 
     # --- observation assembly -------------------------------------------------
     def _briefing_observation(self) -> Observation:

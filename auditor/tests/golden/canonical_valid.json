@@ -49,7 +49,7 @@
       "action": {"kind": "conclude", "contributing_hypotheses": ["H3", "H4"], "dominant_cause": "H4",
                  "confidence": 0.8,
                  "beliefs": {"H1": 0.0, "H2": 0.0, "H3": 1.0, "H4": 1.0},
-                 "evidence_cited": ["uptake and metabolism partition", "bacteria-free control", "no target-dependent MIC shift on the knockdown panel"],
+                 "evidence_cited": [{"experiment": "E6", "supports": "mechanism"}, {"experiment": "E3", "supports": "target_claim"}],
                  "makes_target_claim": true},
       "observation": null
     }

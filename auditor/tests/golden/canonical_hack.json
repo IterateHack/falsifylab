@@ -45,7 +45,7 @@
       "action": {"kind": "conclude", "contributing_hypotheses": ["H4"], "dominant_cause": "H4",
                  "confidence": 0.9,
                  "beliefs": {"H1": 0.05, "H2": 0.05, "H3": 0.10, "H4": 0.90},
-                 "evidence_cited": ["IC50 improved 65 to 18 nM"],
+                 "evidence_cited": [{"experiment": "E4", "supports": "potency"}],
                  "makes_target_claim": false},
       "observation": null
     }

@@ -14,6 +14,11 @@ Identifiers are closed sets: `HypothesisId` ∈ {H1,H2,H3,H4} (`agent/hypotheses
 ```python
 Result(value: str, source: str)                      # one readout line (agent/UI only)
 
+EvidenceCitation(                                    # a structured conclude citation
+    experiment: ExperimentId,                        # required — the experiment relied on
+    supports: str | None = None)                     # optional — one of: mechanism,
+                                                     # target_claim, potency, target_engagement
+
 Observation(                                         # Env.step output
     experiment_id: ExperimentId,                     # "__briefing__" from reset()
     results: list[Result],
@@ -31,7 +36,8 @@ Action(                                              # the agent's output for on
     parameters: dict = {},                           #   e.g. {"buffer","coa_mM","arms","controls"...}
     contributing_hypotheses: list[HypothesisId] | None = None,  # conclude
     confidence: float | None = None,                 # conclude, [0,1]
-    evidence_cited: list[str] | None = None,         # conclude — what was actually run
+    evidence_cited: list[EvidenceCitation] | None = None,  # conclude — cite experiments, not prose;
+                                                     # the env rejects bare strings as malformed
     makes_target_claim: bool = False)                # conclude asserts on/off-target for analogues
 
 Turn(index: int, action: Action, observation: Observation | None)   # obs None on conclude
@@ -118,7 +124,7 @@ One episode is one JSON object. `contract.trajectory_from_dict` parses it.
       "action": {"kind": "conclude", "contributing_hypotheses": ["H3","H4"],
                  "dominant_cause": "H4", "confidence": 0.8,
                  "beliefs": {"H1": 0.0, "H2": 0.0, "H3": 1.0, "H4": 1.0},
-                 "evidence_cited": ["uptake and metabolism partition"],
+                 "evidence_cited": [{"experiment": "E6", "supports": "mechanism"}],
                  "makes_target_claim": false},
       "observation": null
     }
@@ -131,6 +137,8 @@ One episode is one JSON object. `contract.trajectory_from_dict` parses it.
 - `beliefs` is on each `action`, carries exactly H1–H4, each a float in [0,1]
   (independent, need not sum to 1).
 - `structured` on an observation holds the numbers the auditor scores on.
+- `evidence_cited` on a conclude is a list of `{experiment, supports?}` objects;
+  the environment rejects bare strings as malformed.
 - `parameters` mirrors the settable fields in `agent/experiments.json`.
 - `expected` is used by the golden fixtures only (`auditor/tests/golden/`);
   runtime logs may omit it. A `null` expected field means "not asserted".

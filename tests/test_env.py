@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from contract import Action, State
+from contract import Action, EvidenceCitation, State
 from env import BRIEFING_EXPERIMENT_ID, Env, EnvRejection
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -200,6 +200,82 @@ def test_no_purchase_after_conclude(env):
     with pytest.raises(EnvRejection) as ei:
         env.step(run("E4"))
     assert "conclude" in ei.value.reason.lower()
+
+
+# --- conclude requires structured citations -----------------------------------
+def test_conclude_accepts_structured_citations(env):
+    env.reset()
+    env.step(conclude(dominant_cause="H4",
+                      evidence_cited=[{"experiment": "E6", "supports": "mechanism"},
+                                      {"experiment": "E3", "supports": "target_claim"}]))
+    assert env.state.concluded is True
+
+
+def test_conclude_accepts_citation_without_supports(env):
+    env.reset()
+    env.step(conclude(dominant_cause="H4", evidence_cited=[{"experiment": "E6"}]))  # supports optional
+    assert env.state.concluded is True
+
+
+def test_conclude_accepts_evidencecitation_objects(env):
+    env.reset()
+    env.step(conclude(dominant_cause="H4",
+                      evidence_cited=[EvidenceCitation(experiment="E6", supports="mechanism")]))
+    assert env.state.concluded is True
+
+
+@pytest.mark.parametrize("ev", [None, []])
+def test_conclude_accepts_no_citations(env, ev):
+    env.reset()
+    env.step(conclude(dominant_cause="H4", evidence_cited=ev))
+    assert env.state.concluded is True
+
+
+def test_conclude_rejects_bare_string_citations(env):
+    env.reset()
+    with pytest.raises(EnvRejection) as ei:
+        env.step(conclude(dominant_cause="H4", evidence_cited=["IC50 improved 65 to 18 nM"]))
+    assert "malformed" in ei.value.reason.lower()
+
+
+def test_conclude_rejects_missing_experiment(env):
+    env.reset()
+    with pytest.raises(EnvRejection) as ei:
+        env.step(conclude(dominant_cause="H4", evidence_cited=[{"supports": "mechanism"}]))
+    assert "experiment" in ei.value.reason.lower()
+
+
+def test_conclude_rejects_unknown_experiment_id(env):
+    env.reset()
+    with pytest.raises(EnvRejection) as ei:
+        env.step(conclude(dominant_cause="H4", evidence_cited=[{"experiment": "E99"}]))
+    assert "known experiment" in ei.value.reason.lower()
+
+
+def test_conclude_rejects_bad_supports_value(env):
+    env.reset()
+    with pytest.raises(EnvRejection) as ei:
+        env.step(conclude(dominant_cause="H4",
+                          evidence_cited=[{"experiment": "E6", "supports": "vibes"}]))
+    assert "supports" in ei.value.reason.lower()
+
+
+def test_conclude_rejects_non_list_evidence(env):
+    env.reset()
+    with pytest.raises(EnvRejection):
+        env.step(conclude(dominant_cause="H4", evidence_cited={"experiment": "E6"}))
+
+
+def test_malformed_conclude_does_not_end_episode(env):
+    """A refused conclude is not a conclusion: the episode stays open and the
+    budget is untouched, exactly like a rejected purchase."""
+    env.reset()
+    with pytest.raises(EnvRejection):
+        env.step(conclude(dominant_cause="H4", evidence_cited=["bare string"]))
+    s = env.state
+    assert s.concluded is False and s.budget_remaining == 8
+    env.step(run("E4"))                       # still allowed
+    assert env.state.experiments_run == ["E4"]
 
 
 # --- unknown experiment -------------------------------------------------------

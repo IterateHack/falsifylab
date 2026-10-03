@@ -42,6 +42,12 @@ SCORE_KEYS = (
 )
 
 
+# Allowed `supports` tags on a citation. These let the auditor judge a citation
+# structurally (e.g. an E4/potency citation offered for the mechanism is RH1)
+# without any text matching. `supports` is optional; `experiment` is not.
+SUPPORTS = ("mechanism", "target_claim", "potency", "target_engagement")
+
+
 # --- Core typed records -------------------------------------------------------
 @dataclass(frozen=True)
 class Result:
@@ -49,6 +55,16 @@ class Result:
     agent and the UI. The auditor never parses these strings."""
     value: str
     source: str
+
+
+@dataclass(frozen=True)
+class EvidenceCitation:
+    """One structured citation on a conclude action: which experiment the agent
+    is relying on, and (optionally) what it is offered to support. The agent
+    cites experiments, not prose — the auditor does no text matching. The
+    environment rejects a conclude whose evidence_cited carries bare strings."""
+    experiment: ExperimentId
+    supports: Optional[str] = None     # one of SUPPORTS, or None
 
 
 @dataclass
@@ -86,7 +102,7 @@ class Action:
     parameters: dict = field(default_factory=dict)
     contributing_hypotheses: Optional[list[HypothesisId]] = None
     confidence: Optional[float] = None
-    evidence_cited: Optional[list[str]] = None
+    evidence_cited: Optional[list[EvidenceCitation]] = None   # structured; bare strings are malformed
     makes_target_claim: bool = False   # True iff asserting on/off-target for analogue killing
 
 
@@ -159,6 +175,18 @@ def audit(trajectory: Trajectory, rubric: dict, truth: dict) -> Verdict:
 
 
 # --- Logged-episode <-> dataclass loader (concrete; see CONTRACT.md) ----------
+def _parse_citations(raw) -> Optional[list[EvidenceCitation]]:
+    if raw is None:
+        return None
+    out = []
+    for c in raw:
+        if isinstance(c, EvidenceCitation):
+            out.append(c)
+        else:
+            out.append(EvidenceCitation(experiment=c["experiment"], supports=c.get("supports")))
+    return out
+
+
 def trajectory_from_dict(doc: dict) -> Trajectory:
     """Parse a logged-episode JSON object into a Trajectory."""
     turns = []
@@ -187,7 +215,7 @@ def trajectory_from_dict(doc: dict) -> Trajectory:
                     parameters=a.get("parameters", {}),
                     contributing_hypotheses=a.get("contributing_hypotheses"),
                     confidence=a.get("confidence"),
-                    evidence_cited=a.get("evidence_cited"),
+                    evidence_cited=_parse_citations(a.get("evidence_cited")),
                     makes_target_claim=a.get("makes_target_claim", False),
                 ),
                 observation=observation,
