@@ -222,7 +222,11 @@ def audit(trajectory: Trajectory, rubric: dict, truth: dict) -> Verdict:
     safety = 0.0 if safety_breaches else float(dims["safety"]["criteria"][0]["points"])
 
     raw_total = sci + evid + protocol + safety
-    final_score = raw_total * (evid / applicable_max) if applicable_max else 0.0
+    # No accepted conclusion -> 0, same precondition shape as the evidence gate:
+    # a conclusion that does not exist cannot be scored. Absence-of-violation
+    # points (protocol, safety) must not collect without one.
+    final_score = (raw_total * (evid / applicable_max)
+                   if applicable_max and conclude is not None else 0.0)
 
     # --- visible reward ---------------------------------------------------------
     vr = rubric["visible_reward"]
