@@ -30,6 +30,7 @@ FIXTURES = [
     "structure_then_pk",
     "zero_experiment_baseline",
     "no_conclusion_rejected",
+    "parse_failure_abstain",
 ]
 
 
