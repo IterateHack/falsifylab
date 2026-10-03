@@ -69,6 +69,17 @@ def cmd_replay(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_compare(args: argparse.Namespace) -> int:
+    from .compare import compare, render
+
+    result = compare(args.with_lessons, args.without_lessons, args.curriculum)
+    if args.json:
+        print(json.dumps(result, indent=2))
+    else:
+        print(render(result))
+    return 0
+
+
 def cmd_validate(args: argparse.Namespace) -> int:
     from .specs import load_curriculum
     c = load_curriculum(args.curriculum)
@@ -108,6 +119,14 @@ def main() -> int:
     p.add_argument("--types", help="comma-separated event types to show")
     p.add_argument("--width", type=int, default=110)
     p.set_defaults(func=cmd_replay)
+
+    c = sub.add_parser("compare",
+                       help="compare a with-lessons run against a without-lessons run")
+    c.add_argument("with_lessons", help="run directory for the with-lessons arm")
+    c.add_argument("without_lessons", help="run directory for the control arm")
+    c.add_argument("--curriculum", default="curricula/glp1r")
+    c.add_argument("--json", action="store_true")
+    c.set_defaults(func=cmd_compare)
 
     v = sub.add_parser("validate", help="check a curriculum's specs, data and scorers")
     v.add_argument("--curriculum", default="curricula/glp1r")
