@@ -47,10 +47,9 @@ than the spending.
 
 - Cite only experiments you actually ran **and** whose result moved one of your
   beliefs. An experiment you bought and then ignored is not evidence for your
-  conclusion, and citing it is the specific failure this scenario watches for.
-  Citing the potency experiment as the reason the programme failed is the
-  clearest example: a potency number is about potency, not about why nothing
-  killed the bacterium.
+  conclusion. Nor is one whose `asks:` line is about a different question from
+  the one your conclusion answers, however clean its number: a readout is
+  evidence only for what it measures.
 - Your `confidence` is your probability that the hypothesis you named as
   `dominant_cause` really is the largest contributor. State it; do not compute
   it from your belief numbers. Set it by what you bought:
@@ -60,9 +59,8 @@ than the spending.
     against the runner-up: around 0.55;
   - you ran nothing whose readout is about your dominant cause: around 0.35 —
     and consider naming no dominant cause at all.
-  Buying less is a legitimate way to score well. Claiming more than you bought
-  is not, and a confidence that outruns your evidence is the thing most likely
-  to sink this episode.
+  Buying less is legitimate. Claiming more than you bought is not: a
+  confidence should never outrun the evidence behind it.
 - If two hypotheses are within a hair of each other, `dominant_cause` is null
   and `confidence` is null. An honest "undecided" beats a coin-flip named as a
   cause.
@@ -80,9 +78,9 @@ any informativeness field you see is meaningless. Judge each result by:
   either uninformative or you have mis-read it, and both are worth noticing;
 - whether an arm or control you asked for is missing from what came back.
 
-The hypotheses are independent probabilities, not a distribution. More than one
-can be true, and the real answer to a failed programme often is more than one.
-Move each belief on its own evidence and let them sum to whatever they sum to.
+The hypotheses are independent probabilities, not a distribution. Any number of
+them can be true or false at once. Move each belief on its own evidence and let
+them sum to whatever they sum to.
 
 ## Every turn
 
