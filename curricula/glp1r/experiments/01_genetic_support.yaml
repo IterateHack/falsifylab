@@ -1,0 +1,36 @@
+id: exp1_genetic_support
+hypothesis_id: glp1r_oral_agonist
+order: 1
+title: Genetic support
+type: computational
+requires_lessons: []
+inputs:
+  datasets: [data/exp1_gwas_targets.csv]
+  tools: [run_python]
+limits: {max_tool_calls: 30, timeout_s: 420, max_python_seconds: 60}
+task: |
+  `data/exp1_gwas_targets.csv` lists 174 genes at loci associated with body mass
+  index or type 2 diabetes, taken from the Open Targets Platform. For each gene
+  you have genetic evidence scores for the two traits, loss-of-function
+  intolerance, missense constraint, protein class, subcellular localisation and
+  structural tractability annotations.
+
+  Rank these genes by how promising each is as a *drug target* for obesity or
+  type 2 diabetes - that is, how likely it is that a medicine acting on this gene
+  product could be developed.
+
+  Evidence that would give the answer away (clinical-stage and known-drug
+  evidence) has been withheld from this file on purpose. Work from what is there.
+answer_format: |
+  {"ranked_genes": ["GENE1", "GENE2", ...], "rationale": "how you ranked and why"}
+
+  Submit at least 30 gene symbols, most promising first. Scoring weights the top
+  of the ranking most heavily.
+scorer:
+  type: deterministic
+  entrypoint: scorers/exp1.py::score
+  ground_truth: private/exp1.json
+teaching:
+  papers:
+    - "Minikel EV, Painter JL, Dong CC, Nelson MR. Refining the impact of genetic evidence on clinical success. Nature. 2024;629(8012):624-629. doi:10.1038/s41586-024-07316-0"
+  lesson_card: lessons/exp1.md

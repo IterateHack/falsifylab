@@ -1,0 +1,43 @@
+id: exp6_capstone
+hypothesis_id: glp1r_oral_agonist
+order: 6
+title: Capstone verdict
+type: reasoning
+requires_lessons:
+  - exp1_genetic_support
+  - exp2_structure_contacts
+  - exp3_peptide_engineering
+  - exp4_potency
+  - exp5_small_molecule_feasibility
+inputs:
+  datasets: []
+  tools: [run_python]
+limits: {max_tool_calls: 16, timeout_s: 420, max_python_seconds: 30}
+task: |
+  Write an evidence-weighted verdict on the headline hypothesis:
+
+    "GLP-1R is a genetically supported, druggable obesity target, and oral
+     non-peptide agonism is feasible."
+
+  Treat it as three separate claims - genetically supported, druggable, oral
+  non-peptide agonism feasible - and for each one name the strongest evidence you
+  have, say what type of evidence it is, and grade your confidence. Then say what
+  this body of evidence does *not* establish, and what would change your mind.
+
+  You have the lessons from all five earlier experiments. Use `read_lessons`.
+  Where your own earlier answer was wrong, say so and say what corrected it.
+answer_format: |
+  {"verdict": "your overall judgement on H1",
+   "per_claim": {"genetically_supported": "...", "druggable": "...",
+                 "oral_non_peptide_feasible": "..."},
+   "not_established": "what this evidence does not cover",
+   "would_change_my_mind": "...",
+   "reasoning": "the weighing, in prose"}
+scorer:
+  type: rubric
+  entrypoint: scorers/exp6.py::score
+  ground_truth: private/exp6.json
+teaching:
+  papers:
+    - "Wharton S, Aronne LJ, Stefanski A, et al. Orforglipron, an Oral Small-Molecule GLP-1 Receptor Agonist for Obesity Treatment. N Engl J Med. 2025;393(18):1796-1806. doi:10.1056/NEJMoa2511774"
+  lesson_card: lessons/exp6.md

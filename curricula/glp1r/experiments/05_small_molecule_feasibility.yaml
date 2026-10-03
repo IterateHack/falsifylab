@@ -1,0 +1,44 @@
+id: exp5_small_molecule_feasibility
+hypothesis_id: glp1r_oral_agonist
+order: 5
+title: Small-molecule feasibility
+type: reasoning
+requires_lessons: [exp2_structure_contacts, exp4_potency]
+inputs:
+  datasets: [data/exp5_ortholog_alignment.csv]
+  tools: [run_python]
+limits: {max_tool_calls: 28, timeout_s: 480, max_python_seconds: 60}
+task: |
+  A medicinal chemistry programme has an orally available non-peptide small
+  molecule that activates human GLP-1R in a cell-based assay. You are asked to
+  design the next experiment and to predict its outcome.
+
+  `data/exp5_ortholog_alignment.csv` is a position-by-position comparison of the
+  GLP-1R protein sequence across human, mouse, rat and rhesus macaque, annotated
+  with the region each position falls in (extracellular, transmembrane helix,
+  cytoplasmic), built from the UniProt reviewed records.
+
+  Answer three things.
+
+  1. Which assay system should be used to characterise this compound, and which
+     readouts? Be specific about species and about what is measured.
+  2. Predict whether a non-peptide small molecule can act as a GLP-1R agonist at
+     all, and where on the receptor it would have to act.
+  3. What result would you expect from the system you would be most tempted to
+     reach for by default, and what would that result actually mean?
+
+  You have the contact map from experiment 2 and the pharmacology from
+  experiment 4. Use them.
+answer_format: |
+  {"assay_model": "the system and readouts you would use",
+   "prediction": "whether a non-peptide agonist works, and where it binds",
+   "default_choice_outcome": "what the obvious default model would show and why",
+   "reasoning": "the evidence behind all three"}
+scorer:
+  type: rubric
+  entrypoint: scorers/exp5.py::score
+  ground_truth: private/exp5.json
+teaching:
+  papers:
+    - "Kawai T, Sun B, Yoshino H, et al. Structural basis for GLP-1 receptor activation by LY3502970, an orally active nonpeptide agonist. Proc Natl Acad Sci U S A. 2020;117(47):29959-29967. doi:10.1073/pnas.2014879117"
+  lesson_card: lessons/exp5.md

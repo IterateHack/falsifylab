@@ -1,0 +1,42 @@
+id: exp4_potency
+hypothesis_id: glp1r_oral_agonist
+order: 4
+title: Potency
+type: computational
+requires_lessons: [exp3_peptide_engineering]
+inputs:
+  datasets: [data/exp4_dose_response.csv, data/exp4_chembl_activities.csv]
+  tools: [run_python]
+limits: {max_tool_calls: 42, timeout_s: 540, max_python_seconds: 90}
+task: |
+  Two files, both about the potency of GLP-1R agonists.
+
+  `data/exp4_dose_response.csv` has concentration-response measurements for 14
+  molecules: concentration in nM, three replicates per point, response as a
+  percentage, and a `qc_flag` column marking suspect points.
+
+  `data/exp4_chembl_activities.csv` has the raw ChEMBL EC50 records for the same
+  14 molecules, exactly as deposited - mixed assay types, mixed relations, and
+  varying numbers of reports per molecule.
+
+  Two things are wanted.
+
+  1. For each molecule, estimate pEC50 (= -log10 of EC50 in molar) from the
+     concentration-response data.
+  2. Rank the 14 molecules from most to least potent using the ChEMBL records.
+
+  The two sources will not agree perfectly. Say which you trust where, and why.
+answer_format: |
+  {"fitted_pec50": {"CHEMBL123": 8.42, ...},
+   "ranking": ["CHEMBL_most_potent", ..., "CHEMBL_least_potent"],
+   "method": "how you fitted the curves and aggregated the ChEMBL records"}
+
+  Use molecule_chembl_id as the key in both. Cover all 14 molecules.
+scorer:
+  type: deterministic
+  entrypoint: scorers/exp4.py::score
+  ground_truth: private/exp4.json
+teaching:
+  papers:
+    - "Gaulton A, Hersey A, Nowotka M, et al. The ChEMBL database in 2017. Nucleic Acids Res. 2017;45(D1):D945-D954. doi:10.1093/nar/gkw1074"
+  lesson_card: lessons/exp4.md
