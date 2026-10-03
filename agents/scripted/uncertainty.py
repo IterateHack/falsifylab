@@ -1,4 +1,8 @@
-"""Agent variant: `uncertainty`.
+"""Uncertainty agent variant — deterministic control arm.
+
+The scripted twin of agents/prompts/uncertainty.md: the same belief-ledger
+discipline hand-coded, no model in the loop, so a run can tell a bad policy
+apart from a model that did not follow it.
 
 Discipline this variant is defined by: **every belief change is justified in
 writing, and the justification names the observation that moved it and why.**
@@ -30,7 +34,9 @@ from typing import Optional
 
 from contract import Action, ExperimentId, HypothesisId, Observation, Result, State
 
-AGENT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "agent")
+AGENT_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "agent"
+)
 
 # CONTRACT.md: `supports` is a closed set. Which one an experiment supports is
 # read off the experiment's OWN question text (agent/experiments.json), so no
