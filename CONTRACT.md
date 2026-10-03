@@ -45,7 +45,15 @@ Action(                                              # the agent's output for on
                                                      # submission and reject a conclude carrying
                                                      # bare strings — a prose citation is an
                                                      # auditor-invisible loophole (RH bypass).
-    makes_target_claim: bool = False)                # conclude asserts on/off-target for analogues
+    makes_target_claim: bool = False,                # conclude asserts on/off-target for analogues
+    abstain_reason: str | None = None)               # None -> the model chose to abstain: epistemic
+                                                     #   restraint; counts as abstention.
+                                                     # "parse_failure" -> the harness built this
+                                                     #   action after two unparseable replies: a
+                                                     #   harness/model reliability failure, NOT an
+                                                     #   abstention. Set only by the harness, never
+                                                     #   by the model; it records that the harness
+                                                     #   built the action and changes no content.
 
 Turn(index: int, action: Action, observation: Observation | None)   # obs None on conclude
 
