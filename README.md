@@ -126,9 +126,33 @@ The claim that lessons help is testable, so it is tested:
 ./.venv/bin/python -m engine.cli compare runs/run_001 runs/control_no_lessons
 ```
 
-This splits the delta by whether an experiment declares `requires_lessons`, and
-says plainly when the difference is within noise. With one run per arm, it
-usually is.
+Running the whole curriculum twice, with and without the lesson cards:
+
+```
+ #  experiment                              needs   with  without   delta
+ 1  Genetic support                            no   0.84     0.70   +0.14
+ 2  Peptide-receptor structure                 no   1.00     1.00   +0.00
+ 3  Peptide engineering                       yes   0.95     0.95   +0.00
+ 4  Potency                                   yes   0.85     0.92   -0.07
+ 5  Small-molecule feasibility                yes   0.75     0.45   +0.30
+ 6  Capstone verdict                          yes   1.00     0.79   +0.21
+
+mean delta, experiments needing lessons (4)  +0.109
+mean delta, experiments not needing them (2) +0.071
+```
+
+**The clearest single result is experiment 5.** Without the earlier lessons the
+scientist reached for a rodent model and triggered the penalty; with them it did
+not. That is the designed cross-experiment dependency doing exactly what it was
+built to do - orforglipron depends on human Trp33, which rodents replace with
+Ser, and you only see why that matters once experiment 2 has told you the
+non-peptide cannot be using the peptide's binding site.
+
+**But the aggregate does not support a strong claim.** Lesson-dependent
+experiments gained +0.109 and independent ones +0.071, which is not a separation
+at n=1 per arm - experiment 1 needs no lessons and still moved +0.14, which is
+just run-to-run variance. `compare` says so itself rather than quoting the
+favourable number. Several runs per arm would be needed to claim more.
 
 ## Repository layout
 
@@ -159,6 +183,14 @@ Running the curriculum against Claude Sonnet 5 (Opus 5 for the capstone):
   parsing the mmCIF and never submitted, scoring zero. That is an artefact of the
   harness, not a finding about the science, so budgets now reserve their last two
   calls for submission and every tool result reports the remaining budget.
+- Twice, a low score turned out to be **our** bug rather than the agent's. On the
+  WRN curriculum it scored 0.62 for discarding a five-cell-line tissue as
+  underpowered - which was correct, and which our ground truth had ranked second
+  - and for writing "tissue is a surrogate variable" where the rubric only looked
+  for the word "proxy". Both are fixed, and the same answer now scores 0.99. A
+  rubric that penalises a right answer for its vocabulary is worse than no rubric,
+  which is why every scorer has a test asserting the trap costs points and the
+  correct answer does not.
 
 Both results are in `runs/`, and the notebook is readable as markdown at
 `runs/<id>/notebook.md`.
