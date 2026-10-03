@@ -35,7 +35,8 @@ interface Props {
 }
 
 export function Lab({ scene, titles, reducedMotion, onOpenStation }: Props) {
-  const running = scene.activeIndex !== null && scene.statuses[scene.activeIndex] === "running";
+  const running =
+    scene.activeIndex !== null && scene.statuses[scene.activeIndex] === "running";
 
   return (
     <div className="scene" style={{ width: SCENE_W, height: SCENE_H }}>
@@ -100,8 +101,10 @@ export function Lab({ scene, titles, reducedMotion, onOpenStation }: Props) {
         <div
           className={`speech speech-${scene.speechKind}`}
           style={{
-            left: Math.max(4, Math.min(scene.scientistX - 72, SCENE_W - 168)),
-            top: 112,
+            // Below the scientist, on the empty floor: above would cover the
+            // bench and the stations the viewer is meant to be watching.
+            left: Math.max(4, Math.min(scene.scientistX - 70, SCENE_W - 152)),
+            top: 170,
           }}
         >
           {scene.speech}

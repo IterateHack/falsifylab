@@ -24,7 +24,7 @@ export const STATION_X0 = 56;
 export const WORKTOP_Y = BENCH.y + 16;
 export const STATION_PROP_Y = WORKTOP_Y - 32;
 export const STATION_LIGHT_Y = 58;
-export const STATION_PLATE_Y = WORKTOP_Y + 4;
+export const STATION_PLATE_Y = WORKTOP_Y + 10;
 export const SCORE_BADGE_Y = 44;
 
 export function stationX(index: number): number {
@@ -56,8 +56,9 @@ export const DECOR_SLOTS: { x: number; sprite: string }[] = [
 /** Floor-level clutter, drawn in front of the bench but behind the scientist. */
 export const FLOOR_DECOR = [
   { x: 348, y: 150, sprite: "decor_petri" },
-  { x: 14, y: 150, sprite: "decor_clipboard" },
   { x: 356, y: 118, sprite: "decor_pipettes" },
+  // Kept clear of SCIENTIST.homeX so the idle scientist is not standing on it.
+  { x: 4, y: 178, sprite: "decor_clipboard" },
 ];
 
 export const WALL_DECOR = [

@@ -81,20 +81,45 @@ export function usePlayback(opts: PlaybackOptions) {
     finishedIndexes: [],
   }));
 
+  /**
+   * The completion callback is held in a ref, not captured in the queue's
+   * closures. The pump schedules a timeout and the callback it invokes later
+   * must reflect current state - capturing it meant a "Run all" toggled on in
+   * the same tick was invisible, and the notebook popped open mid-run.
+   */
+  const onDone = useRef(onExperimentDone);
+  useEffect(() => {
+    onDone.current = onExperimentDone;
+  }, [onExperimentDone]);
+
   const queue = useRef<LabEvent[]>([]);
   const timer = useRef<number | null>(null);
   const draining = useRef(false);
   const posX = useRef(SCIENTIST.homeX);
 
-  // The first station is clickable as soon as the scene mounts.
+  /**
+   * Resize the per-station arrays when the curriculum arrives.
+   *
+   * The curriculum is fetched, so on first render `n` is 0 and the useState
+   * initialiser - which only ever runs once - produces empty arrays. Without
+   * this the arrays stay empty, every station reads `undefined`, and the scene
+   * crashes on the first score. Also marks station 1 ready.
+   */
   useEffect(() => {
     setScene((s) => {
-      if (s.statuses[0] !== "locked") return s;
-      const statuses = [...s.statuses];
-      statuses[0] = "ready";
-      return { ...s, statuses };
+      if (s.statuses.length === n) return s;
+      const grow = <T,>(arr: T[], fill: T): T[] =>
+        Array.from({ length: n }, (_, i) => (i < arr.length ? arr[i] : fill));
+      const statuses = grow(s.statuses, "locked" as StationStatus);
+      if (n > 0 && statuses[0] === "locked") statuses[0] = "ready";
+      return {
+        ...s,
+        statuses,
+        scores: grow(s.scores, null as number | null),
+        confidences: grow(s.confidences, null as number | null),
+      };
     });
-  }, []);
+  }, [n]);
 
   const indexOf = useCallback(
     (id: string | null) => (id ? experimentIds.indexOf(id) : -1),
@@ -210,12 +235,12 @@ export function usePlayback(opts: PlaybackOptions) {
         return next;
       });
 
-      if (ev.type === "experiment_done" && ev.experiment_id && onExperimentDone) {
-        onExperimentDone(ev.experiment_id);
+      if (ev.type === "experiment_done" && ev.experiment_id) {
+        onDone.current?.(ev.experiment_id);
       }
       return extra;
     },
-    [indexOf, n, onExperimentDone, reducedMotion, speed],
+    [indexOf, n, reducedMotion, speed],
   );
 
   const pump = useCallback(() => {

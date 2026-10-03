@@ -6,7 +6,7 @@ import {
 
 interface Props {
   index: number;
-  status: StationStatus;
+  status: StationStatus | undefined;
   score: number | null;
   confidence: number | null;
   title: string;
@@ -27,14 +27,14 @@ export function Station({
         frameH={32}
         x={x}
         y={STATION_PROP_Y}
-        className={status === "locked" ? "station-prop dim" : "station-prop"}
+        className={(status ?? "locked") === "locked" ? "station-prop dim" : "station-prop"}
       />
       <Sprite
         sheet="status_lights"
         frameW={8}
         frameH={8}
         frames={4}
-        frame={STATUS_FRAME[status]}
+        frame={STATUS_FRAME[status ?? "locked"]}
         x={x + STATION_W / 2 - 4}
         y={STATION_LIGHT_Y}
         className={status === "running" ? "status-light blink" : "status-light"}
@@ -42,7 +42,7 @@ export function Station({
       <div className="station-plate" style={{ left: x, top: STATION_PLATE_Y }}>
         {index + 1}
       </div>
-      {score !== null && (
+      {score != null && (
         <div
           className={"score-badge " + (score >= 0.6 ? "good" : "poor")}
           style={{ left: x - 4, top: SCORE_BADGE_Y }}
@@ -72,8 +72,8 @@ export function Station({
         }
         title={
           clickable
-            ? `${title} - score ${score?.toFixed(2)}${
-                confidence !== null ? `, stated confidence ${confidence.toFixed(2)}` : ""
+            ? `${title} - score ${score?.toFixed(2) ?? "-"}${
+                confidence != null ? `, stated confidence ${confidence.toFixed(2)}` : ""
               }. Click to open the notebook.`
             : `${title} (${status})`
         }

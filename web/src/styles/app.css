@@ -244,11 +244,11 @@ button.ghost { background: var(--panel-2); color: #e8e4f4; }
 
 .speech {
   position: absolute;
-  max-width: 164px;
+  max-width: 148px;
   background: var(--paper);
   color: var(--ink);
-  font-size: 6.5px;
-  line-height: 1.5;
+  font-size: 5.5px;
+  line-height: 1.55;
   font-family: "Press Start 2P", monospace;
   padding: 5px 6px;
   border: 2px solid #3a3350;
@@ -256,14 +256,15 @@ button.ghost { background: var(--panel-2); color: #e8e4f4; }
   word-break: break-word;
 }
 
+/* The tail points up at the scientist, since the bubble sits below them. */
 .speech::after {
   content: "";
   position: absolute;
-  bottom: -5px; left: 58px;
+  top: -5px; left: 64px;
   width: 0; height: 0;
   border-left: 4px solid transparent;
   border-right: 4px solid transparent;
-  border-top: 5px solid #3a3350;
+  border-bottom: 5px solid #3a3350;
 }
 
 .speech-tool { background: #dfeaf2; }

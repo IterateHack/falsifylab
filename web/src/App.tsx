@@ -16,7 +16,14 @@ export default function App() {
   const [runId, setRunId] = useState<string | null>(null);
   const [notebook, setNotebook] = useState<Notebook | null>(null);
   const [openIndex, setOpenIndex] = useState<number | null>(null);
-  const [speed, setSpeed] = useState(1);
+  const params = useMemo(
+    () => new URLSearchParams(typeof window === "undefined" ? "" : window.location.search),
+    [],
+  );
+  const [speed, setSpeed] = useState(() => {
+    const s = Number(params.get("speed"));
+    return [1, 2, 4].includes(s) ? s : 1;
+  });
   const [mode, setMode] = useState<Mode>("replay");
   const [runAll, setRunAll] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,6 +58,8 @@ export default function App() {
       if (runId) refreshNotebook(runId);
       const idx = experimentIds.indexOf(expId);
       setCursor(idx + 1);
+      // Opening the notebook after every experiment is right for a click-through
+      // demo and wrong for "Run all", which should play straight through.
       if (!runAll) setOpenIndex(idx);
     },
   });
@@ -64,7 +73,9 @@ export default function App() {
         setHypothesis(c.hypothesis);
         const r = await api.runs();
         setRuns(r.runs);
+        const wanted = params.get("run");
         const best =
+          (wanted ? r.runs.find((x) => x.run_id === wanted) : undefined) ??
           r.runs.find((x) => x.run_id.startsWith("demo")) ??
           r.runs.find((x) => (x.n_entries ?? 0) > 0) ??
           r.runs[0];
@@ -73,7 +84,7 @@ export default function App() {
         setError(String(e));
       }
     })();
-  }, []);
+  }, [params]);
 
   useEffect(() => {
     if (runId) refreshNotebook(runId);
@@ -102,6 +113,17 @@ export default function App() {
     },
     [runId, experimentIds, enqueue],
   );
+
+  // ?autostart=1 begins playback once the curriculum and run are loaded. Used
+  // for recording the demo, and to drive the UI in a headless browser check.
+  const autostarted = useRef(false);
+  useEffect(() => {
+    if (!params.get("autostart")) return;
+    if (autostarted.current || !runId || !experimentIds.length) return;
+    autostarted.current = true;
+    if (params.get("runall") !== "0") setRunAll(true);
+    playExperiment(0);
+  }, [params, runId, experimentIds.length, playExperiment]);
 
   // "Run all" chains straight into the next experiment as each one finishes.
   useEffect(() => {
