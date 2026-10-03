@@ -27,7 +27,9 @@ doi:10.1038/s41586-020-2769-8
 
 ## Method
 1. Rank groups by the fraction of lines that are dependent, not by the mean, and
-   set a minimum group size - a tissue with two lines tops any ranking by chance.
+   apply lesson 1's standard to the group as well: enough lines to measure a
+   fraction at all, and a genuine deep tail. In this dataset a five-line tissue
+   whose worst line only reaches -0.59 otherwise ranks second, above colorectal.
 2. When a dependency clusters by lineage, ask what else clusters that way.
    Lineage correlates with mutational process, expression programme and genotype.
 3. Get the candidate variable annotated directly - here, MSI status per line -

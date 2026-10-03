@@ -43,6 +43,9 @@ SELECTIVE_FRACTION = 0.05       # dependent in at least this fraction => selecti
 # scraping past -0.5 while its worst line only reaches -1.09, whereas every
 # genuine selective gene here goes below -1.6.
 SELECTIVE_TAIL = -1.0
+# Experiment 2 applies the same standard to tissues.
+MIN_LINES_PER_TISSUE = 15
+TISSUE_TAIL = -1.0
 
 SEARCH_Q = """
 query($q: String!) {
@@ -198,21 +201,34 @@ def main() -> None:
            for k in ("common_essential", "selective", "non_essential")})
 
     # --- experiment 2: where does WRN dependency concentrate? ---------------
+    # The same standard lesson 1 teaches has to apply here, or the ground truth
+    # contradicts its own curriculum. A tissue counts only if it has enough
+    # lines to measure a fraction AND a genuine deep tail. With a 5-line floor
+    # and no tail requirement, "hepatopancreatic ampulla" (1 of 5 dependent,
+    # worst line -0.59) ranked second, above colorectal - and an agent that
+    # correctly discarded it as underpowered was marked down for doing so.
     tissue_stats = {
         t: {
             "n_lines": len(v),
             "median_gene_effect": round(median(v), 4),
+            "min_gene_effect": round(min(v), 4),
             "fraction_dependent": round(
                 sum(1 for e in v if e <= DEPENDENCY_THRESHOLD) / len(v), 4),
         }
-        for t, v in wrn_by_tissue.items() if len(v) >= 5
+        for t, v in wrn_by_tissue.items()
+        if len(v) >= MIN_LINES_PER_TISSUE and min(v) <= TISSUE_TAIL
     }
     ranked = sorted(tissue_stats, key=lambda t: -tissue_stats[t]["fraction_dependent"])
     (PRIVATE / "h2exp2.json").write_text(json.dumps({
         "scoring": "Rank correlation on tissues ordered by the fraction of cell "
                    "lines with WRN gene_effect <= -0.5, plus a mechanism rubric.",
         "source": "Open Targets Platform depMapEssentiality, WRN (ENSG00000165392)",
-        "min_lines_per_tissue": 5,
+        "min_lines_per_tissue": MIN_LINES_PER_TISSUE,
+        "tissue_tail_requirement": TISSUE_TAIL,
+        "inclusion_rule": f"a tissue is ranked only if it has at least "
+                          f"{MIN_LINES_PER_TISSUE} cell lines and at least one line "
+                          f"below {TISSUE_TAIL} - the same tail standard lesson 1 "
+                          f"applies to genes",
         "tissue_stats": tissue_stats,
         "ranking_most_to_least_dependent": ranked,
         "top_tissues": ranked[:5],
@@ -224,11 +240,15 @@ def main() -> None:
                        "as the underlying state, not the tissue itself"},
             {"id": "lineage_confound", "weight": 2.5,
              "any_of": ["confound", "lineage is a proxy", "proxy for", "not the tissue",
-                        "within-lineage", "within lineage", "stratif", "enriched in"],
+                        "within-lineage", "within lineage", "stratif", "enriched in",
+                        "surrogate", "is not the cause", "not the cause",
+                        "bimodal within", "within each", "standing in for",
+                        "stands in for", "correlate", "marker for"],
              "points": "treats lineage as a proxy for the real variable rather than "
                        "the cause"},
             {"id": "synthetic_lethal", "weight": 2.0,
-             "any_of": ["synthetic lethal", "synthetic-lethal", "synthetic lethality"],
+             "any_of": ["synthetic lethal", "synthetic-lethal", "synthetic lethality",
+                        "lethal only in", "lethal in combination", "genetic interaction"],
              "points": "frames the relationship as synthetic lethality"},
             {"id": "mechanism", "weight": 1.5,
              "any_of": ["ta repeat", "ta-repeat", "repeat expansion", "cruciform",

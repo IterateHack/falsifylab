@@ -16,9 +16,11 @@ task: |
   Using the same file, work out **which tissues those dependent lines belong to**,
   and then explain what is actually going on.
 
-  1. Rank the tissues by how concentrated WRN dependency is within them. Consider
-     only tissues with at least 5 cell lines - a tissue with two lines will top any
-     ranking by chance.
+  1. Rank the tissues by how concentrated WRN dependency is within them - the
+     fraction of that tissue's lines that are dependent. Count a tissue only if it
+     has at least 15 cell lines **and** at least one line below -1.0, applying the
+     same tail standard to tissues that lesson 1 applied to genes. Without that,
+     a tissue with five lines and one weak hit tops the ranking by chance.
   2. Explain what the lineage pattern reflects. Is the tissue of origin itself the
      cause of the dependency, or is it standing in for something else? If it is
      standing in for something, name it, propose the mechanism, and say what you
