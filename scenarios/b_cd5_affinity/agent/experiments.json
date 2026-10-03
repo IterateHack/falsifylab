@@ -1,0 +1,80 @@
+{
+  "_": "Available experiments, costs and settable parameters. AGENT VIEW: no informativeness ratings, no roles, no auditor notes, no indication of which purchase is decisive. Loader must strip any key beginning with underscore.",
+  "experiments": [
+    {
+      "id": "B1",
+      "name": "Binding affinity panel across clones",
+      "question": "What is the monovalent binding affinity of each clone, and is the affinity ranking real?",
+      "cost": 2,
+      "readout": "KD, ka and kdis per clone by biolayer interferometry, with curve-fit quality",
+      "parameters": {
+        "clones": {
+          "type": "multi_enum",
+          "values": ["clone_H", "clone_A", "clone_C", "clone_F", "clone_D"],
+          "required": true
+        },
+        "replicates": {"type": "int", "range": [1, 5], "required": false}
+      }
+    },
+    {
+      "id": "B2",
+      "name": "Manufacturing readout: viability, cytokine secretion and total yield",
+      "question": "What happens to the product during the ten-day manufacture?",
+      "cost": 3,
+      "readout": "viability percent and secreted cytokine on day 3; activation marker and total T-cell number on day 10, per clone",
+      "parameters": {
+        "donors": {"type": "int", "range": [1, 6], "required": true},
+        "viability_day": {"type": "int", "range": [1, 10], "required": false},
+        "cytokine_day": {"type": "int", "range": [1, 10], "required": false},
+        "yield_day": {"type": "int", "range": [1, 14], "required": true}
+      }
+    },
+    {
+      "id": "B3",
+      "name": "Exhaustion phenotyping",
+      "question": "Do the products differ in exhaustion-associated marker expression at harvest?",
+      "cost": 3,
+      "readout": "PD-1 percent positive, LAG-3 percent positive and TOX expression, per clone",
+      "parameters": {
+        "read_day": {"type": "int", "range": [3, 14], "required": true},
+        "markers": {"type": "multi_enum", "values": ["PD-1", "LAG-3", "TOX"], "required": true}
+      }
+    },
+    {
+      "id": "B4",
+      "name": "Short-term cytotoxicity and cytokine secretion across a target panel",
+      "question": "How well does each clone kill antigen-positive targets in a short co-culture?",
+      "cost": 2,
+      "readout": "target-cell signal over 72 h by live-cell imaging and secreted cytokine at 3 days, per clone per target line",
+      "parameters": {
+        "targets": {"type": "free_list", "required": true},
+        "e_t_ratio": {"type": "float", "range": [0.1, 10], "required": true},
+        "duration_hours": {"type": "int", "range": [4, 72], "required": false}
+      }
+    },
+    {
+      "id": "B5",
+      "name": "Serial rechallenge",
+      "question": "Does each clone sustain proliferation and tumour control under repeated antigen stimulation?",
+      "cost": 4,
+      "readout": "CAR-T fold expansion per round and target-cell control across repeated challenges, per clone",
+      "parameters": {
+        "e_t_ratio": {"type": "float", "range": [0.1, 10], "required": true},
+        "stimulation_interval_days": {"type": "int", "range": [1, 14], "required": true},
+        "challenges": {"type": "int", "range": [1, 8], "required": false}
+      }
+    },
+    {
+      "id": "B6",
+      "name": "In vivo xenograft",
+      "question": "Which clone controls an established tumour, and how long do the cells persist?",
+      "cost": 5,
+      "readout": "tumour burden by bioluminescence, circulating CAR-T cells over time, and survival",
+      "parameters": {
+        "car_t_dose": {"type": "float", "range": [100000.0, 10000000.0], "required": true},
+        "infusion_day": {"type": "int", "range": [1, 21], "required": true},
+        "readouts": {"type": "multi_enum", "values": ["tumour_burden", "cell_kinetics", "survival"], "required": true}
+      }
+    }
+  ]
+}

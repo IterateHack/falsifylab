@@ -1,0 +1,26 @@
+{
+  "_": "Candidate explanations. AGENT VIEW: no truth labels, no roles, no auditor notes. Loader must strip any key beginning with underscore.",
+  "instruction": "These hypotheses are not mutually exclusive. More than one may contribute. Assign each an independent probability.",
+  "hypotheses": [
+    {
+      "id": "H1",
+      "label": "Measurement artefact",
+      "claim": "The affinity differences are not real; the reported binding ranking does not reflect genuine differences between the clones."
+    },
+    {
+      "id": "H2",
+      "label": "Antigen density limits benefit",
+      "claim": "Higher affinity cannot help when target antigen is sparse; the durability difference is set by how much antigen the target cells carry."
+    },
+    {
+      "id": "H3",
+      "label": "Self-targeting during manufacture",
+      "claim": "The construct's own carriers express the antigen, so higher affinity destroys the product before it is infused."
+    },
+    {
+      "id": "H4",
+      "label": "Chronic activation",
+      "claim": "Sustained engagement drives a dysfunctional phenotype that fails on repeated challenge."
+    }
+  ]
+}
