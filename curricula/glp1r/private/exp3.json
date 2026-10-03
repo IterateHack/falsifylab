@@ -1,0 +1,114 @@
+{
+  "approx_half_life_h": {
+    "Albiglutide": 120.0,
+    "Dulaglutide": 112.0,
+    "Exenatide": 2.4,
+    "GLP-1(7-37)": 0.03,
+    "Liraglutide": 13.0,
+    "Lixisenatide": 3.0,
+    "Semaglutide": 165.0,
+    "Taspoglutide": 165.0,
+    "Tirzepatide": 117.0
+  },
+  "duration_classes": {
+    "Albiglutide": "once_weekly",
+    "Dulaglutide": "once_weekly",
+    "Exenatide": "twice_daily",
+    "GLP-1(7-37)": "minutes",
+    "Liraglutide": "once_daily",
+    "Lixisenatide": "once_daily",
+    "Semaglutide": "once_weekly",
+    "Taspoglutide": "once_weekly",
+    "Tirzepatide": "once_weekly"
+  },
+  "duration_rank": {
+    "Albiglutide": 3,
+    "Dulaglutide": 3,
+    "Exenatide": 1,
+    "GLP-1(7-37)": 0,
+    "Liraglutide": 2,
+    "Lixisenatide": 2,
+    "Semaglutide": 3,
+    "Taspoglutide": 3,
+    "Tirzepatide": 3
+  },
+  "half_life_provenance": "transcribed from primary literature and product labels; exact values NOT independently verified via API - duration class is what is scored",
+  "native_glp1_7_37": "HAEGTFTSDVSSYLEGQAAKEFIAWLVKGR",
+  "penalties": [
+    {
+      "any_of": [
+        "acylate the n-terminus",
+        "modify his7",
+        "acylation at his7",
+        "n-terminal acylation improves"
+      ],
+      "id": "acylate_nterm",
+      "weight": 2.0,
+      "why": "the N-terminus inserts into the receptor core; acylating it costs potency"
+    }
+  ],
+  "rubric": [
+    {
+      "any_of": [
+        "dpp-4",
+        "dpp4",
+        "dipeptidyl peptidase"
+      ],
+      "id": "dpp4",
+      "must_also": [
+        "aib",
+        "position 8",
+        "ala8",
+        "gly",
+        "alpha-aminoisobutyric"
+      ],
+      "points": "identifies protection of the His7-Ala8 DPP-4 cleavage site",
+      "weight": 2.0
+    },
+    {
+      "any_of": [
+        "albumin"
+      ],
+      "id": "albumin",
+      "must_also": [
+        "fatty",
+        "acyl",
+        "diacid",
+        "c18",
+        "c16",
+        "palmitoyl"
+      ],
+      "points": "links fatty-acid acylation to reversible albumin binding",
+      "weight": 2.0
+    },
+    {
+      "any_of": [
+        "renal",
+        "kidney",
+        "glomerular",
+        "hydrodynamic",
+        "molecular size",
+        "molecular weight"
+      ],
+      "id": "renal",
+      "points": "explains size-based escape from renal clearance (Fc / albumin fusion)",
+      "weight": 1.5
+    },
+    {
+      "any_of": [
+        "lys26",
+        "k26",
+        "mid-region",
+        "midregion",
+        "c-terminal",
+        "position 26",
+        "away from the n-terminus",
+        "lys20"
+      ],
+      "id": "site_choice",
+      "points": "places the modification away from the receptor-engaging N-terminus (the lesson from experiment 2)",
+      "weight": 1.5
+    }
+  ],
+  "scoring": "Spearman rank correlation on duration class, plus a mechanism rubric."
+}

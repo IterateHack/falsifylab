@@ -1,0 +1,98 @@
+[
+  {
+    "dataset": "exp2_7ki0.cif",
+    "detail": "mmCIF, 994709 bytes, Zhang et al. Cell Rep 2021 (2.5 A cryo-EM)",
+    "kind": "fetched",
+    "source": "RCSB PDB 7KI0"
+  },
+  {
+    "dataset": "private/exp2.json",
+    "detail": "40 contact residues at 4.0 A",
+    "kind": "computed",
+    "source": "computed from 7KI0"
+  },
+  {
+    "dataset": "exp3_analogues.csv",
+    "detail": "native GLP-1 sequence anchored to the reviewed record: HAEGTFTSDVSS...",
+    "kind": "fetched",
+    "source": "UniProt P01275 (proglucagon)"
+  },
+  {
+    "dataset": "exp3_analogues.csv",
+    "detail": "9 analogues; sequence modifications transcribed",
+    "kind": "transcribed",
+    "source": "primary literature + product labels"
+  },
+  {
+    "dataset": "exp5_ortholog_alignment.csv",
+    "detail": "human GLP1R, 463 aa",
+    "kind": "fetched",
+    "source": "UniProt P43220"
+  },
+  {
+    "dataset": "exp5_ortholog_alignment.csv",
+    "detail": "mouse GLP1R, 463 aa",
+    "kind": "fetched",
+    "source": "UniProt O35659"
+  },
+  {
+    "dataset": "exp5_ortholog_alignment.csv",
+    "detail": "rat GLP1R, 463 aa",
+    "kind": "fetched",
+    "source": "UniProt P32301"
+  },
+  {
+    "dataset": "exp5_ortholog_alignment.csv",
+    "detail": "macaque GLP1R, 463 aa",
+    "kind": "fetched",
+    "source": "UniProt F7E3K6"
+  },
+  {
+    "dataset": "private/exp5.json",
+    "detail": "residue 33 = {'human': 'W', 'mouse': 'S', 'rat': 'S', 'macaque': 'W'}",
+    "kind": "computed",
+    "source": "computed from UniProt orthologues"
+  },
+  {
+    "dataset": "exp1_gwas_targets.csv",
+    "detail": "body mass index: top 90 of 6549 associated targets",
+    "kind": "fetched",
+    "source": "Open Targets Platform EFO_0004340"
+  },
+  {
+    "dataset": "exp1_gwas_targets.csv",
+    "detail": "type 2 diabetes mellitus: top 90 of 10206 associated targets",
+    "kind": "fetched",
+    "source": "Open Targets Platform MONDO_0005148"
+  },
+  {
+    "dataset": "exp1_gwas_targets.csv",
+    "detail": "tractability / constraint / localisation for 174 genes",
+    "kind": "fetched",
+    "source": "Open Targets Platform targets()"
+  },
+  {
+    "dataset": "private/exp1.json",
+    "detail": "30 of 174 candidate genes have an approved drug",
+    "kind": "fetched",
+    "source": "Open Targets Platform"
+  },
+  {
+    "dataset": "exp4_chembl_activities.csv",
+    "detail": "2365 EC50 records across 1720 molecules",
+    "kind": "fetched",
+    "source": "ChEMBL REST activity (CHEMBL1784, EC50)"
+  },
+  {
+    "dataset": "exp4_dose_response.csv",
+    "detail": "570 points for 14 molecules; curve points are a deterministic four-parameter-logistic rendering (seed 20261003) of the real potencies, because ChEMBL stores summary EC50s not raw curves",
+    "kind": "derived",
+    "source": "simulated from real ChEMBL consensus pEC50"
+  },
+  {
+    "dataset": "private/exp4.json",
+    "detail": "consensus pEC50 for 14 molecules",
+    "kind": "computed",
+    "source": "computed from ChEMBL"
+  }
+]
