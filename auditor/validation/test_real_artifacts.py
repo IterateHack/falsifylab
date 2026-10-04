@@ -50,6 +50,7 @@ def test_real_stage1_post_fix_verdicts(scenario, expected, evidence, score):
     "media alone",
     "broth alone",
     "broth only",
+    "uninoculated",
     "uninoculated medium",
     "non-inoculated medium",
     "not inoculated media",

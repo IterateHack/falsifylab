@@ -16,7 +16,8 @@ _BLOCKED = tuple(re.compile(pattern) for pattern in (
 _ACCEPTED = tuple(re.compile(pattern) for pattern in (
     r"\bsterility controls?\b",
     r"\b(?:medium|media|broth) (?:alone|only)\b",
-    r"\b(?:uninoculated|non inoculated|not inoculated) (?:medium|media|broth)\b",
+    r"\buninoculated\b",
+    r"\b(?:non inoculated|not inoculated) (?:medium|media|broth)\b",
     r"\bnegative growth controls?\b",
     r"\b(?:media|medium) controls?\b",
     r"\bno cells?\b(?: \w+){0,4} (?:incubations?|controls?)\b",
