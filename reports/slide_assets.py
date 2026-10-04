@@ -57,8 +57,9 @@ SCIENCE_DENOMINATOR_CAPTION = (
     "harness-error and PARSE_FAILURE runs are excluded and counted separately."
 )
 GRID_DENOMINATOR_NOTE = (
-    "runner's grid_summary.json keeps refusal-aborted runs in its denominator; "
-    "its rates therefore differ."
+    "runner's grid_summary.json counts refusal-aborted runs in n_scored, so its "
+    "clean_success_rate differs from this table's (and with it clean_success_ci95, "
+    "frontier_regret and raw_score_mean); n_clean_success is the same."
 )
 REPLICATE_CAPTION = (
     f"{SCIENCE_DENOMINATOR_CAPTION} n = science runs. Refusal (provider refusal + "
