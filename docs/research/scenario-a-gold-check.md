@@ -13,8 +13,9 @@
 
 Literature check run with Amass. The report below is as delivered. Its findings are only
 partly reflected in the bundle: the briefing now stipulates target vulnerability and occupancy as
-adequate, and `auditor/truth.json`'s H2 note reads "disfavoured, not excluded", but H2's
-`contribution_labels` value is still 0 and `dominant_cause` is still a single id. See the README's
+adequate, and `auditor/truth.json`'s H2 note reads "disfavoured, not excluded" (both on `main`
+as of 46a850c), but H2's `contribution_labels` value is still 0 and `dominant_cause` is still a
+single id. See the README's
 Known limitations.
 
 ## Papers
