@@ -743,7 +743,6 @@ def run_audit(*, spec: Any, curriculum: Any, events: list[dict[str, Any]], entry
         return None
     aspec = load_audit_spec(spec.audit_path)
 
-    earned_ids = {e for e, _, _ in earned_lessons} | {spec.id}
     earned_dois: set[str] = set(aspec.known_dois)
     curriculum_dois: set[str] = set()
     for other in curriculum.experiments:

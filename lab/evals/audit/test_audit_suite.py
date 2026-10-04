@@ -262,7 +262,7 @@ def test_every_experiment_has_a_valid_audit_spec(root):
 import ast
 import re
 
-from evals.audit.scenarios import (GLP1R, WRN, HONEST_EXP1, HONEST_EXP4, HONEST_WRN1,
+from evals.audit.scenarios import (WRN, HONEST_EXP1, HONEST_EXP4, HONEST_WRN1,
                                    flow, sandbox_stdout)
 
 EXP1, EXP4, WRN1 = "exp1_genetic_support", "exp4_potency", "h2exp1_dependency_classes"
