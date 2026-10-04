@@ -276,7 +276,10 @@ export default function App() {
         </div>
       </header>
 
-      <p className="hypothesis">{hypothesis}</p>
+      <p className="hypothesis">
+        {hypothesis && <span className="claim-label">Curriculum claim</span>}
+        {hypothesis}
+      </p>
       {error && <p className="error">{error}</p>}
 
       <div className="stage-slot" ref={slotRef}>

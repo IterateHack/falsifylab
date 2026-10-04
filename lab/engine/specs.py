@@ -1,7 +1,7 @@
 """Experiment and curriculum specs (plan section 8.1).
 
-A curriculum is a config folder, so the engine is hypothesis-agnostic: a new
-hypothesis is a new folder under `curricula/`, with no change to the code.
+A curriculum is a config folder, so the engine is curriculum-agnostic: a different
+curriculum is a different folder under `curricula/`, with no change to the code.
 """
 from __future__ import annotations
 

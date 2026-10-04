@@ -168,6 +168,15 @@ button.ghost { background: var(--panel-2); color: #e8e4f4; }
   opacity: 0.65;
 }
 
+.claim-label {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9a93b8;
+}
+
 .error {
   background: #3a1f28;
   border: 1px solid var(--poor);
