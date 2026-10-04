@@ -328,12 +328,46 @@ function CalibrationPage({ data }: { data: NotebookData | null }) {
   );
 }
 
-/** Deliberately tiny: headings, bullets, tables and bold are all the notebook uses. */
+const ORDERED_ITEM = /^\s*(\d+)\.\s+/;
+
+/**
+ * Consecutive numbered blocks form one list even when blank lines separate the
+ * items, so they count 1. 2. 3. instead of each restarting at 1.
+ */
+function groupOrderedLists(blocks: string[]): (string | string[])[] {
+  const out: (string | string[])[] = [];
+  for (const block of blocks) {
+    if (!ORDERED_ITEM.test(block.split("\n")[0])) {
+      out.push(block);
+      continue;
+    }
+    const last = out[out.length - 1];
+    const items = Array.isArray(last) ? last : [];
+    if (!Array.isArray(last)) out.push(items);
+    for (const line of block.split("\n")) {
+      if (ORDERED_ITEM.test(line) || items.length === 0) items.push(line);
+      else items[items.length - 1] += "\n" + line;
+    }
+  }
+  return out;
+}
+
+/** Deliberately tiny: headings, bullets, numbered lists, tables and bold are all the notebook uses. */
 function Markdownish({ text }: { text: string }) {
-  const blocks = text.split(/\n{2,}/);
+  const blocks = groupOrderedLists(text.split(/\n{2,}/));
   return (
     <>
       {blocks.map((block, i) => {
+        if (Array.isArray(block)) {
+          const start = Number(block[0].match(ORDERED_ITEM)?.[1] ?? 1);
+          return (
+            <ol key={i} start={start}>
+              {block.map((item, j) => (
+                <li key={j}>{inline(item.replace(ORDERED_ITEM, ""))}</li>
+              ))}
+            </ol>
+          );
+        }
         const lines = block.split("\n");
         if (lines.every((l) => l.trim().startsWith("|")) && lines.length > 1) {
           const rows = lines
@@ -360,15 +394,6 @@ function Markdownish({ text }: { text: string }) {
                 <li key={j}>{inline(l.replace(/^\s*[-*]\s+/, ""))}</li>
               ))}
             </ul>
-          );
-        }
-        if (/^\s*\d+\.\s+/.test(lines[0]) && lines.every((l) => /^\s*\d+\.\s+/.test(l))) {
-          return (
-            <ol key={i}>
-              {lines.map((l, j) => (
-                <li key={j}>{inline(l.replace(/^\s*\d+\.\s+/, ""))}</li>
-              ))}
-            </ol>
           );
         }
         return <p key={i}>{inline(block)}</p>;
