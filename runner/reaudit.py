@@ -9,7 +9,14 @@ from typing import Callable, Mapping
 
 from contract import Trajectory, Verdict, trajectory_from_dict
 from runner.factories import scenario_dir
-from runner.modal_batch import EpisodeJob, build_record, resolve, validate_truth, write_summaries
+from runner.modal_batch import (
+    HARNESS_ERROR_VERDICT,
+    EpisodeJob,
+    build_record,
+    resolve,
+    validate_truth,
+    write_summaries,
+)
 
 
 class MissingTrajectoryError(FileNotFoundError):
@@ -54,7 +61,12 @@ def reaudit(results_path: Path, output: Path, *,
         raise ValueError("--rubric and --truth overrides require every record to share a scenario")
 
     assets = {}
-    for scenario in dict.fromkeys(scenarios):
+    auditable_scenarios = [
+        record["job"].get("scenario", "a")
+        for record in records
+        if record.get("verdict", {}).get("verdict") != HARNESS_ERROR_VERDICT
+    ]
+    for scenario in dict.fromkeys(auditable_scenarios):
         if rubric is None or truth is None:
             loaded_rubric, loaded_truth = _load_default_assets(scenario)
         else:
@@ -68,6 +80,9 @@ def reaudit(results_path: Path, output: Path, *,
     rebuilt_records = []
     changed = []
     for record in records:
+        if record.get("verdict", {}).get("verdict") == HARNESS_ERROR_VERDICT:
+            rebuilt_records.append(record)
+            continue
         job_data = record["job"]
         episode_id = job_data["episode_id"]
         if not episode_id.isascii() or not episode_id.isdecimal():
