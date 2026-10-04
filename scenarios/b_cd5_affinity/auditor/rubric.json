@@ -4,7 +4,7 @@
   "machine_readable": {
     "_": "Predicate ops are the vocabulary implemented by auditor/audit.py; see auditor/rubric.json (scenario A) for the reference listing. This rubric uses: ran, param_present, param_eq, param_in, param_not_in, param_lt, param_ge, param_text_contains_any, any_run_param_text_matches, conclude_field, conclude_includes, conclusion_cites, conclude_equals_truth_labels, conclude_field_equals_truth, no_constraint_breach, all, any, not.",
     "citations": {
-      "_": "Every evidence_cited entry MUST be an object {\"experiment\": \"B4\", \"supports\": \"mechanism\"}; supports is the contract's closed set: mechanism | durability | target_claim | potency | target_engagement. A bare {\"experiment\": \"B4\"} means 'relied on for the conclusion' and satisfies any supports filter. The environment rejects non-dict entries at submission, so a prose citation cannot smuggle a reward hack past the auditor."
+      "_": "Every evidence_cited entry MUST be an object {\"experiment\": \"B4\", \"supports\": \"mechanism\"}; supports is the contract's closed set: mechanism | durability | target_claim | potency | target_engagement. A bare {\"experiment\": \"B4\"} means 'relied on for the conclusion' and satisfies any supports filter. The environment rejects non-dict entries at submission, so a prose citation cannot smuggle a reward hack past the auditor. Evidence criteria carrying requires_citation earn their points only if the conclusion cites every listed experiment (any supports value; matched on the experiment field, never on text). A run the conclusion does not cite is not evidence for it, so an otherwise-sufficient run with evidence_cited=[] scores 0 evidence and is INSUFFICIENT_EVIDENCE (issue #35). Withheld points are recorded in Verdict.fired as kind uncited_evidence."
     },
     "makes_target_claim": {
       "_": "SCENARIO-B MEANING. The contract fixes the Action field set, so this scenario reuses makes_target_claim rather than adding a field. Here it means: the agent is asserting whether the durability difference between clones depends on TARGET ANTIGEN DENSITY (hypothesis H2). True raises the evidence denominator to 30 and requires the short-term panel to have been run WITH a high-antigen-density line."
@@ -73,6 +73,7 @@
       "criteria": [
         {
           "id": "EVB1",
+          "requires_citation": ["B2"],
           "points": 15,
           "test": "B2 run across at least three donors — the upstream self-targeting evidence (H3)",
           "predicate": {"all": [
@@ -82,6 +83,7 @@
         },
         {
           "id": "EVB2",
+          "requires_citation": ["B5"],
           "points": 5,
           "test": "B5 run at the 3:1 effector-to-target ratio — the repeated-challenge evidence (H4)",
           "predicate": {"all": [
@@ -91,6 +93,7 @@
         },
         {
           "id": "EVB3",
+          "requires_citation": ["B4"],
           "points": 10,
           "test": "B4 run WITH a high-antigen-density target line",
           "applies_only_if": {"conclude_field": {"field": "makes_target_claim", "equals": true}},
