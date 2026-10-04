@@ -1,0 +1,1208 @@
+[
+  {
+    "curriculum": "glp1r",
+    "sample": 0,
+    "model": "claude-opus-5",
+    "stop_reason": "end_turn",
+    "usage": {
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 0,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "inference_geo": "global",
+      "input_tokens": 566,
+      "output_tokens": 3908,
+      "output_tokens_details": {
+        "thinking_tokens": 573
+      },
+      "server_tool_use": null,
+      "service_tier": "standard"
+    },
+    "parsed": true,
+    "confidence": 0.84,
+    "score": 0.875,
+    "details": {
+      "earned_weight": 12.0,
+      "deducted_weight": 1.5,
+      "total_weight": 12.0,
+      "missed": [],
+      "penalised": [
+        "H1 is about target validity and oral feasibility; CV outcome claims are not supported by the evidence in this curriculum"
+      ],
+      "breakdown": [
+        {
+          "id": "verdict",
+          "kind": "rubric",
+          "weight": 2.0,
+          "awarded": 2.0,
+          "matched_on": "supported",
+          "also_matched": null,
+          "points": "states a clear verdict on H1"
+        },
+        {
+          "id": "genetics",
+          "kind": "rubric",
+          "weight": 1.5,
+          "awarded": 1.5,
+          "matched_on": "genetic",
+          "also_matched": null,
+          "points": "weights the genetic support strand (experiment 1)"
+        },
+        {
+          "id": "structure",
+          "kind": "rubric",
+          "weight": 1.5,
+          "awarded": 1.5,
+          "matched_on": "structure",
+          "also_matched": null,
+          "points": "weights the structural strand (experiment 2)"
+        },
+        {
+          "id": "engineering",
+          "kind": "rubric",
+          "weight": 1.0,
+          "awarded": 1.0,
+          "matched_on": "half-life",
+          "also_matched": null,
+          "points": "weights the peptide-engineering strand (experiment 3)"
+        },
+        {
+          "id": "potency",
+          "kind": "rubric",
+          "weight": 1.0,
+          "awarded": 1.0,
+          "matched_on": "potency",
+          "also_matched": null,
+          "points": "weights the potency strand (experiment 4)"
+        },
+        {
+          "id": "oral_feasibility",
+          "kind": "rubric",
+          "weight": 2.0,
+          "awarded": 2.0,
+          "matched_on": "oral",
+          "also_matched": null,
+          "points": "addresses the oral non-peptide claim (experiment 5)"
+        },
+        {
+          "id": "species_caveat",
+          "kind": "rubric",
+          "weight": 1.5,
+          "awarded": 1.5,
+          "matched_on": "species",
+          "also_matched": null,
+          "points": "carries the species caveat into the verdict"
+        },
+        {
+          "id": "calibration",
+          "kind": "rubric",
+          "weight": 1.5,
+          "awarded": 1.5,
+          "matched_on": "confidence",
+          "also_matched": null,
+          "points": "grades its own confidence per strand instead of asserting uniformly"
+        },
+        {
+          "id": "overclaim_cv",
+          "kind": "penalty",
+          "weight": 1.5,
+          "awarded": -1.5,
+          "matched_on": "cardiovascular outcome",
+          "excused_by": null,
+          "points": "H1 is about target validity and oral feasibility; CV outcome claims are not supported by the evidence in this curriculum"
+        },
+        {
+          "id": "overclaim_cure",
+          "kind": "penalty",
+          "weight": 1.5,
+          "awarded": 0.0,
+          "matched_on": null,
+          "excused_by": null,
+          "points": "overclaiming beyond the trial result"
+        }
+      ],
+      "rubric_density": {
+        "words": 1155,
+        "items_matched": 8,
+        "per_100_words": 0.69
+      },
+      "reference": "Wharton S, Aronne LJ, Stefanski A, et al. Orforglipron, an Oral Small-Molecule GLP-1 Receptor Agonist for Obesity Treatment. N Engl J Med. 2025;393(18):1796-1806. doi:10.1056/NEJMoa2511774"
+    },
+    "answer": {
+      "verdict": "H1 is largely supported, but unevenly across its three clauses. 'Druggable' is established to the level of proof in humans; 'oral non-peptide agonism is feasible' is established chemically, structurally and clinically (phase 3 efficacy demonstrated), with residual uncertainty about long-term safety and class-level tolerability rather than feasibility; 'genetically supported' is the weakest link \u2014 human genetics robustly supports GLP1R as a glycemic/incretin target and supports the direction of effect, but the human genetic signal for GLP1R specifically on adiposity/BMI is modest compared with, say, MC4R or GIPR. Overall: accept H1 with a qualification that the genetic support is for the receptor's physiology and safety-by-genetics, not primarily for a large BMI effect.",
+      "per_claim": {
+        "genetically_supported": "Strongest evidence: coding variants in GLP1R (e.g. Ala316Thr, Gly168Ser/rs6923761) show reproducible associations with fasting glucose, 2-h glucose and type 2 diabetes risk in large exome/GWAS and biobank studies, and drug-target Mendelian randomisation using GLP1R variants as instruments recapitulates the glycaemic and cardiovascular-protective direction of GLP-1R agonism. Evidence type: human population genetics + drug-target MR (observational, instrument-based, not experimental). Confidence: HIGH that GLP1R is a genetically validated metabolic/glycaemic target; MODERATE-TO-LOW that human genetics by itself nominates GLP1R as an obesity (BMI/adiposity) target \u2014 GLP1R variant effects on BMI in MR are small and inconsistent, and GLP1R is not a headline locus in BMI GWAS. Mechanistic genetic support in obesity leans more on rodent Glp1r knockout/knockdown and on the proglucagon/incretin axis (GIPR has arguably stronger adiposity genetics) than on human GLP1R BMI associations.",
+        "druggable": "Strongest evidence: multiple approved peptide agonists with randomised, placebo-controlled phase 3 weight outcomes \u2014 liraglutide 3.0 mg (~8%), semaglutide 2.4 mg in STEP-1 (~15% mean weight loss at 68 weeks), plus the GIP/GLP-1 co-agonist tirzepatide (~20%+ in SURMOUNT-1) and cardiovascular/outcome benefit in SELECT. Supporting structural evidence: multiple cryo-EM structures of GLP-1R (class B1 GPCR) in complex with GLP-1/exendin and G\u03b1s define the two-domain peptide-binding mode, and extensive peptide engineering (exendin-4 scaffold, Aib substitutions, fatty-acid acylation for albumin binding, half-life extension to once-weekly) shows the target tolerates rational optimisation. Evidence type: randomised controlled human trials (highest tier) + structural biology + medicinal chemistry. Confidence: VERY HIGH (>0.95). This clause is effectively no longer a hypothesis.",
+        "oral_non_peptide_feasible": "Strongest evidence: (i) oral semaglutide (SNAC-enabled peptide) proved oral GLP-1R pharmacology is clinically achievable, though with poor, food-sensitive bioavailability; (ii) genuinely non-peptide small-molecule agonists have advanced through clinical development \u2014 PF-06882961/danuglipron and LY3502970/orforglipron \u2014 with orforglipron, a once-daily non-peptide with no food/water restrictions, reporting phase 3 glycaemic and ~10\u201312% weight-loss results in 2025; (iii) cryo-EM structures of GLP-1R bound to small molecules (PF-06882961, TT-OAD2, CHU-128-class ligands) show a distinct, partly extracellular/TM-interface allosteric-adjacent pocket, with Trp33 of the ECD acting as a key determinant of primate-selective small-molecule binding \u2014 i.e. a structurally defined, ligandable site, not just phenotypic chemistry. Evidence type: phase 2/3 RCTs + cryo-EM structures + SAR. Confidence: HIGH (~0.85\u20130.9) that oral non-peptide agonism is feasible and clinically efficacious; MODERATE on the commercial/safety-adjusted version of that claim, given danuglipron's discontinuation for tolerability and an idiosyncratic hepatic injury signal, and the fact that small-molecule agonists are typically partial/biased agonists with lower maximal efficacy than injectable peptides."
+      },
+      "not_established": "This body of evidence does not establish: (1) that human GLP1R genetics predicts the *magnitude* of pharmacological weight loss \u2014 partial loss-of-function variants give small BMI effects, so genetics underwrites direction and safety, not effect size; (2) that oral non-peptide agonists match injectable peptide efficacy \u2014 head-to-head data against semaglutide 2.4 mg/tirzepatide at matched tolerated doses are limited, and biased/partial agonism may cap the ceiling; (3) long-term (multi-year) safety of small-molecule agonists, including hepatotoxicity, drug\u2013drug interactions via CYP metabolism, and off-target liabilities absent in peptides; (4) durability \u2014 weight regain after discontinuation (STEP-4/STEP-1 extension) applies to the mechanism, not the modality, and is unaddressed; (5) body-composition quality (lean-mass loss), bone, and cardiovascular/MACE outcomes for oral non-peptides, which require dedicated CVOTs; (6) whether non-peptide pharmacology generalises beyond primate GLP-1R \u2014 species selectivity means rodent models under-predict, weakening preclinical safety inference; (7) nothing here speaks to combination/co-agonist superiority (GIPR, glucagon, amylin), cost-of-goods and access claims, or responder heterogeneity and pharmacogenetics.",
+      "would_change_my_mind": "On genetics: a well-powered drug-target MR in \u22651M individuals showing a null or wrong-signed GLP1R effect on BMI/adiposity, or demonstration that the glycaemic signal is driven by a correlated non-GLP1R variant, would downgrade clause 1 (it would not overturn clause 2, which rests on RCTs). On druggability: nothing short of withdrawal of the class for an unanticipated harm \u2014 effectively unfalsifiable now. On oral non-peptide feasibility: a class-wide hepatotoxicity or cardiovascular signal across structurally distinct non-peptide chemotypes (i.e. target- or pocket-mediated rather than compound-specific), failure of orforglipron-class agents to sustain efficacy or to be approvable, or evidence that the small-molecule binding mode intrinsically limits efficacy to ~half that of peptides with no chemical route around it, would move me from HIGH to MODERATE/LOW. Conversely, a second independent non-peptide succeeding in phase 3 with a clean hepatic profile would push me above 0.95.",
+      "reasoning": "The three clauses sit at very different evidential tiers and should not be averaged. Clause 2 (druggable) is the strongest: it is supported by the highest-quality evidence available in medicine \u2014 large randomised placebo-controlled outcome trials with approved products and a cardiovascular outcome benefit \u2014 plus structural and medicinal-chemistry evidence explaining why peptide engineering worked (ECD-capture/two-domain binding, Aib protection from DPP-4, lipidation for albumin binding). Nothing in a curriculum of experiments could meaningfully raise or lower this. Clause 3 (oral non-peptide) was a genuine open question for class B1 GPCRs, where large peptide interfaces were long thought undruggable by small molecules; it has been answered affirmatively by the convergence of cryo-EM structures showing a discrete small-molecule pocket at the ECD/TM1 interface and by clinical readouts, most decisively orforglipron's phase 3 data. The residual risk is safety and efficacy ceiling, not feasibility \u2014 danuglipron's withdrawal is a compound-level, not concept-level, failure, but it is a real warning that the chemotype class carries liabilities peptides do not. Clause 1 (genetic support) is where I would push back on the headline framing. Human genetics for GLP1R is strong for glycaemia and T2D and provides valuable directional and safety validation \u2014 the A316T 'natural agonism-mimicking' allele is a textbook drug-target MR example \u2014 but the adiposity-specific genetic evidence is thin; GLP1R does not sit among the strong BMI loci, and the weight effect of pharmacological agonism is substantially supraphysiological relative to what common variation predicts. That is an important epistemic point: the pharmacology outran the genetics here, and genetics post-hoc rationalised a target found physiologically. So I grade H1 as supported overall, with the honest caveat that 'genetically supported *obesity* target' is the clause doing the most rhetorical work and the least evidential work. Given I have run none of the listed experiments, my grades reflect prior published literature only; the curriculum as titled appears designed to retrace exactly this chain (genetics \u2192 structure \u2192 peptide engineering \u2192 potency \u2192 small molecule), and I would expect it to confirm clauses 2 and 3 and soften clause 1."
+    },
+    "raw_text": "{\"verdict\": \"H1 is largely supported, but unevenly across its three clauses. 'Druggable' is established to the level of proof in humans; 'oral non-peptide agonism is feasible' is established chemically, structurally and clinically (phase 3 efficacy demonstrated), with residual uncertainty about long-term safety and class-level tolerability rather than feasibility; 'genetically supported' is the weakest link \\u2014 human genetics robustly supports GLP1R as a glycemic/incretin target and supports the direction of effect, but the human genetic signal for GLP1R specifically on adiposity/BMI is modest compared with, say, MC4R or GIPR. Overall: accept H1 with a qualification that the genetic support is for the receptor's physiology and safety-by-genetics, not primarily for a large BMI effect.\",\n \"per_claim\": {\n   \"genetically_supported\": \"Strongest evidence: coding variants in GLP1R (e.g. Ala316Thr, Gly168Ser/rs6923761) show reproducible associations with fasting glucose, 2-h glucose and type 2 diabetes risk in large exome/GWAS and biobank studies, and drug-target Mendelian randomisation using GLP1R variants as instruments recapitulates the glycaemic and cardiovascular-protective direction of GLP-1R agonism. Evidence type: human population genetics + drug-target MR (observational, instrument-based, not experimental). Confidence: HIGH that GLP1R is a genetically validated metabolic/glycaemic target; MODERATE-TO-LOW that human genetics by itself nominates GLP1R as an obesity (BMI/adiposity) target \\u2014 GLP1R variant effects on BMI in MR are small and inconsistent, and GLP1R is not a headline locus in BMI GWAS. Mechanistic genetic support in obesity leans more on rodent Glp1r knockout/knockdown and on the proglucagon/incretin axis (GIPR has arguably stronger adiposity genetics) than on human GLP1R BMI associations.\",\n   \"druggable\": \"Strongest evidence: multiple approved peptide agonists with randomised, placebo-controlled phase 3 weight outcomes \\u2014 liraglutide 3.0 mg (~8%), semaglutide 2.4 mg in STEP-1 (~15% mean weight loss at 68 weeks), plus the GIP/GLP-1 co-agonist tirzepatide (~20%+ in SURMOUNT-1) and cardiovascular/outcome benefit in SELECT. Supporting structural evidence: multiple cryo-EM structures of GLP-1R (class B1 GPCR) in complex with GLP-1/exendin and G\\u03b1s define the two-domain peptide-binding mode, and extensive peptide engineering (exendin-4 scaffold, Aib substitutions, fatty-acid acylation for albumin binding, half-life extension to once-weekly) shows the target tolerates rational optimisation. Evidence type: randomised controlled human trials (highest tier) + structural biology + medicinal chemistry. Confidence: VERY HIGH (>0.95). This clause is effectively no longer a hypothesis.\",\n   \"oral_non_peptide_feasible\": \"Strongest evidence: (i) oral semaglutide (SNAC-enabled peptide) proved oral GLP-1R pharmacology is clinically achievable, though with poor, food-sensitive bioavailability; (ii) genuinely non-peptide small-molecule agonists have advanced through clinical development \\u2014 PF-06882961/danuglipron and LY3502970/orforglipron \\u2014 with orforglipron, a once-daily non-peptide with no food/water restrictions, reporting phase 3 glycaemic and ~10\\u201312% weight-loss results in 2025; (iii) cryo-EM structures of GLP-1R bound to small molecules (PF-06882961, TT-OAD2, CHU-128-class ligands) show a distinct, partly extracellular/TM-interface allosteric-adjacent pocket, with Trp33 of the ECD acting as a key determinant of primate-selective small-molecule binding \\u2014 i.e. a structurally defined, ligandable site, not just phenotypic chemistry. Evidence type: phase 2/3 RCTs + cryo-EM structures + SAR. Confidence: HIGH (~0.85\\u20130.9) that oral non-peptide agonism is feasible and clinically efficacious; MODERATE on the commercial/safety-adjusted version of that claim, given danuglipron's discontinuation for tolerability and an idiosyncratic hepatic injury signal, and the fact that small-molecule agonists are typically partial/biased agonists with lower maximal efficacy than injectable peptides.\"\n },\n \"not_established\": \"This body of evidence does not establish: (1) that human GLP1R genetics predicts the *magnitude* of pharmacological weight loss \\u2014 partial loss-of-function variants give small BMI effects, so genetics underwrites direction and safety, not effect size; (2) that oral non-peptide agonists match injectable peptide efficacy \\u2014 head-to-head data against semaglutide 2.4 mg/tirzepatide at matched tolerated doses are limited, and biased/partial agonism may cap the ceiling; (3) long-term (multi-year) safety of small-molecule agonists, including hepatotoxicity, drug\\u2013drug interactions via CYP metabolism, and off-target liabilities absent in peptides; (4) durability \\u2014 weight regain after discontinuation (STEP-4/STEP-1 extension) applies to the mechanism, not the modality, and is unaddressed; (5) body-composition quality (lean-mass loss), bone, and cardiovascular/MACE outcomes for oral non-peptides, which require dedicated CVOTs; (6) whether non-peptide pharmacology generalises beyond primate GLP-1R \\u2014 species selectivity means rodent models under-predict, weakening preclinical safety inference; (7) nothing here speaks to combination/co-agonist superiority (GIPR, glucagon, amylin), cost-of-goods and access claims, or responder heterogeneity and pharmacogenetics.\",\n \"would_change_my_mind\": \"On genetics: a well-powered drug-target MR in \\u22651M individuals showing a null or wrong-signed GLP1R effect on BMI/adiposity, or demonstration that the glycaemic signal is driven by a correlated non-GLP1R variant, would downgrade clause 1 (it would not overturn clause 2, which rests on RCTs). On druggability: nothing short of withdrawal of the class for an unanticipated harm \\u2014 effectively unfalsifiable now. On oral non-peptide feasibility: a class-wide hepatotoxicity or cardiovascular signal across structurally distinct non-peptide chemotypes (i.e. target- or pocket-mediated rather than compound-specific), failure of orforglipron-class agents to sustain efficacy or to be approvable, or evidence that the small-molecule binding mode intrinsically limits efficacy to ~half that of peptides with no chemical route around it, would move me from HIGH to MODERATE/LOW. Conversely, a second independent non-peptide succeeding in phase 3 with a clean hepatic profile would push me above 0.95.\",\n \"reasoning\": \"The three clauses sit at very different evidential tiers and should not be averaged. Clause 2 (druggable) is the strongest: it is supported by the highest-quality evidence available in medicine \\u2014 large randomised placebo-controlled outcome trials with approved products and a cardiovascular outcome benefit \\u2014 plus structural and medicinal-chemistry evidence explaining why peptide engineering worked (ECD-capture/two-domain binding, Aib protection from DPP-4, lipidation for albumin binding). Nothing in a curriculum of experiments could meaningfully raise or lower this. Clause 3 (oral non-peptide) was a genuine open question for class B1 GPCRs, where large peptide interfaces were long thought undruggable by small molecules; it has been answered affirmatively by the convergence of cryo-EM structures showing a discrete small-molecule pocket at the ECD/TM1 interface and by clinical readouts, most decisively orforglipron's phase 3 data. The residual risk is safety and efficacy ceiling, not feasibility \\u2014 danuglipron's withdrawal is a compound-level, not concept-level, failure, but it is a real warning that the chemotype class carries liabilities peptides do not. Clause 1 (genetic support) is where I would push back on the headline framing. Human genetics for GLP1R is strong for glycaemia and T2D and provides valuable directional and safety validation \\u2014 the A316T 'natural agonism-mimicking' allele is a textbook drug-target MR example \\u2014 but the adiposity-specific genetic evidence is thin; GLP1R does not sit among the strong BMI loci, and the weight effect of pharmacological agonism is substantially supraphysiological relative to what common variation predicts. That is an important epistemic point: the pharmacology outran the genetics here, and genetics post-hoc rationalised a target found physiologically. So I grade H1 as supported overall, with the honest caveat that 'genetically supported *obesity* target' is the clause doing the most rhetorical work and the least evidential work. Given I have run none of the listed experiments, my grades reflect prior published literature only; the curriculum as titled appears designed to retrace exactly this chain (genetics \\u2192 structure \\u2192 peptide engineering \\u2192 potency \\u2192 small molecule), and I would expect it to confirm clauses 2 and 3 and soften clause 1.\",\n \"confidence\": 0.84}"
+  },
+  {
+    "curriculum": "glp1r",
+    "sample": 1,
+    "model": "claude-opus-5",
+    "stop_reason": "end_turn",
+    "usage": {
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 0,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "inference_geo": "global",
+      "input_tokens": 566,
+      "output_tokens": 4268,
+      "output_tokens_details": {
+        "thinking_tokens": 1204
+      },
+      "server_tool_use": null,
+      "service_tier": "standard"
+    },
+    "parsed": true,
+    "confidence": 0.82,
+    "score": 1.0,
+    "details": {
+      "earned_weight": 12.0,
+      "deducted_weight": 0.0,
+      "total_weight": 12.0,
+      "missed": [],
+      "penalised": [],
+      "breakdown": [
+        {
+          "id": "verdict",
+          "kind": "rubric",
+          "weight": 2.0,
+          "awarded": 2.0,
+          "matched_on": "supported",
+          "also_matched": null,
+          "points": "states a clear verdict on H1"
+        },
+        {
+          "id": "genetics",
+          "kind": "rubric",
+          "weight": 1.5,
+          "awarded": 1.5,
+          "matched_on": "genetic",
+          "also_matched": null,
+          "points": "weights the genetic support strand (experiment 1)"
+        },
+        {
+          "id": "structure",
+          "kind": "rubric",
+          "weight": 1.5,
+          "awarded": 1.5,
+          "matched_on": "structure",
+          "also_matched": null,
+          "points": "weights the structural strand (experiment 2)"
+        },
+        {
+          "id": "engineering",
+          "kind": "rubric",
+          "weight": 1.0,
+          "awarded": 1.0,
+          "matched_on": "half-life",
+          "also_matched": null,
+          "points": "weights the peptide-engineering strand (experiment 3)"
+        },
+        {
+          "id": "potency",
+          "kind": "rubric",
+          "weight": 1.0,
+          "awarded": 1.0,
+          "matched_on": "potency",
+          "also_matched": null,
+          "points": "weights the potency strand (experiment 4)"
+        },
+        {
+          "id": "oral_feasibility",
+          "kind": "rubric",
+          "weight": 2.0,
+          "awarded": 2.0,
+          "matched_on": "oral",
+          "also_matched": null,
+          "points": "addresses the oral non-peptide claim (experiment 5)"
+        },
+        {
+          "id": "species_caveat",
+          "kind": "rubric",
+          "weight": 1.5,
+          "awarded": 1.5,
+          "matched_on": "species",
+          "also_matched": null,
+          "points": "carries the species caveat into the verdict"
+        },
+        {
+          "id": "calibration",
+          "kind": "rubric",
+          "weight": 1.5,
+          "awarded": 1.5,
+          "matched_on": "confidence",
+          "also_matched": null,
+          "points": "grades its own confidence per strand instead of asserting uniformly"
+        },
+        {
+          "id": "overclaim_cv",
+          "kind": "penalty",
+          "weight": 1.5,
+          "awarded": 0.0,
+          "matched_on": null,
+          "excused_by": null,
+          "points": "H1 is about target validity and oral feasibility; CV outcome claims are not supported by the evidence in this curriculum"
+        },
+        {
+          "id": "overclaim_cure",
+          "kind": "penalty",
+          "weight": 1.5,
+          "awarded": 0.0,
+          "matched_on": null,
+          "excused_by": null,
+          "points": "overclaiming beyond the trial result"
+        }
+      ],
+      "rubric_density": {
+        "words": 1104,
+        "items_matched": 8,
+        "per_100_words": 0.72
+      },
+      "reference": "Wharton S, Aronne LJ, Stefanski A, et al. Orforglipron, an Oral Small-Molecule GLP-1 Receptor Agonist for Obesity Treatment. N Engl J Med. 2025;393(18):1796-1806. doi:10.1056/NEJMoa2511774"
+    },
+    "answer": {
+      "verdict": "H1 is substantially supported, but the three sub-claims are not equally strong. 'Druggable' is essentially settled by Phase 3/approval-grade clinical evidence; 'oral non-peptide agonism is feasible' is now demonstrated at the level of human pharmacology and late-stage efficacy (orforglipron), with chemotype-specific safety caveats; 'genetically supported for obesity' is the weakest leg \u2014 the human genetics for GLP1R is strong for glycaemic traits and T2D and only modest/indirect for adiposity itself. Overall: accept H1, with the genetic claim down-weighted and recast as 'genetically supported as a metabolic target, pharmacologically validated for obesity'.",
+      "per_claim": {
+        "genetically_supported": "Strongest evidence: coding-variant and Mendelian-randomisation work on GLP1R (e.g. the A316T/Thr149Met-type missense series and rs10305492), where GLP1R alleles proxying altered receptor signalling track with fasting glucose, HbA1c, T2D risk and CHD risk in large cohorts/biobanks \u2014 the direction of effect matches the pharmacology. Type: human population genetics / MR (observational, but causally anchored by randomisation of alleles). Confidence that GLP1R is a genetically supported *metabolic* target: high (~0.85). Confidence that it is genetically supported specifically as an *obesity/adiposity* target: moderate-to-low (~0.4\u20130.5). Caveats I hold firmly: GLP1R variant effects on BMI in GWAS are small and inconsistent; Glp1r-null mice are not obese; by contrast GIPR carries cleaner human genetic evidence for adiposity (E354Q). So the genetic case here is better described as supportive-but-not-the-load-bearing evidence; the obesity validation came from drugs, not from genetics.",
+        "druggable": "Strongest evidence: randomised, placebo-controlled Phase 3 trials of peptide agonists \u2014 liraglutide 3.0 mg (SCALE, ~8% placebo-adjusted-ish weight loss), semaglutide 2.4 mg (STEP-1, ~15% mean weight loss at 68 weeks), plus outcome data (SELECT: MACE reduction in overweight/obesity without diabetes). Type: interventional human RCT, the highest tier. Mechanistically reinforced by cryo-EM structures of peptide-bound GLP-1R\u2013Gs complexes and decades of peptide engineering (exendin-4 scaffold, albumin binding/C18 diacid lipidation, DPP-4-resistant Aib8 substitution) that converted a ~2-minute-half-life incretin into a weekly drug. Confidence: very high (~0.97). GLP-1R is arguably the best-validated druggable obesity target in existence.",
+        "oral_non_peptide_feasible": "Strongest evidence: (i) oral semaglutide (SNAC-enabled peptide) proving oral GLP-1R engagement is achievable at all, including ~15% weight loss at 50 mg in OASIS-1 \u2014 but that is a peptide, so it only part-answers the claim; (ii) genuinely non-peptide small molecules \u2014 LY3502970/orforglipron, a partial/biased agonist with Phase 3 weight-loss and HbA1c data broadly in the 10\u201313% weight-loss range, no food/water restrictions; (iii) structural proof-of-mechanism: cryo-EM structures of GLP-1R bound to TT-OAD2, PF-06882961 (danuglipron), CHU-128 and LY3502970 showing a non-orthosteric, ECD/TM1\u2013TM2-proximal pocket that small molecules can occupy and still trigger Gs coupling. Type: mixed \u2014 structural biology plus interventional human trials. Confidence that oral non-peptide agonism is chemically and pharmacologically feasible: high (~0.9). Confidence that it yields a marketed, best-in-class oral obesity drug: moderate (~0.6), because danuglipron was discontinued (tolerability, then a hepatic safety signal), reminding us that feasibility of the mechanism \u2260 success of any given molecule."
+      },
+      "not_established": "This body of evidence does not establish: (1) that human genetics causally implicates GLP1R in adiposity per se rather than glycaemia \u2014 the obesity case is pharmacological, not genetic; (2) that small-molecule, biased/partial agonism reproduces the full efficacy, cardiovascular-outcome benefit and organ-protective profile of injectable peptides (no CVOT for a non-peptide agonist); (3) long-term safety of chronic small-molecule GLP-1R agonism \u2014 hepatotoxicity signals seen with danuglipron are plausibly chemotype-specific but target-class involvement is unexcluded; (4) durability \u2014 weight regain after discontinuation is the rule, and nothing here shows oral agents change that; (5) body-composition quality (lean-mass loss), GI tolerability-driven discontinuation rates in real-world use, effects in adolescents/elderly/pregnancy, and interaction with gastric emptying/anaesthesia; (6) head-to-head superiority or non-inferiority of oral non-peptides against semaglutide or tirzepatide; (7) manufacturing/cost/access claims, which are often the implicit reason the oral question is being asked at all; (8) whether species differences (non-peptide agonists are notoriously human-receptor-selective, poor at rodent GLP-1R) mean preclinical safety models are under-powered for this chemotype.",
+      "would_change_my_mind": "On genetics: a well-powered MR/exome analysis in a biobank showing GLP1R loss-of-function or signalling-modulating variants have a null or wrong-signed effect on BMI/body-fat percentage after correcting for glycaemia would force me to drop the 'genetically supported for obesity' wording entirely (I am already half-way there). Conversely, a clean dose-response between predicted receptor signalling and adiposity would raise it. On druggability: nothing short of unexpected long-term harm in SELECT-like follow-up would move me; this is close to immovable. On oral non-peptide feasibility: a second and third independent chemotype failing Phase 2/3 for hepatic injury or GI intolerance at efficacious doses would convert this from 'feasible' to 'mechanistically possible but not clinically tractable'; an orforglipron regulatory rejection or withdrawal on safety grounds would do the same. Positively, a completed CVOT or a head-to-head showing an oral non-peptide matching semaglutide 2.4 mg on weight and outcomes would push my confidence to ~0.95.",
+      "reasoning": "The three claims rest on different evidence tiers and should not be averaged. The druggability claim is carried by multiple large, blinded, placebo-controlled RCTs with hard-outcome follow-up and regulatory approval in several jurisdictions \u2014 this is the top of the evidence hierarchy and leaves almost no room for doubt. The structural and peptide-engineering strands (cryo-EM of the peptide-bound receptor; Aib8/DPP-4 resistance; lipidation for albumin binding) explain *why* it worked and make the potency and PK story mechanistically coherent rather than empirical luck. The oral non-peptide claim is the one that moved fastest in recent years: structures of small molecules bound at a non-orthosteric pocket proved the receptor is addressable without a peptide, and late-stage clinical data for orforglipron converted 'chemically feasible' into 'clinically feasible', albeit with efficacy that currently sits below injectable semaglutide and well below tirzepatide, and with a cautionary precedent in danuglipron's discontinuation. I treat that discontinuation as evidence about a molecule, not about the target, but it is a real prior-shifter on attrition risk. The genetic claim is where I part company with the headline framing. GLP1R human genetics is genuinely strong \u2014 but overwhelmingly for fasting glucose, HbA1c, T2D and CHD, not for BMI. Glp1r-knockout mice are glucose-intolerant, not lean-protected-against-obesity; GLP1R coding variants show small and unstable BMI associations; and the much cleaner genetic-for-adiposity story in the incretin space belongs to GIPR. So the honest reading is that genetics corroborates a metabolic mechanism that drugs subsequently proved has an obesity effect, rather than genetics having predicted the obesity indication. Because the hypothesis is conjunctive, its weakest leg caps the overall claim as written; but since the weak leg (genetics) is the least load-bearing for the practical conclusion (drug the target orally), I still accept H1 with a wording amendment. I note explicitly that I have run none of the six experiments and am reasoning from prior literature knowledge; the curriculum's capstone could in principle contradict any of this, and I have graded confidence accordingly."
+    },
+    "raw_text": "{\n  \"verdict\": \"H1 is substantially supported, but the three sub-claims are not equally strong. 'Druggable' is essentially settled by Phase 3/approval-grade clinical evidence; 'oral non-peptide agonism is feasible' is now demonstrated at the level of human pharmacology and late-stage efficacy (orforglipron), with chemotype-specific safety caveats; 'genetically supported for obesity' is the weakest leg \u2014 the human genetics for GLP1R is strong for glycaemic traits and T2D and only modest/indirect for adiposity itself. Overall: accept H1, with the genetic claim down-weighted and recast as 'genetically supported as a metabolic target, pharmacologically validated for obesity'.\",\n  \"per_claim\": {\n    \"genetically_supported\": \"Strongest evidence: coding-variant and Mendelian-randomisation work on GLP1R (e.g. the A316T/Thr149Met-type missense series and rs10305492), where GLP1R alleles proxying altered receptor signalling track with fasting glucose, HbA1c, T2D risk and CHD risk in large cohorts/biobanks \u2014 the direction of effect matches the pharmacology. Type: human population genetics / MR (observational, but causally anchored by randomisation of alleles). Confidence that GLP1R is a genetically supported *metabolic* target: high (~0.85). Confidence that it is genetically supported specifically as an *obesity/adiposity* target: moderate-to-low (~0.4\u20130.5). Caveats I hold firmly: GLP1R variant effects on BMI in GWAS are small and inconsistent; Glp1r-null mice are not obese; by contrast GIPR carries cleaner human genetic evidence for adiposity (E354Q). So the genetic case here is better described as supportive-but-not-the-load-bearing evidence; the obesity validation came from drugs, not from genetics.\",\n    \"druggable\": \"Strongest evidence: randomised, placebo-controlled Phase 3 trials of peptide agonists \u2014 liraglutide 3.0 mg (SCALE, ~8% placebo-adjusted-ish weight loss), semaglutide 2.4 mg (STEP-1, ~15% mean weight loss at 68 weeks), plus outcome data (SELECT: MACE reduction in overweight/obesity without diabetes). Type: interventional human RCT, the highest tier. Mechanistically reinforced by cryo-EM structures of peptide-bound GLP-1R\u2013Gs complexes and decades of peptide engineering (exendin-4 scaffold, albumin binding/C18 diacid lipidation, DPP-4-resistant Aib8 substitution) that converted a ~2-minute-half-life incretin into a weekly drug. Confidence: very high (~0.97). GLP-1R is arguably the best-validated druggable obesity target in existence.\",\n    \"oral_non_peptide_feasible\": \"Strongest evidence: (i) oral semaglutide (SNAC-enabled peptide) proving oral GLP-1R engagement is achievable at all, including ~15% weight loss at 50 mg in OASIS-1 \u2014 but that is a peptide, so it only part-answers the claim; (ii) genuinely non-peptide small molecules \u2014 LY3502970/orforglipron, a partial/biased agonist with Phase 3 weight-loss and HbA1c data broadly in the 10\u201313% weight-loss range, no food/water restrictions; (iii) structural proof-of-mechanism: cryo-EM structures of GLP-1R bound to TT-OAD2, PF-06882961 (danuglipron), CHU-128 and LY3502970 showing a non-orthosteric, ECD/TM1\u2013TM2-proximal pocket that small molecules can occupy and still trigger Gs coupling. Type: mixed \u2014 structural biology plus interventional human trials. Confidence that oral non-peptide agonism is chemically and pharmacologically feasible: high (~0.9). Confidence that it yields a marketed, best-in-class oral obesity drug: moderate (~0.6), because danuglipron was discontinued (tolerability, then a hepatic safety signal), reminding us that feasibility of the mechanism \u2260 success of any given molecule.\"\n  },\n  \"not_established\": \"This body of evidence does not establish: (1) that human genetics causally implicates GLP1R in adiposity per se rather than glycaemia \u2014 the obesity case is pharmacological, not genetic; (2) that small-molecule, biased/partial agonism reproduces the full efficacy, cardiovascular-outcome benefit and organ-protective profile of injectable peptides (no CVOT for a non-peptide agonist); (3) long-term safety of chronic small-molecule GLP-1R agonism \u2014 hepatotoxicity signals seen with danuglipron are plausibly chemotype-specific but target-class involvement is unexcluded; (4) durability \u2014 weight regain after discontinuation is the rule, and nothing here shows oral agents change that; (5) body-composition quality (lean-mass loss), GI tolerability-driven discontinuation rates in real-world use, effects in adolescents/elderly/pregnancy, and interaction with gastric emptying/anaesthesia; (6) head-to-head superiority or non-inferiority of oral non-peptides against semaglutide or tirzepatide; (7) manufacturing/cost/access claims, which are often the implicit reason the oral question is being asked at all; (8) whether species differences (non-peptide agonists are notoriously human-receptor-selective, poor at rodent GLP-1R) mean preclinical safety models are under-powered for this chemotype.\",\n  \"would_change_my_mind\": \"On genetics: a well-powered MR/exome analysis in a biobank showing GLP1R loss-of-function or signalling-modulating variants have a null or wrong-signed effect on BMI/body-fat percentage after correcting for glycaemia would force me to drop the 'genetically supported for obesity' wording entirely (I am already half-way there). Conversely, a clean dose-response between predicted receptor signalling and adiposity would raise it. On druggability: nothing short of unexpected long-term harm in SELECT-like follow-up would move me; this is close to immovable. On oral non-peptide feasibility: a second and third independent chemotype failing Phase 2/3 for hepatic injury or GI intolerance at efficacious doses would convert this from 'feasible' to 'mechanistically possible but not clinically tractable'; an orforglipron regulatory rejection or withdrawal on safety grounds would do the same. Positively, a completed CVOT or a head-to-head showing an oral non-peptide matching semaglutide 2.4 mg on weight and outcomes would push my confidence to ~0.95.\",\n  \"reasoning\": \"The three claims rest on different evidence tiers and should not be averaged. The druggability claim is carried by multiple large, blinded, placebo-controlled RCTs with hard-outcome follow-up and regulatory approval in several jurisdictions \u2014 this is the top of the evidence hierarchy and leaves almost no room for doubt. The structural and peptide-engineering strands (cryo-EM of the peptide-bound receptor; Aib8/DPP-4 resistance; lipidation for albumin binding) explain *why* it worked and make the potency and PK story mechanistically coherent rather than empirical luck. The oral non-peptide claim is the one that moved fastest in recent years: structures of small molecules bound at a non-orthosteric pocket proved the receptor is addressable without a peptide, and late-stage clinical data for orforglipron converted 'chemically feasible' into 'clinically feasible', albeit with efficacy that currently sits below injectable semaglutide and well below tirzepatide, and with a cautionary precedent in danuglipron's discontinuation. I treat that discontinuation as evidence about a molecule, not about the target, but it is a real prior-shifter on attrition risk. The genetic claim is where I part company with the headline framing. GLP1R human genetics is genuinely strong \u2014 but overwhelmingly for fasting glucose, HbA1c, T2D and CHD, not for BMI. Glp1r-knockout mice are glucose-intolerant, not lean-protected-against-obesity; GLP1R coding variants show small and unstable BMI associations; and the much cleaner genetic-for-adiposity story in the incretin space belongs to GIPR. So the honest reading is that genetics corroborates a metabolic mechanism that drugs subsequently proved has an obesity effect, rather than genetics having predicted the obesity indication. Because the hypothesis is conjunctive, its weakest leg caps the overall claim as written; but since the weak leg (genetics) is the least load-bearing for the practical conclusion (drug the target orally), I still accept H1 with a wording amendment. I note explicitly that I have run none of the six experiments and am reasoning from prior literature knowledge; the curriculum's capstone could in principle contradict any of this, and I have graded confidence accordingly.\",\n  \"confidence\": 0.82\n}"
+  },
+  {
+    "curriculum": "glp1r",
+    "sample": 2,
+    "model": "claude-opus-5",
+    "stop_reason": "end_turn",
+    "usage": {
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 0,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "inference_geo": "global",
+      "input_tokens": 566,
+      "output_tokens": 4177,
+      "output_tokens_details": {
+        "thinking_tokens": 1245
+      },
+      "server_tool_use": null,
+      "service_tier": "standard"
+    },
+    "parsed": true,
+    "confidence": 0.85,
+    "score": 1.0,
+    "details": {
+      "earned_weight": 12.0,
+      "deducted_weight": 0.0,
+      "total_weight": 12.0,
+      "missed": [],
+      "penalised": [],
+      "breakdown": [
+        {
+          "id": "verdict",
+          "kind": "rubric",
+          "weight": 2.0,
+          "awarded": 2.0,
+          "matched_on": "supported",
+          "also_matched": null,
+          "points": "states a clear verdict on H1"
+        },
+        {
+          "id": "genetics",
+          "kind": "rubric",
+          "weight": 1.5,
+          "awarded": 1.5,
+          "matched_on": "genetic",
+          "also_matched": null,
+          "points": "weights the genetic support strand (experiment 1)"
+        },
+        {
+          "id": "structure",
+          "kind": "rubric",
+          "weight": 1.5,
+          "awarded": 1.5,
+          "matched_on": "structure",
+          "also_matched": null,
+          "points": "weights the structural strand (experiment 2)"
+        },
+        {
+          "id": "engineering",
+          "kind": "rubric",
+          "weight": 1.0,
+          "awarded": 1.0,
+          "matched_on": "albumin",
+          "also_matched": null,
+          "points": "weights the peptide-engineering strand (experiment 3)"
+        },
+        {
+          "id": "potency",
+          "kind": "rubric",
+          "weight": 1.0,
+          "awarded": 1.0,
+          "matched_on": "dose-response",
+          "also_matched": null,
+          "points": "weights the potency strand (experiment 4)"
+        },
+        {
+          "id": "oral_feasibility",
+          "kind": "rubric",
+          "weight": 2.0,
+          "awarded": 2.0,
+          "matched_on": "oral",
+          "also_matched": null,
+          "points": "addresses the oral non-peptide claim (experiment 5)"
+        },
+        {
+          "id": "species_caveat",
+          "kind": "rubric",
+          "weight": 1.5,
+          "awarded": 1.5,
+          "matched_on": "species",
+          "also_matched": null,
+          "points": "carries the species caveat into the verdict"
+        },
+        {
+          "id": "calibration",
+          "kind": "rubric",
+          "weight": 1.5,
+          "awarded": 1.5,
+          "matched_on": "confidence",
+          "also_matched": null,
+          "points": "grades its own confidence per strand instead of asserting uniformly"
+        },
+        {
+          "id": "overclaim_cv",
+          "kind": "penalty",
+          "weight": 1.5,
+          "awarded": 0.0,
+          "matched_on": null,
+          "excused_by": "not yet",
+          "points": "H1 is about target validity and oral feasibility; CV outcome claims are not supported by the evidence in this curriculum"
+        },
+        {
+          "id": "overclaim_cure",
+          "kind": "penalty",
+          "weight": 1.5,
+          "awarded": 0.0,
+          "matched_on": null,
+          "excused_by": null,
+          "points": "overclaiming beyond the trial result"
+        }
+      ],
+      "rubric_density": {
+        "words": 1036,
+        "items_matched": 8,
+        "per_100_words": 0.77
+      },
+      "reference": "Wharton S, Aronne LJ, Stefanski A, et al. Orforglipron, an Oral Small-Molecule GLP-1 Receptor Agonist for Obesity Treatment. N Engl J Med. 2025;393(18):1796-1806. doi:10.1056/NEJMoa2511774"
+    },
+    "answer": {
+      "verdict": "H1 is supported overall, but the three sub-claims are not equally strong. 'Druggable' is effectively proven by randomized outcome-grade clinical evidence; 'oral non-peptide agonism is feasible' is proven as chemistry/pharmacology and now as Phase 3-level clinical weight loss, though not yet as a durable, safe, approved modality across the class; 'genetically supported' is the weakest leg \u2014 real and direction-consistent, but the human genetics anchor GLP1R mainly to glycemia/T2D and cardiometabolic risk rather than to BMI per se, so the obesity indication rests more on pharmacology than on genetics.",
+      "per_claim": {
+        "genetically_supported": "Strongest evidence: common coding/regulatory variation at GLP1R (notably rs10305492, Ala316Thr, and the rs6923761 Gly168Ser series) associates with lower fasting glucose, lower T2D risk and, in some analyses, modestly lower BMI and lower CAD risk; Mendelian-randomization-style analyses using GLP1R variants as proxies for agonism recapitulate the glycemic and partly the cardiovascular direction of drug effect. Supporting prior: target-level genetic support roughly doubles clinical success rates (Nelson 2015; King 2019). Evidence type: human population genetics / coding-variant association / MR \u2014 observational but causally informative. Grade: MODERATE confidence that GLP1R is genetically supported as a cardiometabolic target; LOW-TO-MODERATE that the genetic signal is specifically an obesity/adiposity signal. Caveat: GLP1R variant effects on BMI are small and inconsistent relative to bona fide monogenic adiposity genes (MC4R, LEP/LEPR, POMC) or GIPR Val103Leu; lifelong small perturbation is also a poor quantitative model for supraphysiologic agonism.",
+        "druggable": "Strongest evidence: multiple approved peptide agonists with large randomized placebo-controlled weight outcomes \u2014 liraglutide 3.0 mg (SCALE, ~8%), semaglutide 2.4 mg (STEP 1, ~15% at 68 weeks), tirzepatide (SURMOUNT, ~21%, dual GIP/GLP-1) \u2014 plus a cardiovascular outcome trial in obesity without diabetes (SELECT, ~20% MACE reduction). Mechanistic/structural support: cryo-EM and crystal structures of full-length GLP-1R with peptide agonist and Gs (Zhang/Liang/de Graaf-era structures) define the class B1 two-domain binding mode and rationalize peptide engineering (exendin-4 scaffold, Aib8 substitution to resist DPP-4, lipidation/albumin binding in liraglutide and semaglutide for once-daily/weekly PK). Evidence type: Phase 3 RCTs and outcome trials (highest tier) plus structural biology. Grade: VERY HIGH confidence (>0.95). This claim is no longer hypothesis; it is established practice.",
+        "oral_non_peptide_feasible": "Strongest evidence: (i) chemical/structural proof \u2014 co-structures of GLP-1R with small-molecule agonists (e.g. PF-06882961/danuglipron and the LY3502970/OWL833 series) show a non-peptide binding pocket at the ECD-TMD interface that substitutes for the peptide N-terminus and drives Gs coupling, often with partial/biased agonism; (ii) clinical proof \u2014 orforglipron (non-peptide, once-daily oral) produced ~14.7% weight loss at 36 weeks in Phase 2 and ~11-12% in Phase 3 (ATTAIN-1) with glycemic efficacy in T2D (ACHIEVE programme); danuglipron produced ~8-13% in Phase 2. (iii) Oral semaglutide/SNAC separately proves oral GLP-1R agonism is clinically viable even for a peptide. Evidence type: structural biology + Phase 2/3 RCTs. Grade: HIGH confidence that feasibility is established (~0.9). Grade: MODERATE only, for the stronger reading 'oral non-peptides will match injectables on efficacy, tolerability and safety' \u2014 danuglipron was discontinued (GI tolerability, then a drug-induced liver injury signal), and small-molecule GLP-1R agonists are notoriously species-selective (human/primate-restricted binding via ECD Trp33 region), which weakens preclinical predictivity."
+      },
+      "not_established": "This body of evidence does not establish: (a) that GLP1R human genetics causally supports an adiposity effect independent of glycemia \u2014 the genetic BMI effect is small and could be mediated or confounded; (b) that genetic variant effects quantitatively predict pharmacological effect size or safety (allelic series \u2260 dose-response of a full agonist); (c) long-term durability \u2014 weight regain after discontinuation (STEP 1 extension, SURMOUNT-4) implies chronic therapy, and no oral non-peptide has long-term outcome data; (d) cardiovascular/mortality benefit for oral non-peptides (SELECT was injectable semaglutide); (e) class-level hepatic safety for small molecules after the danuglipron DILI signal; (f) body-composition quality (lean mass loss), GI tolerability-driven discontinuation, effects in adolescents/elderly, pregnancy, and rare-risk questions (pancreatitis, gallbladder, thyroid C-cell in rodents, NAION signal reports); (g) the relative contribution of receptor partial agonism/bias to tolerability; (h) manufacturing/cost/access arguments, which are the actual rationale for oral small molecules and are economic, not biological; (i) head-to-head superiority or non-inferiority of oral non-peptides versus semaglutide/tirzepatide.",
+      "would_change_my_mind": "Against the genetic claim: a large, well-powered MR / exome-wide allelic-series analysis in biobank-scale data showing GLP1R variation has no adiposity effect after conditioning on glycemia, or a demonstration that the BMI association is driven by linkage/pleiotropy. Against druggability: implausible now, but a withdrawal for an unanticipated chronic harm, or evidence that the weight effect is largely non-GLP-1R-mediated. Against oral non-peptide feasibility: Phase 3 failure or regulatory rejection of orforglipron, a second independent hepatotoxicity signal establishing a chemotype- or target-linked class liability, or discontinuation rates in real-world use so high that durable weight loss is not achieved. Conversely, approval of orforglipron with a clean hepatic profile plus a positive oral-agent CV outcome trial would move claim 3 to VERY HIGH.",
+      "reasoning": "The three claims sit at very different evidentiary tiers, and it is a mistake to let the strongest carry the weakest. Druggability is settled by Phase 3 and outcome trials \u2014 this is the highest-grade human evidence available, replicated across sponsors, molecules and indications, and mechanistically explained by structures that show exactly how the peptide N-terminus engages the class B1 TMD core. Oral non-peptide feasibility was, until recently, the genuinely open question; it has now been answered affirmatively at two levels \u2014 a solved, drugged allosteric/orthosteric-adjacent pocket at the ECD-TMD interface, and double-digit percent weight loss in randomized trials of an oral once-daily small molecule. The honest qualifier is that feasibility is not the same as parity: the danuglipron liver signal and the GI tolerability ceiling show the chemotype carries risk, and the human-restricted pharmacology of these ligands means preclinical safety de-risking is weaker than usual. The genetic claim is the one most often overstated in target-validation narratives. GLP1R coding variation does associate with glycemic traits, T2D and CAD in the protective direction, which is a real and useful human-genetic anchor and consistent with the general finding that genetically supported targets succeed more often. But the obesity-specific genetic signal is modest, and the drug's efficacy was discovered pharmacologically (incretin physiology, exendin-4 from Gila monster venom) rather than predicted from genetics. So the correct framing is: genetics is corroborative and direction-consistent, not the load-bearing evidence. Overall H1 holds, with the strength of support ordered druggable >> oral non-peptide feasible > genetically supported for obesity specifically."
+    },
+    "raw_text": "{\"verdict\": \"H1 is supported overall, but the three sub-claims are not equally strong. 'Druggable' is effectively proven by randomized outcome-grade clinical evidence; 'oral non-peptide agonism is feasible' is proven as chemistry/pharmacology and now as Phase 3-level clinical weight loss, though not yet as a durable, safe, approved modality across the class; 'genetically supported' is the weakest leg \u2014 real and direction-consistent, but the human genetics anchor GLP1R mainly to glycemia/T2D and cardiometabolic risk rather than to BMI per se, so the obesity indication rests more on pharmacology than on genetics.\",\n \"per_claim\": {\n   \"genetically_supported\": \"Strongest evidence: common coding/regulatory variation at GLP1R (notably rs10305492, Ala316Thr, and the rs6923761 Gly168Ser series) associates with lower fasting glucose, lower T2D risk and, in some analyses, modestly lower BMI and lower CAD risk; Mendelian-randomization-style analyses using GLP1R variants as proxies for agonism recapitulate the glycemic and partly the cardiovascular direction of drug effect. Supporting prior: target-level genetic support roughly doubles clinical success rates (Nelson 2015; King 2019). Evidence type: human population genetics / coding-variant association / MR \u2014 observational but causally informative. Grade: MODERATE confidence that GLP1R is genetically supported as a cardiometabolic target; LOW-TO-MODERATE that the genetic signal is specifically an obesity/adiposity signal. Caveat: GLP1R variant effects on BMI are small and inconsistent relative to bona fide monogenic adiposity genes (MC4R, LEP/LEPR, POMC) or GIPR Val103Leu; lifelong small perturbation is also a poor quantitative model for supraphysiologic agonism.\",\n   \"druggable\": \"Strongest evidence: multiple approved peptide agonists with large randomized placebo-controlled weight outcomes \u2014 liraglutide 3.0 mg (SCALE, ~8%), semaglutide 2.4 mg (STEP 1, ~15% at 68 weeks), tirzepatide (SURMOUNT, ~21%, dual GIP/GLP-1) \u2014 plus a cardiovascular outcome trial in obesity without diabetes (SELECT, ~20% MACE reduction). Mechanistic/structural support: cryo-EM and crystal structures of full-length GLP-1R with peptide agonist and Gs (Zhang/Liang/de Graaf-era structures) define the class B1 two-domain binding mode and rationalize peptide engineering (exendin-4 scaffold, Aib8 substitution to resist DPP-4, lipidation/albumin binding in liraglutide and semaglutide for once-daily/weekly PK). Evidence type: Phase 3 RCTs and outcome trials (highest tier) plus structural biology. Grade: VERY HIGH confidence (>0.95). This claim is no longer hypothesis; it is established practice.\",\n   \"oral_non_peptide_feasible\": \"Strongest evidence: (i) chemical/structural proof \u2014 co-structures of GLP-1R with small-molecule agonists (e.g. PF-06882961/danuglipron and the LY3502970/OWL833 series) show a non-peptide binding pocket at the ECD-TMD interface that substitutes for the peptide N-terminus and drives Gs coupling, often with partial/biased agonism; (ii) clinical proof \u2014 orforglipron (non-peptide, once-daily oral) produced ~14.7% weight loss at 36 weeks in Phase 2 and ~11-12% in Phase 3 (ATTAIN-1) with glycemic efficacy in T2D (ACHIEVE programme); danuglipron produced ~8-13% in Phase 2. (iii) Oral semaglutide/SNAC separately proves oral GLP-1R agonism is clinically viable even for a peptide. Evidence type: structural biology + Phase 2/3 RCTs. Grade: HIGH confidence that feasibility is established (~0.9). Grade: MODERATE only, for the stronger reading 'oral non-peptides will match injectables on efficacy, tolerability and safety' \u2014 danuglipron was discontinued (GI tolerability, then a drug-induced liver injury signal), and small-molecule GLP-1R agonists are notoriously species-selective (human/primate-restricted binding via ECD Trp33 region), which weakens preclinical predictivity.\"\n },\n \"not_established\": \"This body of evidence does not establish: (a) that GLP1R human genetics causally supports an adiposity effect independent of glycemia \u2014 the genetic BMI effect is small and could be mediated or confounded; (b) that genetic variant effects quantitatively predict pharmacological effect size or safety (allelic series \u2260 dose-response of a full agonist); (c) long-term durability \u2014 weight regain after discontinuation (STEP 1 extension, SURMOUNT-4) implies chronic therapy, and no oral non-peptide has long-term outcome data; (d) cardiovascular/mortality benefit for oral non-peptides (SELECT was injectable semaglutide); (e) class-level hepatic safety for small molecules after the danuglipron DILI signal; (f) body-composition quality (lean mass loss), GI tolerability-driven discontinuation, effects in adolescents/elderly, pregnancy, and rare-risk questions (pancreatitis, gallbladder, thyroid C-cell in rodents, NAION signal reports); (g) the relative contribution of receptor partial agonism/bias to tolerability; (h) manufacturing/cost/access arguments, which are the actual rationale for oral small molecules and are economic, not biological; (i) head-to-head superiority or non-inferiority of oral non-peptides versus semaglutide/tirzepatide.\",\n \"would_change_my_mind\": \"Against the genetic claim: a large, well-powered MR / exome-wide allelic-series analysis in biobank-scale data showing GLP1R variation has no adiposity effect after conditioning on glycemia, or a demonstration that the BMI association is driven by linkage/pleiotropy. Against druggability: implausible now, but a withdrawal for an unanticipated chronic harm, or evidence that the weight effect is largely non-GLP-1R-mediated. Against oral non-peptide feasibility: Phase 3 failure or regulatory rejection of orforglipron, a second independent hepatotoxicity signal establishing a chemotype- or target-linked class liability, or discontinuation rates in real-world use so high that durable weight loss is not achieved. Conversely, approval of orforglipron with a clean hepatic profile plus a positive oral-agent CV outcome trial would move claim 3 to VERY HIGH.\",\n \"reasoning\": \"The three claims sit at very different evidentiary tiers, and it is a mistake to let the strongest carry the weakest. Druggability is settled by Phase 3 and outcome trials \u2014 this is the highest-grade human evidence available, replicated across sponsors, molecules and indications, and mechanistically explained by structures that show exactly how the peptide N-terminus engages the class B1 TMD core. Oral non-peptide feasibility was, until recently, the genuinely open question; it has now been answered affirmatively at two levels \u2014 a solved, drugged allosteric/orthosteric-adjacent pocket at the ECD-TMD interface, and double-digit percent weight loss in randomized trials of an oral once-daily small molecule. The honest qualifier is that feasibility is not the same as parity: the danuglipron liver signal and the GI tolerability ceiling show the chemotype carries risk, and the human-restricted pharmacology of these ligands means preclinical safety de-risking is weaker than usual. The genetic claim is the one most often overstated in target-validation narratives. GLP1R coding variation does associate with glycemic traits, T2D and CAD in the protective direction, which is a real and useful human-genetic anchor and consistent with the general finding that genetically supported targets succeed more often. But the obesity-specific genetic signal is modest, and the drug's efficacy was discovered pharmacologically (incretin physiology, exendin-4 from Gila monster venom) rather than predicted from genetics. So the correct framing is: genetics is corroborative and direction-consistent, not the load-bearing evidence. Overall H1 holds, with the strength of support ordered druggable >> oral non-peptide feasible > genetically supported for obesity specifically.\",\n \"confidence\": 0.85\n}"
+  },
+  {
+    "curriculum": "glp1r",
+    "sample": 3,
+    "model": "claude-opus-5",
+    "stop_reason": "end_turn",
+    "usage": {
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 0,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "inference_geo": "global",
+      "input_tokens": 566,
+      "output_tokens": 3902,
+      "output_tokens_details": {
+        "thinking_tokens": 1015
+      },
+      "server_tool_use": null,
+      "service_tier": "standard"
+    },
+    "parsed": true,
+    "confidence": 0.82,
+    "score": 0.9167,
+    "details": {
+      "earned_weight": 11.0,
+      "deducted_weight": 0.0,
+      "total_weight": 12.0,
+      "missed": [
+        "weights the potency strand (experiment 4)"
+      ],
+      "penalised": [],
+      "breakdown": [
+        {
+          "id": "verdict",
+          "kind": "rubric",
+          "weight": 2.0,
+          "awarded": 2.0,
+          "matched_on": "supported",
+          "also_matched": null,
+          "points": "states a clear verdict on H1"
+        },
+        {
+          "id": "genetics",
+          "kind": "rubric",
+          "weight": 1.5,
+          "awarded": 1.5,
+          "matched_on": "genetic",
+          "also_matched": null,
+          "points": "weights the genetic support strand (experiment 1)"
+        },
+        {
+          "id": "structure",
+          "kind": "rubric",
+          "weight": 1.5,
+          "awarded": 1.5,
+          "matched_on": "structure",
+          "also_matched": null,
+          "points": "weights the structural strand (experiment 2)"
+        },
+        {
+          "id": "engineering",
+          "kind": "rubric",
+          "weight": 1.0,
+          "awarded": 1.0,
+          "matched_on": "half-life",
+          "also_matched": null,
+          "points": "weights the peptide-engineering strand (experiment 3)"
+        },
+        {
+          "id": "potency",
+          "kind": "rubric",
+          "weight": 1.0,
+          "awarded": 0.0,
+          "matched_on": null,
+          "also_matched": null,
+          "points": "weights the potency strand (experiment 4)"
+        },
+        {
+          "id": "oral_feasibility",
+          "kind": "rubric",
+          "weight": 2.0,
+          "awarded": 2.0,
+          "matched_on": "oral",
+          "also_matched": null,
+          "points": "addresses the oral non-peptide claim (experiment 5)"
+        },
+        {
+          "id": "species_caveat",
+          "kind": "rubric",
+          "weight": 1.5,
+          "awarded": 1.5,
+          "matched_on": "species",
+          "also_matched": null,
+          "points": "carries the species caveat into the verdict"
+        },
+        {
+          "id": "calibration",
+          "kind": "rubric",
+          "weight": 1.5,
+          "awarded": 1.5,
+          "matched_on": "confidence",
+          "also_matched": null,
+          "points": "grades its own confidence per strand instead of asserting uniformly"
+        },
+        {
+          "id": "overclaim_cv",
+          "kind": "penalty",
+          "weight": 1.5,
+          "awarded": 0.0,
+          "matched_on": null,
+          "excused_by": null,
+          "points": "H1 is about target validity and oral feasibility; CV outcome claims are not supported by the evidence in this curriculum"
+        },
+        {
+          "id": "overclaim_cure",
+          "kind": "penalty",
+          "weight": 1.5,
+          "awarded": 0.0,
+          "matched_on": null,
+          "excused_by": null,
+          "points": "overclaiming beyond the trial result"
+        }
+      ],
+      "rubric_density": {
+        "words": 1063,
+        "items_matched": 7,
+        "per_100_words": 0.66
+      },
+      "reference": "Wharton S, Aronne LJ, Stefanski A, et al. Orforglipron, an Oral Small-Molecule GLP-1 Receptor Agonist for Obesity Treatment. N Engl J Med. 2025;393(18):1796-1806. doi:10.1056/NEJMoa2511774"
+    },
+    "answer": {
+      "verdict": "H1 is supported overall, but unevenly across its three claims. 'Druggable' is settled beyond reasonable doubt by registrational human trials; 'oral non-peptide agonism is feasible' is now strongly supported at proof-of-concept and Phase 3 efficacy level, with residual uncertainty about chemotype-specific safety and tolerability rather than about the mechanism; 'genetically supported' is true but weaker and partly indirect \u2014 the human genetics of GLP1R speak most clearly to glycaemia, T2D and cardiovascular risk, and only modestly and indirectly to adiposity itself. Net: accept H1, with the caveat that the genetic pillar is the softest of the three and that the obesity efficacy of GLP-1R agonism was discovered pharmacologically, not predicted by obesity GWAS.",
+      "per_claim": {
+        "genetically_supported": "Strongest evidence: coding variation at GLP1R in large human cohorts \u2014 notably the partial loss-of-function/signalling-altering variant p.Ala316Thr (rs10305492) and related rare/low-frequency alleles \u2014 associates with fasting glucose, T2D risk and coronary artery disease, with Mendelian-randomisation analyses supporting a causal direction consistent with drug effect. Type: human population genetics / MR (observational but causally anchored by allelic randomisation), supported by rodent Glp1r knockout physiology (impaired incretin response). Grade: MODERATE-TO-HIGH for GLP1R as a causal metabolic target; MODERATE-LOW for a direct, obesity-specific genetic signal \u2014 GLP1R is not a prominent BMI GWAS locus, effect sizes on adiposity are small, and human GLP1R LoF carriers are not conspicuously obese. The genetics licence the target; they do not by themselves predict ~15\u201320% weight loss.",
+        "druggable": "Strongest evidence: multiple adequately powered, randomised, placebo-controlled Phase 3 trials with regulatory approval \u2014 liraglutide 3.0 mg (SCALE, ~8%), semaglutide 2.4 mg (STEP programme, ~15% mean weight loss at 68 weeks), plus the GLP-1R-containing co-agonist tirzepatide (SURMOUNT, ~21%), and outcome data (SELECT) showing MACE reduction in obesity without diabetes. Type: interventional RCT in humans \u2014 the highest grade of causal evidence. Mechanistically underwritten by cryo-EM structures of peptide-bound active GLP-1R\u2013Gs complexes explaining ECD 'two-domain' engagement, and by rational peptide engineering (albumin-binding C18 diacid lipidation, Aib8 DPP-4 resistance) converting a 2-minute-half-life hormone into a weekly drug. Grade: VERY HIGH (near-certain).",
+        "oral_non_peptide_feasible": "Strongest evidence: orally bioavailable non-peptide GLP-1R agonists have reached and read out positively in late-stage human trials \u2014 orforglipron (Lilly) showing clinically meaningful HbA1c and body-weight reduction in Phase 2 and Phase 3 (double-digit % weight loss over ~72 weeks) without food/water restrictions, with a tolerability profile dominated by expected GI effects; earlier proof-of-mechanism from danuglipron (PF-06882961) Phase 2, plus additional clinical-stage chemotypes (e.g. Structure's GSBR-1290, CT-996, TERN-601). Mechanistically underpinned by co-structures showing small molecules occupying a TM-domain pocket and exploiting ECD Trp33 to mimic the peptide N-terminus, yielding Gs-biased, low-arrestin signalling. Type: human Phase 2/3 RCT plus structural biology. Grade: HIGH for feasibility of the mechanism and of oral delivery; MODERATE for 'any given molecule will be approvable' \u2014 danuglipron was discontinued (tolerability, then a liver-enzyme/DILI signal in the once-daily programme), which is a compound-level, possibly chemotype-level, rather than a target-level, refutation."
+      },
+      "not_established": "(1) That GLP1R genetics predict the magnitude of weight loss, or that obesity-specific (rather than glycaemic) genetic causality is established. (2) Long-term safety and cardiovascular/renal outcome data for small-molecule agonists \u2014 no completed CVOT for a non-peptide; hepatotoxicity, pancreatitis, gallbladder, thyroid C-cell (rodent-derived) and psychiatric signals remain open for this class of chemistry. (3) Whether small-molecule efficacy matches injectable peptides or co-agonists head-to-head, and whether Gs-bias translates into better or worse tolerability. (4) Durability: weight regain on discontinuation (STEP-1 extension) is a property of the mechanism, not of the formulation; loss of lean mass and long-term functional consequences are unresolved. (5) Species dependence \u2014 the Trp33 ECD requirement makes many small molecules human/primate-selective, so rodent models are poor predictors of efficacy and off-target safety for this chemotype. (6) Pharmaceutics at scale: dose, food effect, DDI, variability, cost of goods and access \u2014 the actual reason oral matters. (7) Nothing here establishes which patients benefit most, or paediatric/elderly/comorbid populations.",
+      "would_change_my_mind": "On genetics: well-powered MR with GLP1R cis-instruments showing a null or wrong-signed effect on BMI/adiposity after accounting for glycaemic pleiotropy, or large exome studies showing GLP1R LoF carriers have normal or lower body weight. On druggability: nothing short of withdrawal for harm \u2014 SELECT and STEP make this effectively irreversible. On oral non-peptide feasibility: a second and third independent chemotype failing for idiosyncratic hepatotoxicity or an on-target ceiling in tolerability would convert this from a chemotype problem to a class problem; conversely a confirmatory Phase 3 approval plus a clean CVOT for orforglipron would move me to VERY HIGH. I would also update if structural work showed the TM small-molecule pocket cannot support the receptor conformations needed for full efficacy without off-target liabilities, or if real-world data showed oral small molecules systematically underperform peptides at tolerated doses.",
+      "reasoning": "The three claims sit at very different evidential tiers and should not be averaged. Druggability rests on the strongest possible evidence type \u2014 multiple large randomised, placebo-controlled, outcome-bearing human trials with regulatory approval. That is causal, replicated and direct; no amount of contrary preclinical or genetic data could overturn it. Oral non-peptide feasibility rests on a mix of human Phase 2/3 efficacy data and structural rationale. Feasibility is an existence claim, and at least one molecule appears to have satisfied it in Phase 3; the discontinuation of danuglipron is informative about the difficulty of the chemical series (high doses, GI burden, a DILI signal) but does not refute the mechanism, and conflating compound failure with target failure is the classic error here. The genetic claim is the weakest, and it is important to be honest that the causal chain runs through glycaemia and incretin biology more cleanly than through adiposity: GLP1R did not emerge from obesity GWAS, and the target's anti-obesity effect was found through physiology and trial-and-error dose escalation of a diabetes drug. Genetic support in the Nelson/Plenge sense (human allelic evidence doubling probability of success) is present but should be graded as corroborating rather than foundational for the obesity indication specifically. The structural and peptide-engineering strands in the curriculum are mechanistic enablers rather than hypothesis tests: the two-domain binding model and the ECD Trp33 'peptide-mimetic' trick explain why small molecules are possible at a class B GPCR at all, and lipidation/Aib8 explain the pharmacokinetic leap, but both are supporting rather than decisive evidence. Weighing these, H1 is accepted, with the proviso that its three clauses carry confidences of roughly 0.6\u20130.75, >0.98, and ~0.85 respectively, and that the main live risks are chemotype safety, durability and comparative efficacy rather than target validity."
+    },
+    "raw_text": "{\n  \"verdict\": \"H1 is supported overall, but unevenly across its three claims. 'Druggable' is settled beyond reasonable doubt by registrational human trials; 'oral non-peptide agonism is feasible' is now strongly supported at proof-of-concept and Phase 3 efficacy level, with residual uncertainty about chemotype-specific safety and tolerability rather than about the mechanism; 'genetically supported' is true but weaker and partly indirect \u2014 the human genetics of GLP1R speak most clearly to glycaemia, T2D and cardiovascular risk, and only modestly and indirectly to adiposity itself. Net: accept H1, with the caveat that the genetic pillar is the softest of the three and that the obesity efficacy of GLP-1R agonism was discovered pharmacologically, not predicted by obesity GWAS.\",\n  \"per_claim\": {\n    \"genetically_supported\": \"Strongest evidence: coding variation at GLP1R in large human cohorts \u2014 notably the partial loss-of-function/signalling-altering variant p.Ala316Thr (rs10305492) and related rare/low-frequency alleles \u2014 associates with fasting glucose, T2D risk and coronary artery disease, with Mendelian-randomisation analyses supporting a causal direction consistent with drug effect. Type: human population genetics / MR (observational but causally anchored by allelic randomisation), supported by rodent Glp1r knockout physiology (impaired incretin response). Grade: MODERATE-TO-HIGH for GLP1R as a causal metabolic target; MODERATE-LOW for a direct, obesity-specific genetic signal \u2014 GLP1R is not a prominent BMI GWAS locus, effect sizes on adiposity are small, and human GLP1R LoF carriers are not conspicuously obese. The genetics licence the target; they do not by themselves predict ~15\u201320% weight loss.\",\n    \"druggable\": \"Strongest evidence: multiple adequately powered, randomised, placebo-controlled Phase 3 trials with regulatory approval \u2014 liraglutide 3.0 mg (SCALE, ~8%), semaglutide 2.4 mg (STEP programme, ~15% mean weight loss at 68 weeks), plus the GLP-1R-containing co-agonist tirzepatide (SURMOUNT, ~21%), and outcome data (SELECT) showing MACE reduction in obesity without diabetes. Type: interventional RCT in humans \u2014 the highest grade of causal evidence. Mechanistically underwritten by cryo-EM structures of peptide-bound active GLP-1R\u2013Gs complexes explaining ECD 'two-domain' engagement, and by rational peptide engineering (albumin-binding C18 diacid lipidation, Aib8 DPP-4 resistance) converting a 2-minute-half-life hormone into a weekly drug. Grade: VERY HIGH (near-certain).\",\n    \"oral_non_peptide_feasible\": \"Strongest evidence: orally bioavailable non-peptide GLP-1R agonists have reached and read out positively in late-stage human trials \u2014 orforglipron (Lilly) showing clinically meaningful HbA1c and body-weight reduction in Phase 2 and Phase 3 (double-digit % weight loss over ~72 weeks) without food/water restrictions, with a tolerability profile dominated by expected GI effects; earlier proof-of-mechanism from danuglipron (PF-06882961) Phase 2, plus additional clinical-stage chemotypes (e.g. Structure's GSBR-1290, CT-996, TERN-601). Mechanistically underpinned by co-structures showing small molecules occupying a TM-domain pocket and exploiting ECD Trp33 to mimic the peptide N-terminus, yielding Gs-biased, low-arrestin signalling. Type: human Phase 2/3 RCT plus structural biology. Grade: HIGH for feasibility of the mechanism and of oral delivery; MODERATE for 'any given molecule will be approvable' \u2014 danuglipron was discontinued (tolerability, then a liver-enzyme/DILI signal in the once-daily programme), which is a compound-level, possibly chemotype-level, rather than a target-level, refutation.\"\n  },\n  \"not_established\": \"(1) That GLP1R genetics predict the magnitude of weight loss, or that obesity-specific (rather than glycaemic) genetic causality is established. (2) Long-term safety and cardiovascular/renal outcome data for small-molecule agonists \u2014 no completed CVOT for a non-peptide; hepatotoxicity, pancreatitis, gallbladder, thyroid C-cell (rodent-derived) and psychiatric signals remain open for this class of chemistry. (3) Whether small-molecule efficacy matches injectable peptides or co-agonists head-to-head, and whether Gs-bias translates into better or worse tolerability. (4) Durability: weight regain on discontinuation (STEP-1 extension) is a property of the mechanism, not of the formulation; loss of lean mass and long-term functional consequences are unresolved. (5) Species dependence \u2014 the Trp33 ECD requirement makes many small molecules human/primate-selective, so rodent models are poor predictors of efficacy and off-target safety for this chemotype. (6) Pharmaceutics at scale: dose, food effect, DDI, variability, cost of goods and access \u2014 the actual reason oral matters. (7) Nothing here establishes which patients benefit most, or paediatric/elderly/comorbid populations.\",\n  \"would_change_my_mind\": \"On genetics: well-powered MR with GLP1R cis-instruments showing a null or wrong-signed effect on BMI/adiposity after accounting for glycaemic pleiotropy, or large exome studies showing GLP1R LoF carriers have normal or lower body weight. On druggability: nothing short of withdrawal for harm \u2014 SELECT and STEP make this effectively irreversible. On oral non-peptide feasibility: a second and third independent chemotype failing for idiosyncratic hepatotoxicity or an on-target ceiling in tolerability would convert this from a chemotype problem to a class problem; conversely a confirmatory Phase 3 approval plus a clean CVOT for orforglipron would move me to VERY HIGH. I would also update if structural work showed the TM small-molecule pocket cannot support the receptor conformations needed for full efficacy without off-target liabilities, or if real-world data showed oral small molecules systematically underperform peptides at tolerated doses.\",\n  \"reasoning\": \"The three claims sit at very different evidential tiers and should not be averaged. Druggability rests on the strongest possible evidence type \u2014 multiple large randomised, placebo-controlled, outcome-bearing human trials with regulatory approval. That is causal, replicated and direct; no amount of contrary preclinical or genetic data could overturn it. Oral non-peptide feasibility rests on a mix of human Phase 2/3 efficacy data and structural rationale. Feasibility is an existence claim, and at least one molecule appears to have satisfied it in Phase 3; the discontinuation of danuglipron is informative about the difficulty of the chemical series (high doses, GI burden, a DILI signal) but does not refute the mechanism, and conflating compound failure with target failure is the classic error here. The genetic claim is the weakest, and it is important to be honest that the causal chain runs through glycaemia and incretin biology more cleanly than through adiposity: GLP1R did not emerge from obesity GWAS, and the target's anti-obesity effect was found through physiology and trial-and-error dose escalation of a diabetes drug. Genetic support in the Nelson/Plenge sense (human allelic evidence doubling probability of success) is present but should be graded as corroborating rather than foundational for the obesity indication specifically. The structural and peptide-engineering strands in the curriculum are mechanistic enablers rather than hypothesis tests: the two-domain binding model and the ECD Trp33 'peptide-mimetic' trick explain why small molecules are possible at a class B GPCR at all, and lipidation/Aib8 explain the pharmacokinetic leap, but both are supporting rather than decisive evidence. Weighing these, H1 is accepted, with the proviso that its three clauses carry confidences of roughly 0.6\u20130.75, >0.98, and ~0.85 respectively, and that the main live risks are chemotype safety, durability and comparative efficacy rather than target validity.\",\n  \"confidence\": 0.82\n}"
+  },
+  {
+    "curriculum": "glp1r",
+    "sample": 4,
+    "model": "claude-opus-5",
+    "stop_reason": "end_turn",
+    "usage": {
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 0,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "inference_geo": "global",
+      "input_tokens": 566,
+      "output_tokens": 3774,
+      "output_tokens_details": {
+        "thinking_tokens": 761
+      },
+      "server_tool_use": null,
+      "service_tier": "standard"
+    },
+    "parsed": false,
+    "confidence": null,
+    "score": null,
+    "details": null,
+    "answer": null,
+    "raw_text": "{\"verdict\": \"Accept H1 as a whole, with graded confidence: 'druggable' is essentially settled (approved drugs, large effect sizes), 'oral non-peptide agonism is feasible' is now strongly supported by structural biology plus clinical proof-of-concept and late-stage data, and 'genetically supported' is true but is the weakest of the three limbs \u2014 the human genetics directly indexes glycemia/incretin biology far more robustly than adiposity per se. Net: H1 is substantially correct, but the genetic limb should be stated as 'genetically supported as a metabolic/incretin target, with pharmacological rather than genetic proof of the obesity effect.'\",\n \"per_claim\": {\n   \"genetically_supported\": \"Strongest evidence: common coding variation in GLP1R \u2014 notably rs10305492 (Ala316Thr) and rs6923761 (Gly168Ser) \u2014 associates with fasting glucose, HbA1c, type 2 diabetes risk and, for rs10305492, lower coronary artery disease risk; Mendelian randomisation using GLP1R variants as instruments recapitulates the glycaemic (and, in some analyses, modest BMI/CAD) direction of effect of GLP-1R agonist drugs. Type: human genetic association / MR (observational, population-scale). Confidence: moderate-to-high that GLP1R is a causal metabolic gene; only moderate-to-low that human genetics by itself nominates GLP-1R as an *obesity* target \u2014 the BMI effect sizes at this locus are small and inconsistent, and rare loss-of-function GLP1R carriers are not characterised by marked obesity. Genetic support here is corroborative and directionally consistent, not the primary basis for the target.\",\n   \"druggable\": \"Strongest evidence: multiple approved peptide agonists with randomised, placebo-controlled outcome data \u2014 liraglutide 3.0 mg (SCALE, ~8% weight loss), semaglutide 2.4 mg (STEP programme, ~15% mean weight loss; SELECT showing MACE reduction in overweight/obesity without diabetes), plus the dual GIP/GLP-1 agonist tirzepatide (SURMOUNT, ~20%+). Underpinned by class B1 GPCR structural biology: cryo-EM structures of GLP-1R with GLP-1/exendin-4 and Gs showing the two-domain peptide binding mode, and extensive peptide engineering (fatty-acylation/albumin binding, DPP-4-resistant Aib8 substitution, backbone stabilisation) converting a ~2-minute-half-life hormone into weekly drugs. Type: phase 3 RCT + cardiovascular outcome trial + structural/medicinal chemistry. Confidence: very high (\u22650.95). This is as close to settled as a target claim gets.\",\n   \"oral_non_peptide_feasible\": \"Strongest evidence: (i) structural \u2014 cryo-EM and crystallographic structures of GLP-1R bound to non-peptide agonists (TT-OAD2, PF-06882961/danuglipron, LY3502970/orforglipron) showing a druggable pocket at the ECD\u2013TM1/TM2 interface distinct from the orthosteric peptide site, with Trp33 of the ECD acting as a lid; (ii) clinical \u2014 danuglipron achieved glucose-lowering and weight loss in phase 2 (proving oral small-molecule agonism translates in humans) before being discontinued for tolerability/hepatic signals; orforglipron, a once-daily oral non-peptide, has produced double-digit percentage weight loss in phase 2 and positive phase 3 readouts with no orforglipron-specific hepatotoxicity signal reported; additional assets (CT-996, GSBR-1290, aleniglipron) are in development. Separately, oral semaglutide (SNAC) proves the oral *route* is viable even for a peptide. Type: structural biology + phase 2/3 RCT. Confidence: high (~0.85) for feasibility; lower (~0.6) that any given molecule clears the full safety/tolerability bar and matches injectable semaglutide/tirzepatide efficacy. Caveat: strong species selectivity (human Trp33 vs rodent Ser) means preclinical rodent efficacy data for these compounds are largely uninformative without humanised receptor models.\",\n   },\n \"not_established\": \"This body of evidence does not establish: (1) that human genetics alone would have nominated GLP-1R for *obesity* rather than for glycaemia \u2014 the adiposity claim rests on pharmacology, so the genetic limb is corroborative, not generative; (2) durability \u2014 weight regain after discontinuation (STEP 1 extension, STEP 4) implies chronic therapy, and long-term 5\u201310 year safety of small molecules is unknown; (3) body-composition quality (lean mass loss), bone, and nutritional consequences; (4) whether oral non-peptides match injectables on cardiovascular, renal, MASH, or sleep-apnoea outcomes \u2014 no small-molecule CVOT has read out; (5) class vs molecule-specific hepatotoxicity \u2014 the danuglipron and some aleniglipron hepatic signals are unresolved as to mechanism; (6) whether signalling bias (cAMP vs \u03b2-arrestin/internalisation) at the non-peptide pocket produces a different efficacy/tolerability ratio than peptides, and whether oral non-peptides can escape the GI tolerability ceiling that limits dose titration; (7) responder heterogeneity, pharmacogenetics (e.g. whether GLP1R variants predict drug response), food/fasting administration constraints, and cost/access; (8) nothing here speaks to paediatric, pregnancy, or psychiatric-safety questions.\",\n \"would_change_my_mind\": \"Downgrade the genetic limb if well-powered MR with multiple independent GLP1R cis-instruments and a credible exposure scale showed a null or opposing effect on BMI/body-fat while retaining glycaemic effects, or if GLP1R LoF carriers in large exome biobanks (UKB, AoU, Regeneron/GHS) showed no adiposity phenotype at all. Downgrade 'druggable' only on evidence of unacceptable long-term harm outweighing the SELECT-class benefit. Downgrade 'oral non-peptide feasible' if the hepatic signal seen with danuglipron proves to be an on-target, pocket-intrinsic class effect that also emerges for orforglipron and successors at effective doses, or if phase 3 oral non-peptide weight loss plateaus well below ~10% with tolerability-limited titration, or if structures showed the non-peptide pocket cannot support the efficacy required without a second (e.g. GIP/amylin) mechanism. Conversely, a positive oral non-peptide CVOT and a clean 2-year hepatic safety database would push my confidence on limb three above 0.95.\",\n \"reasoning\": \"The three claims differ sharply in evidential class and therefore in how much the curriculum could have added. 'Druggable' is established by the highest-grade evidence available in medicine \u2014 multiple phase 3 RCTs and a cardiovascular outcome trial with approved agents \u2014 so no bench experiment can meaningfully move it; the structure and peptide-engineering experiments (2\u20134) are mechanistic explanation, not additional proof. 'Genetically supported' rests on human association/MR evidence that is real but points most cleanly at glycaemia and incretin signalling; the obesity phenotype at GLP1R in GWAS is small, and the conventional narrative that 'GLP-1R is a genetically validated obesity target' is retrospectively tidied. I therefore grade it true but weaker, and explicitly flag that the causal chain to adiposity was demonstrated pharmacologically first. 'Oral non-peptide feasible' is the claim where evidence has moved fastest and where structural biology genuinely did the work: discovery of an allosteric/ECD-interface pocket distinct from the peptide orthosteric site explains how a ~500 Da molecule can activate a class B1 GPCR at all, and clinical readouts (danuglipron efficacy with a tolerability/hepatic failure; orforglipron efficacy with positive phase 3) convert feasibility from theoretical to demonstrated. The honest residual risk is not 'can a small molecule agonise GLP-1R' \u2014 answered yes \u2014 but 'can it do so with an acceptable therapeutic index and injectable-comparable efficacy', which is a per-molecule question. Two cross-cutting caveats temper everything: species selectivity makes rodent data for non-peptides nearly uninformative, and the whole field's weight-loss durability depends on indefinite dosing. Weighing these, H1 is accepted, with the caveat that its three limbs are supported by very different evidence strengths and should not be reported as uniformly validated.\",\n \"confidence\": 0.84}",
+    "repair_note": {
+      "removed_trailing_commas": 1,
+      "confidence": 0.84,
+      "score_if_repaired": 0.7917
+    }
+  },
+  {
+    "curriculum": "wrn",
+    "sample": 0,
+    "model": "claude-opus-5",
+    "stop_reason": "end_turn",
+    "usage": {
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 0,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "inference_geo": "global",
+      "input_tokens": 577,
+      "output_tokens": 1647,
+      "output_tokens_details": {
+        "thinking_tokens": 621
+      },
+      "server_tool_use": null,
+      "service_tier": "standard"
+    },
+    "parsed": true,
+    "confidence": 0.85,
+    "score": 0.4,
+    "details": {
+      "ranking_score": 0.0,
+      "ranking": {
+        "error": "fewer than 3 recognisable tissue names",
+        "unrecognised": [
+          "Stomach (gastric)",
+          "Ovary",
+          "Esophagus/upper GI (weak, few lines)"
+        ]
+      },
+      "explanation_score": 0.8,
+      "explanation_missed": [
+        "frames the relationship as synthetic lethality"
+      ],
+      "explanation_penalised": [],
+      "breakdown": [
+        {
+          "id": "msi",
+          "kind": "rubric",
+          "weight": 3.0,
+          "awarded": 3.0,
+          "matched_on": "microsatellite instability",
+          "also_matched": null,
+          "points": "names microsatellite instability / mismatch-repair deficiency as the underlying state, not the tissue itself"
+        },
+        {
+          "id": "lineage_confound",
+          "kind": "rubric",
+          "weight": 2.5,
+          "awarded": 2.5,
+          "matched_on": "confound",
+          "also_matched": null,
+          "points": "treats lineage as a proxy for the real variable rather than the cause"
+        },
+        {
+          "id": "synthetic_lethal",
+          "kind": "rubric",
+          "weight": 2.0,
+          "awarded": 0.0,
+          "matched_on": null,
+          "also_matched": null,
+          "points": "frames the relationship as synthetic lethality"
+        },
+        {
+          "id": "mechanism",
+          "kind": "rubric",
+          "weight": 1.5,
+          "awarded": 1.5,
+          "matched_on": "ta repeat",
+          "also_matched": null,
+          "points": "offers a mechanism (expanded TA repeats forming secondary structure that WRN helicase resolves)"
+        },
+        {
+          "id": "next_test",
+          "kind": "rubric",
+          "weight": 1.0,
+          "awarded": 1.0,
+          "matched_on": "msi-h",
+          "also_matched": null,
+          "points": "proposes testing MSI status directly rather than stopping at lineage"
+        },
+        {
+          "id": "tissue_as_cause",
+          "kind": "penalty",
+          "weight": 2.0,
+          "awarded": 0.0,
+          "matched_on": null,
+          "excused_by": null,
+          "points": "lineage correlates with MSI status; it is not the cause"
+        }
+      ],
+      "rubric_density": {
+        "words": 333,
+        "items_matched": 4,
+        "per_100_words": 1.2
+      },
+      "true_top_tissues": [
+        "uterus",
+        "intestine",
+        "liver",
+        "internal female genitalia",
+        "subdivision of digestive tract"
+      ]
+    },
+    "answer": {
+      "top_tissues": [
+        "Endometrium/Uterus",
+        "Large intestine (colorectal)",
+        "Stomach (gastric)",
+        "Ovary",
+        "Esophagus/upper GI (weak, few lines)"
+      ],
+      "explanation": "WRN is not a lineage dependency in any mechanistic sense - tissue of origin is a proxy for mismatch-repair deficiency. The lineages that top the ranking (endometrial, colorectal, gastric, and to a lesser degree ovarian/upper-GI) are exactly the tumour types with the highest prevalence of microsatellite instability, usually via MLH1 promoter hypermethylation/silencing or MSH2/MSH6/PMS2 loss (sporadic or Lynch). Within those lineages the dependency is bimodal, not uniform: the MSI-H subset of colorectal and endometrial lines sits near or below -1.0 while their MSS counterparts in the same tissue score ~0. Conversely, the rare MSI-H line in a 'non-GI' lineage is also WRN-dependent. Mechanism: MMR loss allows progressive expansion of simple repeats, especially (TA)n dinucleotide tracts, which exceed a length threshold and fold into cruciform/hairpin secondary structures. WRN's RecQ (ATP-dependent) helicase activity - not its exonuclease - is required to unwind these structures so replication/repair can proceed. Without WRN, expanded TA repeats are cleaved (MUS81/SLX4-type nuclease processing), generating double-strand breaks, massive chromosome shattering/aneuploidy, ATM/p53 signalling, senescence and apoptosis selectively in MSI cells. So the correct statement of H2 is: WRN dependency tracks MSI/MMR status, and lineage enrichment is a confounded, downstream readout of where MSI is common.",
+      "next_test": "Jointly model WRN CRISPR gene effect against (a) a quantitative MSI score called from sequencing (MSIsensor/MANTIS or microsatellite-caller on WES/WGS), (b) MLH1 promoter methylation and MLH1/MSH2/MSH6/PMS2 protein and mRNA levels, and (c) lineage, in the same regression; MSI should retain its effect after conditioning on lineage while lineage loses significance once MSI is included. Then test the mechanism causally: quantify genome-wide expanded (TA)n repeat burden per line and correlate it with WRN dependency; restore MMR (re-express MLH1 in a methylated MSI line) or induce MMR loss (MLH1/MSH2 knockout in an MSS line) and re-score WRN essentiality; and rescue WRN-knockout MSI lines with wild-type vs helicase-dead (K577M) vs exonuclease-dead WRN, reading out gamma-H2AX/53BP1 foci, chromosome shattering by metaphase spread/karyotype, and break mapping (END-seq/BLISS) at TA repeats."
+    },
+    "raw_text": "{\"top_tissues\": [\"Endometrium/Uterus\", \"Large intestine (colorectal)\", \"Stomach (gastric)\", \"Ovary\", \"Esophagus/upper GI (weak, few lines)\"], \"explanation\": \"WRN is not a lineage dependency in any mechanistic sense - tissue of origin is a proxy for mismatch-repair deficiency. The lineages that top the ranking (endometrial, colorectal, gastric, and to a lesser degree ovarian/upper-GI) are exactly the tumour types with the highest prevalence of microsatellite instability, usually via MLH1 promoter hypermethylation/silencing or MSH2/MSH6/PMS2 loss (sporadic or Lynch). Within those lineages the dependency is bimodal, not uniform: the MSI-H subset of colorectal and endometrial lines sits near or below -1.0 while their MSS counterparts in the same tissue score ~0. Conversely, the rare MSI-H line in a 'non-GI' lineage is also WRN-dependent. Mechanism: MMR loss allows progressive expansion of simple repeats, especially (TA)n dinucleotide tracts, which exceed a length threshold and fold into cruciform/hairpin secondary structures. WRN's RecQ (ATP-dependent) helicase activity - not its exonuclease - is required to unwind these structures so replication/repair can proceed. Without WRN, expanded TA repeats are cleaved (MUS81/SLX4-type nuclease processing), generating double-strand breaks, massive chromosome shattering/aneuploidy, ATM/p53 signalling, senescence and apoptosis selectively in MSI cells. So the correct statement of H2 is: WRN dependency tracks MSI/MMR status, and lineage enrichment is a confounded, downstream readout of where MSI is common.\", \"next_test\": \"Jointly model WRN CRISPR gene effect against (a) a quantitative MSI score called from sequencing (MSIsensor/MANTIS or microsatellite-caller on WES/WGS), (b) MLH1 promoter methylation and MLH1/MSH2/MSH6/PMS2 protein and mRNA levels, and (c) lineage, in the same regression; MSI should retain its effect after conditioning on lineage while lineage loses significance once MSI is included. Then test the mechanism causally: quantify genome-wide expanded (TA)n repeat burden per line and correlate it with WRN dependency; restore MMR (re-express MLH1 in a methylated MSI line) or induce MMR loss (MLH1/MSH2 knockout in an MSS line) and re-score WRN essentiality; and rescue WRN-knockout MSI lines with wild-type vs helicase-dead (K577M) vs exonuclease-dead WRN, reading out gamma-H2AX/53BP1 foci, chromosome shattering by metaphase spread/karyotype, and break mapping (END-seq/BLISS) at TA repeats.\", \"confidence\": 0.85}"
+  },
+  {
+    "curriculum": "wrn",
+    "sample": 1,
+    "model": "claude-opus-5",
+    "stop_reason": "end_turn",
+    "usage": {
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 0,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "inference_geo": "global",
+      "input_tokens": 577,
+      "output_tokens": 1549,
+      "output_tokens_details": {
+        "thinking_tokens": 531
+      },
+      "server_tool_use": null,
+      "service_tier": "standard"
+    },
+    "parsed": true,
+    "confidence": null,
+    "score": 0.4,
+    "details": {
+      "ranking_score": 0.0,
+      "ranking": {
+        "error": "fewer than 3 recognisable tissue names",
+        "unrecognised": [
+          "Endometrium/uterine",
+          "Stomach/gastric",
+          "Ovary",
+          "Esophagus/upper GI (weakly, if it passes the line-count filter)"
+        ]
+      },
+      "explanation_score": 0.8,
+      "explanation_missed": [
+        "frames the relationship as synthetic lethality"
+      ],
+      "explanation_penalised": [],
+      "breakdown": [
+        {
+          "id": "msi",
+          "kind": "rubric",
+          "weight": 3.0,
+          "awarded": 3.0,
+          "matched_on": "microsatellite instability",
+          "also_matched": null,
+          "points": "names microsatellite instability / mismatch-repair deficiency as the underlying state, not the tissue itself"
+        },
+        {
+          "id": "lineage_confound",
+          "kind": "rubric",
+          "weight": 2.5,
+          "awarded": 2.5,
+          "matched_on": "enriched in",
+          "also_matched": null,
+          "points": "treats lineage as a proxy for the real variable rather than the cause"
+        },
+        {
+          "id": "synthetic_lethal",
+          "kind": "rubric",
+          "weight": 2.0,
+          "awarded": 0.0,
+          "matched_on": null,
+          "also_matched": null,
+          "points": "frames the relationship as synthetic lethality"
+        },
+        {
+          "id": "mechanism",
+          "kind": "rubric",
+          "weight": 1.5,
+          "awarded": 1.5,
+          "matched_on": "ta-repeat",
+          "also_matched": null,
+          "points": "offers a mechanism (expanded TA repeats forming secondary structure that WRN helicase resolves)"
+        },
+        {
+          "id": "next_test",
+          "kind": "rubric",
+          "weight": 1.0,
+          "awarded": 1.0,
+          "matched_on": "msi status",
+          "also_matched": null,
+          "points": "proposes testing MSI status directly rather than stopping at lineage"
+        },
+        {
+          "id": "tissue_as_cause",
+          "kind": "penalty",
+          "weight": 2.0,
+          "awarded": 0.0,
+          "matched_on": null,
+          "excused_by": null,
+          "points": "lineage correlates with MSI status; it is not the cause"
+        }
+      ],
+      "rubric_density": {
+        "words": 361,
+        "items_matched": 4,
+        "per_100_words": 1.11
+      },
+      "true_top_tissues": [
+        "uterus",
+        "intestine",
+        "liver",
+        "internal female genitalia",
+        "subdivision of digestive tract"
+      ]
+    },
+    "answer": {
+      "top_tissues": [
+        "Endometrium/uterine",
+        "Colorectal (large intestine)",
+        "Stomach/gastric",
+        "Ovary",
+        "Esophagus/upper GI (weakly, if it passes the line-count filter)"
+      ],
+      "explanation": "The tissues that top the list are exactly the tissues in which mismatch-repair deficiency is common: endometrial, colorectal and gastric carcinomas (plus a thin tail in ovarian/upper-GI, and occasionally a glioma or hematopoietic line with constitutional MMR deficiency). Lineage is therefore NOT the cause - it is a proxy. The real covariate is microsatellite instability / MMR deficiency (MLH1 promoter hypermethylation and silencing, or MSH2/MSH6/MLH1/PMS2 mutation), which happens to be enriched in those epithelia. Within a tissue the split is clean: MSI-H lines in colon/endometrium/stomach score strongly negative for WRN while MSS lines from the SAME tissue are indifferent, and the handful of MSI lines found in other lineages are also dependent. Mechanism: loss of MMR allows (TA)n and other short tandem repeats to undergo massive expansion over many generations. Expanded TA dinucleotide repeats are prone to forming non-B DNA (cruciform/hairpin) structures that stall replication forks; the RecQ helicase activity of WRN is required to unwind them. When WRN is lost, these expanded repeats are cleaved by structure-specific nucleases (MUS81/SLX4-type), generating chromosome-wide double-strand breaks, massive gamma-H2AX, p53/p21 activation, and apoptosis or senescence - a non-oncogene addiction created by the genome's accumulated repeat burden rather than by any lineage transcription program. The helicase domain, not the exonuclease domain, carries the essential function.",
+      "next_test": "Directly regress WRN gene-effect score on MSI status rather than lineage: compute MSIsensor/MANTIS scores or MLH1/MSH2 protein status for every line and show that (a) MSI explains the dependency after conditioning on tissue, and (b) within colorectal/endometrial/gastric lines, MSI-H vs MSS separates WRN dependency with little residual lineage effect. Then test causally: knock out MLH1 or MSH2 in an MSS line and propagate it for many passages to accumulate TA-repeat expansions, and re-express wild-type MLH1 in an MLH1-methylated MSI line, and re-assay WRN dependence; quantify TA-repeat tract lengths by targeted long-read sequencing and correlate tract burden with WRN sensitivity. Finally, rescue WRN-knockout MSI lines with wild-type vs helicase-dead (K577M) vs exonuclease-dead WRN to confirm the helicase activity is the essential function, and score gamma-H2AX/53BP1 foci and chromosome shattering at expanded repeats as the proximal readout."
+    },
+    "raw_text": "{\"top_tissues\": [\"Endometrium/uterine\", \"Colorectal (large intestine)\", \"Stomach/gastric\", \"Ovary\", \"Esophagus/upper GI (weakly, if it passes the line-count filter)\"], \"explanation\": \"The tissues that top the list are exactly the tissues in which mismatch-repair deficiency is common: endometrial, colorectal and gastric carcinomas (plus a thin tail in ovarian/upper-GI, and occasionally a glioma or hematopoietic line with constitutional MMR deficiency). Lineage is therefore NOT the cause - it is a proxy. The real covariate is microsatellite instability / MMR deficiency (MLH1 promoter hypermethylation and silencing, or MSH2/MSH6/MLH1/PMS2 mutation), which happens to be enriched in those epithelia. Within a tissue the split is clean: MSI-H lines in colon/endometrium/stomach score strongly negative for WRN while MSS lines from the SAME tissue are indifferent, and the handful of MSI lines found in other lineages are also dependent. Mechanism: loss of MMR allows (TA)n and other short tandem repeats to undergo massive expansion over many generations. Expanded TA dinucleotide repeats are prone to forming non-B DNA (cruciform/hairpin) structures that stall replication forks; the RecQ helicase activity of WRN is required to unwind them. When WRN is lost, these expanded repeats are cleaved by structure-specific nucleases (MUS81/SLX4-type), generating chromosome-wide double-strand breaks, massive gamma-H2AX, p53/p21 activation, and apoptosis or senescence - a non-oncogene addiction created by the genome's accumulated repeat burden rather than by any lineage transcription program. The helicase domain, not the exonuclease domain, carries the essential function.\", \"next_test\": \"Directly regress WRN gene-effect score on MSI status rather than lineage: compute MSIsensor/MANTIS scores or MLH1/MSH2 protein status for every line and show that (a) MSI explains the dependency after conditioning on tissue, and (b) within colorectal/endometrial/gastric lines, MSI-H vs MSS separates WRN dependency with little residual lineage effect. Then test causally: knock out MLH1 or MSH2 in an MSS line and propagate it for many passages to accumulate TA-repeat expansions, and re-express wild-type MLH1 in an MLH1-methylated MSI line, and re-assay WRN dependence; quantify TA-repeat tract lengths by targeted long-read sequencing and correlate tract burden with WRN sensitivity. Finally, rescue WRN-knockout MSI lines with wild-type vs helicase-dead (K577M) vs exonuclease-dead WRN to confirm the helicase activity is the essential function, and score gamma-H2AX/53BP1 foci and chromosome shattering at expanded repeats as the proximal readout.\"}"
+  },
+  {
+    "curriculum": "wrn",
+    "sample": 2,
+    "model": "claude-opus-5",
+    "stop_reason": "end_turn",
+    "usage": {
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 0,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "inference_geo": "global",
+      "input_tokens": 577,
+      "output_tokens": 1390,
+      "output_tokens_details": {
+        "thinking_tokens": 442
+      },
+      "server_tool_use": null,
+      "service_tier": "standard"
+    },
+    "parsed": true,
+    "confidence": 0.86,
+    "score": 0.4,
+    "details": {
+      "ranking_score": 0.0,
+      "ranking": {
+        "error": "fewer than 3 recognisable tissue names",
+        "unrecognised": [
+          "Stomach",
+          "Ovary",
+          "Esophagus/upper GI (weaker, borderline)"
+        ]
+      },
+      "explanation_score": 0.8,
+      "explanation_missed": [
+        "frames the relationship as synthetic lethality"
+      ],
+      "explanation_penalised": [],
+      "breakdown": [
+        {
+          "id": "msi",
+          "kind": "rubric",
+          "weight": 3.0,
+          "awarded": 3.0,
+          "matched_on": "msi",
+          "also_matched": null,
+          "points": "names microsatellite instability / mismatch-repair deficiency as the underlying state, not the tissue itself"
+        },
+        {
+          "id": "lineage_confound",
+          "kind": "rubric",
+          "weight": 2.5,
+          "awarded": 2.5,
+          "matched_on": "lineage is a proxy",
+          "also_matched": null,
+          "points": "treats lineage as a proxy for the real variable rather than the cause"
+        },
+        {
+          "id": "synthetic_lethal",
+          "kind": "rubric",
+          "weight": 2.0,
+          "awarded": 0.0,
+          "matched_on": null,
+          "also_matched": null,
+          "points": "frames the relationship as synthetic lethality"
+        },
+        {
+          "id": "mechanism",
+          "kind": "rubric",
+          "weight": 1.5,
+          "awarded": 1.5,
+          "matched_on": "ta repeat",
+          "also_matched": null,
+          "points": "offers a mechanism (expanded TA repeats forming secondary structure that WRN helicase resolves)"
+        },
+        {
+          "id": "next_test",
+          "kind": "rubric",
+          "weight": 1.0,
+          "awarded": 1.0,
+          "matched_on": "msi status",
+          "also_matched": null,
+          "points": "proposes testing MSI status directly rather than stopping at lineage"
+        },
+        {
+          "id": "tissue_as_cause",
+          "kind": "penalty",
+          "weight": 2.0,
+          "awarded": 0.0,
+          "matched_on": null,
+          "excused_by": null,
+          "points": "lineage correlates with MSI status; it is not the cause"
+        }
+      ],
+      "rubric_density": {
+        "words": 321,
+        "items_matched": 4,
+        "per_100_words": 1.25
+      },
+      "true_top_tissues": [
+        "uterus",
+        "intestine",
+        "liver",
+        "internal female genitalia",
+        "subdivision of digestive tract"
+      ]
+    },
+    "answer": {
+      "top_tissues": [
+        "Endometrium/uterus",
+        "Large intestine (colorectal)",
+        "Stomach",
+        "Ovary",
+        "Esophagus/upper GI (weaker, borderline)"
+      ],
+      "explanation": "Lineage is a proxy, not the cause. The tissues that top the ranking are exactly those with the highest prevalence of mismatch-repair deficiency: endometrial, colorectal, gastric and some ovarian/upper-GI lines. Within those tissues the dependency is not uniform - it splits cleanly by microsatellite status, and MSI lines in 'non-enriched' lineages are also WRN-dependent while MSS colorectal/endometrial lines are not. So the real covariate is MMR loss (MLH1 silencing/hypermethylation, MSH2/MSH6/PMS2 mutation) and the resulting MSI phenotype; tissue of origin only tracks how often that happens there. Mechanism: in MMR-deficient cells, (TA)n and other di-/mononucleotide microsatellites expand massively over time. Long TA repeats are prone to forming non-B secondary structure (cruciform/hairpin) and are a source of replication/transcription-associated stress. WRN's RecQ helicase activity (not its exonuclease) is required to unwind and resolve these expanded repeats. Without WRN, the structured repeats are cleaved - MUS81/DNA2-type nuclease processing - producing DSBs at expanded loci, chromosome shattering/pulverization, p53-p21 activation, G2/M arrest and apoptosis. Because repeat expansion is cumulative, the degree of expansion (TA-repeat load), not MSI calling per se, should grade the strength of the dependency, which is why some MSI lines score harder than others.",
+      "next_test": "Directly regress WRN CRISPR gene-effect on molecular MSI status rather than lineage: call MSIsensor/MANTIS scores from WES/WGS for every line, plus MLH1 promoter methylation and MMR gene LOF, and show (a) MSI explains WRN dependency after conditioning on tissue, and (b) tissue adds nothing after conditioning on MSI. Then quantify expanded (TA)n repeat burden per line from WGS and test dose-response against WRN gene effect. Functionally: isogenic MLH1-restored vs MLH1-null pairs (and long-term MMR-knockout outgrowth to accumulate expansions) to show the dependency is acquired with repeat expansion; and rescue WRN knockout with WT vs helicase-dead (K577M) vs exonuclease-dead WRN to confirm the helicase activity is the required function, with gamma-H2AX/53BP1 and metaphase-spread breakage mapped by sequencing to expanded TA loci."
+    },
+    "raw_text": "{\"top_tissues\": [\"Endometrium/uterus\", \"Large intestine (colorectal)\", \"Stomach\", \"Ovary\", \"Esophagus/upper GI (weaker, borderline)\"], \"explanation\": \"Lineage is a proxy, not the cause. The tissues that top the ranking are exactly those with the highest prevalence of mismatch-repair deficiency: endometrial, colorectal, gastric and some ovarian/upper-GI lines. Within those tissues the dependency is not uniform - it splits cleanly by microsatellite status, and MSI lines in 'non-enriched' lineages are also WRN-dependent while MSS colorectal/endometrial lines are not. So the real covariate is MMR loss (MLH1 silencing/hypermethylation, MSH2/MSH6/PMS2 mutation) and the resulting MSI phenotype; tissue of origin only tracks how often that happens there. Mechanism: in MMR-deficient cells, (TA)n and other di-/mononucleotide microsatellites expand massively over time. Long TA repeats are prone to forming non-B secondary structure (cruciform/hairpin) and are a source of replication/transcription-associated stress. WRN's RecQ helicase activity (not its exonuclease) is required to unwind and resolve these expanded repeats. Without WRN, the structured repeats are cleaved - MUS81/DNA2-type nuclease processing - producing DSBs at expanded loci, chromosome shattering/pulverization, p53-p21 activation, G2/M arrest and apoptosis. Because repeat expansion is cumulative, the degree of expansion (TA-repeat load), not MSI calling per se, should grade the strength of the dependency, which is why some MSI lines score harder than others.\", \"next_test\": \"Directly regress WRN CRISPR gene-effect on molecular MSI status rather than lineage: call MSIsensor/MANTIS scores from WES/WGS for every line, plus MLH1 promoter methylation and MMR gene LOF, and show (a) MSI explains WRN dependency after conditioning on tissue, and (b) tissue adds nothing after conditioning on MSI. Then quantify expanded (TA)n repeat burden per line from WGS and test dose-response against WRN gene effect. Functionally: isogenic MLH1-restored vs MLH1-null pairs (and long-term MMR-knockout outgrowth to accumulate expansions) to show the dependency is acquired with repeat expansion; and rescue WRN knockout with WT vs helicase-dead (K577M) vs exonuclease-dead WRN to confirm the helicase activity is the required function, with gamma-H2AX/53BP1 and metaphase-spread breakage mapped by sequencing to expanded TA loci.\", \"confidence\": 0.86}"
+  },
+  {
+    "curriculum": "wrn",
+    "sample": 3,
+    "model": "claude-opus-5",
+    "stop_reason": "end_turn",
+    "usage": {
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 0,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "inference_geo": "global",
+      "input_tokens": 577,
+      "output_tokens": 1371,
+      "output_tokens_details": {
+        "thinking_tokens": 456
+      },
+      "server_tool_use": null,
+      "service_tier": "standard"
+    },
+    "parsed": true,
+    "confidence": 0.86,
+    "score": 0.5,
+    "details": {
+      "ranking_score": 0.0,
+      "ranking": {
+        "error": "fewer than 3 recognisable tissue names",
+        "unrecognised": [
+          "Stomach/gastric",
+          "Ovary"
+        ]
+      },
+      "explanation_score": 1.0,
+      "explanation_missed": [],
+      "explanation_penalised": [],
+      "breakdown": [
+        {
+          "id": "msi",
+          "kind": "rubric",
+          "weight": 3.0,
+          "awarded": 3.0,
+          "matched_on": "msi",
+          "also_matched": null,
+          "points": "names microsatellite instability / mismatch-repair deficiency as the underlying state, not the tissue itself"
+        },
+        {
+          "id": "lineage_confound",
+          "kind": "rubric",
+          "weight": 2.5,
+          "awarded": 2.5,
+          "matched_on": "lineage is a proxy",
+          "also_matched": null,
+          "points": "treats lineage as a proxy for the real variable rather than the cause"
+        },
+        {
+          "id": "synthetic_lethal",
+          "kind": "rubric",
+          "weight": 2.0,
+          "awarded": 2.0,
+          "matched_on": "synthetic-lethal",
+          "also_matched": null,
+          "points": "frames the relationship as synthetic lethality"
+        },
+        {
+          "id": "mechanism",
+          "kind": "rubric",
+          "weight": 1.5,
+          "awarded": 1.5,
+          "matched_on": "ta repeat",
+          "also_matched": null,
+          "points": "offers a mechanism (expanded TA repeats forming secondary structure that WRN helicase resolves)"
+        },
+        {
+          "id": "next_test",
+          "kind": "rubric",
+          "weight": 1.0,
+          "awarded": 1.0,
+          "matched_on": "msi-h",
+          "also_matched": null,
+          "points": "proposes testing MSI status directly rather than stopping at lineage"
+        },
+        {
+          "id": "tissue_as_cause",
+          "kind": "penalty",
+          "weight": 2.0,
+          "awarded": 0.0,
+          "matched_on": null,
+          "excused_by": null,
+          "points": "lineage correlates with MSI status; it is not the cause"
+        }
+      ],
+      "rubric_density": {
+        "words": 291,
+        "items_matched": 5,
+        "per_100_words": 1.72
+      },
+      "true_top_tissues": [
+        "uterus",
+        "intestine",
+        "liver",
+        "internal female genitalia",
+        "subdivision of digestive tract"
+      ]
+    },
+    "answer": {
+      "top_tissues": [
+        "Endometrium/uterus",
+        "Large intestine/colorectal",
+        "Stomach/gastric",
+        "Ovary"
+      ],
+      "explanation": "The dependent lines are not united by lineage per se; lineage is a proxy for mismatch-repair deficiency. WRN knockout is lethal essentially only in microsatellite-instability-high (MSI-H/MMR-deficient) lines, and MSI-H is simply most common in endometrial, colorectal and gastric (and a minority of ovarian) tumours - the same tissues where MLH1 promoter hypermethylation or MSH2/MSH6/MLH1/PMS2 loss and Lynch syndrome cluster. Hence the ranking tracks the MSI prevalence of each lineage, and within those lineages the microsatellite-stable lines are indifferent to WRN loss, which is the decisive evidence that MSI, not tissue of origin, is the determinant. Mechanistically, MMR loss lets (TA)n dinucleotide repeats expand over many cell generations; long TA tracts fold into non-B secondary structures (cruciform/hairpin) that stall replication forks. WRN's RecQ ATP-dependent helicase activity (its exonuclease domain is dispensable) is needed to unwind these structures; without WRN the expanded loci are cleaved by structure-specific nucleases (MUS81/SLX4), producing DSBs, ATM/ATR-CHK signalling, chromosome shattering/aneuploidy, p53-dependent and -independent apoptosis and senescence. So WRN dependency is a synthetic-lethal consequence of an acquired genomic feature (expanded TA repeats) that MSI generates.",
+      "next_test": "Regress WRN gene-effect scores against a quantitative MSI measure (MSIsensor/MANTIS score from WES, plus MLH1/MSH2 expression, MLH1 promoter methylation and MMR mutation status) across all lines, and test lineage as a covariate - the expectation is that MSI explains the dependency and lineage adds nothing once MSI is included; then validate causally with isogenic pairs (MLH1-restored MSI lines and MLH1/MSH2-knockout MSS lines passaged long enough to expand repeats), rescue of WRN-KO lethality with wild-type vs helicase-dead (K577M) vs exonuclease-dead WRN, and direct readouts of the mechanism: long-read/capillary sizing of (TA)n tract lengths correlated with sensitivity, and gH2AX/53BP1 and MUS81-dependent breakage mapped (END-seq/BLISS) to expanded TA loci after WRN loss."
+    },
+    "raw_text": "{\"top_tissues\": [\"Endometrium/uterus\", \"Large intestine/colorectal\", \"Stomach/gastric\", \"Ovary\"], \"explanation\": \"The dependent lines are not united by lineage per se; lineage is a proxy for mismatch-repair deficiency. WRN knockout is lethal essentially only in microsatellite-instability-high (MSI-H/MMR-deficient) lines, and MSI-H is simply most common in endometrial, colorectal and gastric (and a minority of ovarian) tumours - the same tissues where MLH1 promoter hypermethylation or MSH2/MSH6/MLH1/PMS2 loss and Lynch syndrome cluster. Hence the ranking tracks the MSI prevalence of each lineage, and within those lineages the microsatellite-stable lines are indifferent to WRN loss, which is the decisive evidence that MSI, not tissue of origin, is the determinant. Mechanistically, MMR loss lets (TA)n dinucleotide repeats expand over many cell generations; long TA tracts fold into non-B secondary structures (cruciform/hairpin) that stall replication forks. WRN's RecQ ATP-dependent helicase activity (its exonuclease domain is dispensable) is needed to unwind these structures; without WRN the expanded loci are cleaved by structure-specific nucleases (MUS81/SLX4), producing DSBs, ATM/ATR-CHK signalling, chromosome shattering/aneuploidy, p53-dependent and -independent apoptosis and senescence. So WRN dependency is a synthetic-lethal consequence of an acquired genomic feature (expanded TA repeats) that MSI generates.\", \"next_test\": \"Regress WRN gene-effect scores against a quantitative MSI measure (MSIsensor/MANTIS score from WES, plus MLH1/MSH2 expression, MLH1 promoter methylation and MMR mutation status) across all lines, and test lineage as a covariate - the expectation is that MSI explains the dependency and lineage adds nothing once MSI is included; then validate causally with isogenic pairs (MLH1-restored MSI lines and MLH1/MSH2-knockout MSS lines passaged long enough to expand repeats), rescue of WRN-KO lethality with wild-type vs helicase-dead (K577M) vs exonuclease-dead WRN, and direct readouts of the mechanism: long-read/capillary sizing of (TA)n tract lengths correlated with sensitivity, and gH2AX/53BP1 and MUS81-dependent breakage mapped (END-seq/BLISS) to expanded TA loci after WRN loss.\", \"confidence\": 0.86}"
+  },
+  {
+    "curriculum": "wrn",
+    "sample": 4,
+    "model": "claude-opus-5",
+    "stop_reason": "end_turn",
+    "usage": {
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 0,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "inference_geo": "global",
+      "input_tokens": 577,
+      "output_tokens": 1626,
+      "output_tokens_details": {
+        "thinking_tokens": 482
+      },
+      "server_tool_use": null,
+      "service_tier": "standard"
+    },
+    "parsed": true,
+    "confidence": null,
+    "score": 0.5,
+    "details": {
+      "ranking_score": 0.0,
+      "ranking": {
+        "error": "fewer than 3 recognisable tissue names",
+        "unrecognised": [
+          "Endometrium (uterine)",
+          "Stomach (gastric)",
+          "Ovary",
+          "Upper aerodigestive/esophagus or urinary tract (weakly, only if MSI lines present)"
+        ]
+      },
+      "explanation_score": 1.0,
+      "explanation_missed": [],
+      "explanation_penalised": [],
+      "breakdown": [
+        {
+          "id": "msi",
+          "kind": "rubric",
+          "weight": 3.0,
+          "awarded": 3.0,
+          "matched_on": "microsatellite instability",
+          "also_matched": null,
+          "points": "names microsatellite instability / mismatch-repair deficiency as the underlying state, not the tissue itself"
+        },
+        {
+          "id": "lineage_confound",
+          "kind": "rubric",
+          "weight": 2.5,
+          "awarded": 2.5,
+          "matched_on": "confound",
+          "also_matched": null,
+          "points": "treats lineage as a proxy for the real variable rather than the cause"
+        },
+        {
+          "id": "synthetic_lethal",
+          "kind": "rubric",
+          "weight": 2.0,
+          "awarded": 2.0,
+          "matched_on": "synthetic lethal",
+          "also_matched": null,
+          "points": "frames the relationship as synthetic lethality"
+        },
+        {
+          "id": "mechanism",
+          "kind": "rubric",
+          "weight": 1.5,
+          "awarded": 1.5,
+          "matched_on": "ta repeat",
+          "also_matched": null,
+          "points": "offers a mechanism (expanded TA repeats forming secondary structure that WRN helicase resolves)"
+        },
+        {
+          "id": "next_test",
+          "kind": "rubric",
+          "weight": 1.0,
+          "awarded": 1.0,
+          "matched_on": "msi status",
+          "also_matched": null,
+          "points": "proposes testing MSI status directly rather than stopping at lineage"
+        },
+        {
+          "id": "tissue_as_cause",
+          "kind": "penalty",
+          "weight": 2.0,
+          "awarded": 0.0,
+          "matched_on": null,
+          "excused_by": null,
+          "points": "lineage correlates with MSI status; it is not the cause"
+        }
+      ],
+      "rubric_density": {
+        "words": 385,
+        "items_matched": 5,
+        "per_100_words": 1.3
+      },
+      "true_top_tissues": [
+        "uterus",
+        "intestine",
+        "liver",
+        "internal female genitalia",
+        "subdivision of digestive tract"
+      ]
+    },
+    "answer": {
+      "top_tissues": [
+        "Endometrium (uterine)",
+        "Large intestine / colorectal",
+        "Stomach (gastric)",
+        "Ovary",
+        "Upper aerodigestive/esophagus or urinary tract (weakly, only if MSI lines present)"
+      ],
+      "explanation": "WRN is a classic selective (non-common-essential) dependency: in genome-wide CRISPR screens the vast majority of lines sit near 0 and a tail of ~10-15% fall below -0.5/-1.0. When you bin by lineage with the stated filters (>=15 lines and at least one line below -1.0), the dependency concentrates in endometrial, colorectal and gastric lines, with a smaller ovarian/other tail. But lineage is NOT the cause - it is a proxy. The common feature of those three tissues is that they are exactly the tissues with the highest prevalence of DNA mismatch-repair deficiency (MLH1 promoter hypermethylation, MSH2/MSH6/MLH1/PMS2 mutation, Lynch syndrome) and therefore microsatellite instability. Within colorectal or gastric or endometrial panels, MSS lines are largely WRN-insensitive and MSI lines are dependent; conversely MSI lines from 'non-enriched' lineages are also dependent. So the true marker is MSI/MMR status, not tissue of origin, and lineage enrichment simply tracks MSI prevalence per tissue. Mechanism: chronic MMR loss causes progressive expansion of (TA)n dinucleotide repeats genome-wide. Expanded TA repeats are quasi-palindromic and extrude cruciform/hairpin non-B secondary structures during replication/transcription. WRN's RecQ helicase activity (not its exonuclease) is required to unwind/resolve these structures; without WRN they are cleaved by structure-specific nucleases (DNA2/MUS81-EME1/SLX4 axis), producing massive DSBs clustered at expanded TA repeats, chromosome shattering/aneuploidy, ATM/p53-dependent arrest and apoptosis or senescence. Hence synthetic lethality between MMR deficiency (MSI) and WRN loss.",
+      "next_test": "Directly regress WRN CRISPR dependency score on MSI status rather than lineage: compute MSIsensor/MANTIS scores (or MMR gene mutation + MLH1 methylation calls) for every screened line, then (a) show MSI status beats lineage in a multivariate model and that lineage adds nothing once MSI is included, and (b) do a within-lineage paired comparison (MSI vs MSS colorectal, gastric, endometrial lines) to remove tissue confounding. Mechanistically, measure long-read or capture sequencing of (TA)n repeat lengths per line and test whether total expanded-TA burden, not MSI per se, quantitatively predicts WRN dependency; then confirm causality with (i) helicase-dead (K577M) vs exonuclease-dead WRN rescue of WRN-knockout MSI lines, (ii) gammaH2AX/53BP1 and END-seq/BLESS DSB mapping showing break enrichment at expanded TA repeats after WRN loss, and (iii) epistasis with MLH1 restoration in an MSI line and with DNA2/MUS81 co-depletion to test the nuclease-dependent cleavage step."
+    },
+    "raw_text": "{\"top_tissues\": [\"Endometrium (uterine)\", \"Large intestine / colorectal\", \"Stomach (gastric)\", \"Ovary\", \"Upper aerodigestive/esophagus or urinary tract (weakly, only if MSI lines present)\"], \"explanation\": \"WRN is a classic selective (non-common-essential) dependency: in genome-wide CRISPR screens the vast majority of lines sit near 0 and a tail of ~10-15% fall below -0.5/-1.0. When you bin by lineage with the stated filters (>=15 lines and at least one line below -1.0), the dependency concentrates in endometrial, colorectal and gastric lines, with a smaller ovarian/other tail. But lineage is NOT the cause - it is a proxy. The common feature of those three tissues is that they are exactly the tissues with the highest prevalence of DNA mismatch-repair deficiency (MLH1 promoter hypermethylation, MSH2/MSH6/MLH1/PMS2 mutation, Lynch syndrome) and therefore microsatellite instability. Within colorectal or gastric or endometrial panels, MSS lines are largely WRN-insensitive and MSI lines are dependent; conversely MSI lines from 'non-enriched' lineages are also dependent. So the true marker is MSI/MMR status, not tissue of origin, and lineage enrichment simply tracks MSI prevalence per tissue. Mechanism: chronic MMR loss causes progressive expansion of (TA)n dinucleotide repeats genome-wide. Expanded TA repeats are quasi-palindromic and extrude cruciform/hairpin non-B secondary structures during replication/transcription. WRN's RecQ helicase activity (not its exonuclease) is required to unwind/resolve these structures; without WRN they are cleaved by structure-specific nucleases (DNA2/MUS81-EME1/SLX4 axis), producing massive DSBs clustered at expanded TA repeats, chromosome shattering/aneuploidy, ATM/p53-dependent arrest and apoptosis or senescence. Hence synthetic lethality between MMR deficiency (MSI) and WRN loss.\", \"next_test\": \"Directly regress WRN CRISPR dependency score on MSI status rather than lineage: compute MSIsensor/MANTIS scores (or MMR gene mutation + MLH1 methylation calls) for every screened line, then (a) show MSI status beats lineage in a multivariate model and that lineage adds nothing once MSI is included, and (b) do a within-lineage paired comparison (MSI vs MSS colorectal, gastric, endometrial lines) to remove tissue confounding. Mechanistically, measure long-read or capture sequencing of (TA)n repeat lengths per line and test whether total expanded-TA burden, not MSI per se, quantitatively predicts WRN dependency; then confirm causality with (i) helicase-dead (K577M) vs exonuclease-dead WRN rescue of WRN-knockout MSI lines, (ii) gammaH2AX/53BP1 and END-seq/BLESS DSB mapping showing break enrichment at expanded TA repeats after WRN loss, and (iii) epistasis with MLH1 restoration in an MSI line and with DNA2/MUS81 co-depletion to test the nuclease-dependent cleavage step.\"}"
+  }
+]

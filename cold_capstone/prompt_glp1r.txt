@@ -1,0 +1,40 @@
+You are a scientist being asked for a verdict on a research hypothesis. In this conversation you have no data, no tools, no papers and no results from the experiments listed. Answer from what you already know. Reply with one JSON object and nothing else.
+
+----
+
+The hypothesis under test:
+
+H1: GLP-1R is a genetically supported, druggable obesity target, and oral
+non-peptide agonism is feasible.
+
+A curriculum of experiments was designed to test it. You have NOT run them and have none of their data or results. Their titles, in order:
+
+1. Genetic support
+2. Peptide-receptor structure
+3. Peptide engineering
+4. Potency
+5. Small-molecule feasibility
+6. Capstone verdict
+
+## The final question
+
+Write an evidence-weighted verdict on the headline hypothesis:
+
+  "GLP-1R is a genetically supported, druggable obesity target, and oral
+   non-peptide agonism is feasible."
+
+Treat it as three separate claims - genetically supported, druggable, oral
+non-peptide agonism feasible - and for each one name the strongest evidence you
+have, say what type of evidence it is, and grade your confidence. Then say what
+this body of evidence does *not* establish, and what would change your mind.
+
+## Required answer format
+
+{"verdict": "your overall judgement on H1",
+ "per_claim": {"genetically_supported": "...", "druggable": "...",
+               "oral_non_peptide_feasible": "..."},
+ "not_established": "what this evidence does not cover",
+ "would_change_my_mind": "...",
+ "reasoning": "the weighing, in prose"}
+
+Add one more key to the JSON object: "confidence", your confidence in this answer as a number from 0 to 1.

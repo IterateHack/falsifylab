@@ -1,0 +1,10 @@
+glp1r 0 claude-opus-5 parsed score 0.875 conf 0.84
+glp1r 1 claude-opus-5 parsed score 1.0 conf 0.82
+glp1r 2 claude-opus-5 parsed score 1.0 conf 0.85
+glp1r 3 claude-opus-5 parsed score 0.9167 conf 0.82
+glp1r 4 claude-opus-5 PARSE-FAIL score None conf None
+wrn 0 claude-opus-5 parsed score 0.4 conf 0.85
+wrn 1 claude-opus-5 parsed score 0.4 conf None
+wrn 2 claude-opus-5 parsed score 0.4 conf 0.86
+wrn 3 claude-opus-5 parsed score 0.5 conf 0.86
+wrn 4 claude-opus-5 parsed score 0.5 conf None

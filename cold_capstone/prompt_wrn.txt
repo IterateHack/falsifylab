@@ -1,0 +1,38 @@
+You are a scientist being asked for a verdict on a research hypothesis. In this conversation you have no data, no tools, no papers and no results from the experiments listed. Answer from what you already know. Reply with one JSON object and nothing else.
+
+----
+
+The hypothesis under test:
+
+H2: WRN helicase is a synthetic-lethal target in microsatellite-unstable
+cancers.
+
+A curriculum of experiments was designed to test it. You have NOT run them and have none of their data or results. Their titles, in order:
+
+1. Common essentials vs selective dependencies
+2. Where WRN dependency concentrates
+
+## The final question
+
+WRN is a selective dependency: most cell lines do not care if you knock it out,
+and a minority die.
+
+Say **which tissues those dependent lines belong to**,
+and then explain what is actually going on.
+
+1. Rank the tissues by how concentrated WRN dependency is within them - the
+   fraction of that tissue's lines that are dependent. Count a tissue only if it
+   has at least 15 cell lines **and** at least one line below -1.0. Without that,
+   a tissue with five lines and one weak hit tops the ranking by chance.
+2. Explain what the lineage pattern reflects. Is the tissue of origin itself the
+   cause of the dependency, or is it standing in for something else? If it is
+   standing in for something, name it, propose the mechanism, and say what you
+   would measure next to test it directly.
+
+## Required answer format
+
+{"top_tissues": ["most dependent", ...],
+ "explanation": "what the lineage pattern reflects, and the mechanism",
+ "next_test": "what you would measure to test it directly"}
+
+Add one more key to the JSON object: "confidence", your confidence in this answer as a number from 0 to 1.
