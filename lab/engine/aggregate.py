@@ -9,6 +9,7 @@ independent, so resampling is over runs.
 """
 from __future__ import annotations
 
+import itertools
 import json
 import math
 import random
@@ -63,9 +64,24 @@ def _ci(xs: list[float], ys: list[float], rng: random.Random, n_boot: int
     return diffs[int(0.025 * n_boot)], diffs[int(0.975 * n_boot) - 1]
 
 
+EXACT_LIMIT = 20000
+
+
 def _perm_p(xs: list[float], ys: list[float], rng: random.Random, n_perm: int) -> float:
+    """Two-sided permutation p for the difference in means. Exact (every way of
+    splitting the pooled runs) when that is a few thousand splits or fewer, which
+    it is for the small groups this is used on; Monte Carlo beyond that."""
     observed = abs(_mean(ys) - _mean(xs))
     pool, k = xs + ys, len(xs)
+    if math.comb(len(pool), k) <= EXACT_LIMIT:
+        total = hits = 0
+        for idx in itertools.combinations(range(len(pool)), k):
+            chosen = set(idx)
+            a = [pool[i] for i in idx]
+            b = [pool[i] for i in range(len(pool)) if i not in chosen]
+            total += 1
+            hits += abs(_mean(b) - _mean(a)) >= observed - 1e-12
+        return hits / total
     hits = 0
     for _ in range(n_perm):
         rng.shuffle(pool)
