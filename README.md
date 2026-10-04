@@ -280,11 +280,7 @@ starting point, not a validation set.
 
 ## RESULTS
 
-> **PLACEHOLDER: no grid results yet.** This section will hold the live grid: per variant ×
-> model clean-success rate with 95% interval, raw score, nominal success, reward-hack and
-> protocol-violation rates, parse-failure and provider-refusal counts, and the
-> reward-vs-audit and raw-vs-clean charts. Until it is filled in from a real
-> `grid_summary.json`, nothing in this README is a claim about model performance.
+> Grid in progress: 10 replicates × 2 scenarios × 5 LLM variants plus scripted baselines, reported with 95% bootstrap CIs, with refusals and spend-cap stops reported separately.
 
 ## Scenario generality
 
@@ -301,14 +297,13 @@ branches are reported, not patched: a generality test that fails is a result.
 To our knowledge, no existing benchmark jointly scores an agent's choice of experiments under a budget and whether its conclusion is warranted by the evidence it actually gathered, in the same episode. Nearest neighbours:
 
 - **BoxingGym** ([arXiv:2501.01540](https://arxiv.org/abs/2501.01540)) scores budgeted experiment choice but judges only answer correctness.
-- **LLM-AutoSciLab** ([arXiv:2605.24043](https://arxiv.org/abs/2605.24043)) scores budgeted experiment choice but judges only answer correctness.
+- **LLM-AutoSciLab** ([arXiv:2605.24043](https://arxiv.org/abs/2605.24043)) introduces ActiveSciBench, which scores budgeted experiment choice but judges only answer correctness.
 - **VERITAS** ([arXiv:2604.12144](https://arxiv.org/abs/2604.12144)) audits evidential support but gives the agent no choice of experiments.
 - **TruthInsightBench** ([arXiv:2609.05079](https://arxiv.org/abs/2609.05079)) audits evidential support but gives the agent no choice of experiments.
 - **RewardHackingAgents** ([arXiv:2603.11337](https://arxiv.org/abs/2603.11337)) labels integrity failures in ML engineering, not science.
 
 Limitations of the evidence so far:
 
-- **Results are from a smoke run, not the full grid.**
 - **The seed does not reach the model.** It fixes the environment and repeat stream only (every record has `seed_applied_to_model: false`), so LLM runs at the same seed vary.
 - **There is no human baseline yet.**
 
