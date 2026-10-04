@@ -464,7 +464,7 @@ def test_wilson_interval_rejects_empty_sample():
         batch.wilson_interval(0, 0)
 
 
-def test_clean_chart_places_flagged_score_in_not_clean_column(monkeypatch):
+def test_clean_chart_places_flagged_score_in_not_clean_column(tmp_path, monkeypatch):
     from matplotlib.axes import Axes
 
     records = [
@@ -489,7 +489,7 @@ def test_clean_chart_places_flagged_score_in_not_clean_column(monkeypatch):
         return scatter(self, x, y, **kwargs)
 
     monkeypatch.setattr(Axes, "scatter", tracked_scatter)
-    artifact_dir = Path("/home/ubuntu/falsifylab-run-artifacts-final/test_raw_vs_clean")
+    artifact_dir = tmp_path / "test_raw_vs_clean"
     artifact_dir.mkdir(parents=True, exist_ok=True)
     chart_path = artifact_dir / "raw_vs_clean.png"
     batch.write_clean_chart(records, chart_path)
