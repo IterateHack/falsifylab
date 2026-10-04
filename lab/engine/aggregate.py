@@ -10,6 +10,7 @@ independent, so resampling is over runs.
 from __future__ import annotations
 
 import json
+import math
 import random
 import statistics
 from dataclasses import dataclass
@@ -113,6 +114,9 @@ def compare_arms(runs: list[Run], baseline: str, treatment: str, *,
         "diff": round(_mean(ys) - _mean(xs), 4),
         "ci95": [round(lo, 4), round(hi, 4)],
         "p_permutation": round(_perm_p(xs, ys, rng, n_boot), 4),
+        # The smallest p a permutation test can return: 1 / the number of ways
+        # to split the pooled runs into groups of these sizes.
+        "p_floor": round(1 / math.comb(len(a) + len(b), len(a)), 4),
         "cohens_d": None if _cohens_d(xs, ys) is None else round(_cohens_d(xs, ys), 3),
         "per_experiment": rows,
         "warning": (f"only {n_min} run(s) in the smaller arm; an interval from fewer "
@@ -140,6 +144,10 @@ def render(res: dict[str, Any]) -> str:
         f"  {res['mean_treatment']:.3f} - {res['mean_baseline']:.3f} = "
         f"{res['diff']:+.3f}   95% CI [{lo:+.3f}, {hi:+.3f}]   "
         f"permutation p = {res['p_permutation']}   Cohen's d = {res['cohens_d']}",
+        *(["  ^ NOT RELIABLE: with so few runs the interval is a resample of a "
+           "handful of numbers and the permutation p cannot go below "
+           f"{res['p_floor']}. Read the difference as a first look only."]
+          if res["warning"] else []),
         "", f"  {'experiment':36s} {'base':>6} {'treat':>6} {'diff':>7}   95% CI",
     ]
     for r in res["per_experiment"]:
