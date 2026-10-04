@@ -1,0 +1,10 @@
+{
+  "episodes": 5,
+  "input_tokens": 70431,
+  "output_tokens": 16459,
+  "cost_usd": 0.305452,
+  "cost_per_episode_usd": 0.06109,
+  "episode_limit_usd": 0.25,
+  "batch_limit_usd": 1.25,
+  "estimated": false
+}
