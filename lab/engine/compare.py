@@ -106,7 +106,8 @@ def render(result: dict[str, Any]) -> str:
                 "experiments. With one run per arm this is well within noise; "
                 "repeat the control before claiming the lessons helped.")
     lines.append(
-        "Caveat: n=1 per arm. Treat any delta under about 0.1 as noise.")
+        "Caveat: n=1 per arm. Treat any delta under about 0.1 as noise. "
+        "For several runs per arm, with an interval, use `aggregate`.")
     return "\n".join(lines)
 
 

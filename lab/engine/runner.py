@@ -9,7 +9,7 @@ from typing import Any
 
 from .events import EventLog
 from .notebook import Notebook, NotebookEntry
-from .provider import AnthropicProvider, ModelConfig, Provider
+from .provider import AnthropicProvider, MeteredProvider, ModelConfig, Provider
 from .specs import load_curriculum
 from .agent import run_experiment
 
@@ -19,7 +19,7 @@ class RunResult:
     run_id: str
     run_dir: Path
     notebook: Notebook
-    log: EventLog
+    log: EventLog | None
 
     def summary(self) -> dict[str, Any]:
         cal = self.notebook.calibration_summary()
@@ -41,10 +41,12 @@ def run_curriculum(
     use_lessons: bool = True,
     only: list[str] | None = None,
     existing_log: EventLog | None = None,
+    arm: str | None = None,
+    filler: str | None = None,
 ) -> RunResult:
     curriculum = load_curriculum(curriculum_root)
     model_config = model_config or ModelConfig()
-    provider = provider or AnthropicProvider()
+    provider = MeteredProvider(provider or AnthropicProvider())
 
     run_dir = Path(runs_dir) / run_id
     # The API creates the log up front so an SSE client can subscribe before the
@@ -94,6 +96,7 @@ def run_curriculum(
                     spec=spec, curriculum=curriculum, log=log, provider=provider,
                     model_config=model_config, earned_lessons=list(earned),
                     notebook_entry=entry, backend=backend, use_lessons=use_lessons,
+                    filler=filler,
                 )
             except Exception as exc:
                 log.append("error", {
@@ -117,10 +120,21 @@ def run_curriculum(
         cal = notebook.calibration_summary()
         log.append("run_finished", {"calibration": cal})
         _persist(run_dir, notebook)
+        write_run_meta(run_dir, arm=arm or ("lessons" if use_lessons else "baseline"),
+                       curriculum=curriculum.id)
+        (run_dir / "usage.json").write_text(
+            json.dumps(provider.usage, indent=2), encoding="utf-8")
         if owns_log:
             log.close()          # releases the run-directory lock
 
     return RunResult(run_id=run_id, run_dir=run_dir, notebook=notebook, log=log)
+
+
+def write_run_meta(run_dir: Path, *, arm: str, curriculum: str) -> None:
+    """Which arm produced this run. The aggregator groups runs by it."""
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "run_meta.json").write_text(
+        json.dumps({"arm": arm, "curriculum": curriculum}), encoding="utf-8")
 
 
 def _persist(run_dir: Path, notebook: Notebook) -> None:

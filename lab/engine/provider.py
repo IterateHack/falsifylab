@@ -67,7 +67,7 @@ class AnthropicProvider:
                     max_tokens=max_tokens,
                     system=system,
                     messages=messages,
-                    tools=tools,
+                    **({"tools": tools} if tools else {}),
                     thinking={"type": "adaptive"},
                     output_config={"effort": effort},
                 ) as stream:
@@ -88,6 +88,33 @@ class AnthropicProvider:
                 time.sleep(delay)
         assert last is not None
         raise last
+
+
+_USAGE_FIELDS = ("input_tokens", "output_tokens",
+                 "cache_read_input_tokens", "cache_creation_input_tokens")
+
+
+class MeteredProvider:
+    """Wraps a provider and totals token usage per model.
+
+    Tokens only, not dollars: prices change, tokens do not, and a cost estimate
+    is token counts times whatever the current price table says.
+    """
+
+    def __init__(self, inner: Provider):
+        self._inner = inner
+        self.usage: dict[str, dict[str, int]] = {}
+
+    def complete(self, **kwargs: Any) -> Any:
+        response = self._inner.complete(**kwargs)
+        used = getattr(response, "usage", None)
+        if used is not None:
+            row = self.usage.setdefault(
+                kwargs.get("model", "?"), {"calls": 0, **{f: 0 for f in _USAGE_FIELDS}})
+            row["calls"] += 1
+            for f in _USAGE_FIELDS:
+                row[f] += int(getattr(used, f, 0) or 0)
+        return response
 
 
 class ScriptedProvider:

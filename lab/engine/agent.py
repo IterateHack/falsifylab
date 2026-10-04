@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import json
 import os
+import random
+import re
 from typing import Any
 
 from sandbox import get_executor
@@ -130,6 +132,74 @@ def _blocks_to_text(content: list[Any]) -> str:
     return "\n".join(out).strip()
 
 
+def relevant_lessons(spec: Any, earned: list[tuple[str, str, str]]
+                     ) -> list[tuple[str, str, str]]:
+    """The earned cards this experiment declares it needs, in curriculum order.
+
+    Relevance is the experiment's own `requires_lessons`. Cards earned on other
+    experiments are not shown: they would add context that is not what the
+    experiment is designed to test, and make arms incomparable.
+    """
+    wanted = set(spec.requires_lessons)
+    return [card for card in earned if card[0] in wanted]
+
+
+# Filler for the control arms. The real cards are replaced word for word, so
+# length, line breaks and markdown marks are identical and only the content is
+# gone. `placebo` swaps in prose about something unrelated; `null` swaps in
+# symbol strings with no meaning at all.
+_PLACEBO_PROSE = (
+    "The lighthouse keeper climbed the spiral stair each evening to trim the wick "
+    "and polish the great lens before the fog rolled in from the headland. Gulls "
+    "wheeled over the rocks while the supply boat, late again, rocked at its "
+    "mooring. In winter the keeper kept a ledger of passing ships, noting their "
+    "flags, their weather and the hour, and on quiet nights he mended nets and "
+    "read old almanacs by the stove. The harbour clock struck twelve, the tide "
+    "turned, and the lamp swept its slow white arm across the water."
+).split()
+_NULL_ALPHABET = "%$#&@*+=~^<>|\\/?!"
+_MD_PREFIX = re.compile(r"^(\s*(?:#+|[-*>]+|\d+[.)])\s+)")
+
+
+def _swap_words(text: str, next_token) -> str:
+    out = []
+    for line in text.split("\n"):
+        m = _MD_PREFIX.match(line)
+        prefix = m.group(1) if m else ""
+        out.append(prefix + " ".join(next_token() for _ in line[len(prefix):].split()))
+    return "\n".join(out)
+
+
+def filler_cards(cards: list[tuple[str, str, str]], kind: str
+                 ) -> list[tuple[str, str, str]]:
+    """Same-shape stand-ins for `cards`: neutral ids and titles, matched word
+    count and layout, no topic. Deterministic, so a rerun gets identical text."""
+    out = []
+    for i, (exp_id, _title, md) in enumerate(cards, 1):
+        if kind == "placebo":
+            words = iter(_PLACEBO_PROSE * (len(md.split()) // len(_PLACEBO_PROSE) + 1))
+            token = lambda: next(words)
+        elif kind == "null":
+            rng = random.Random(exp_id)
+            token = lambda: "".join(rng.choices(_NULL_ALPHABET, k=rng.randint(2, 7)))
+        else:
+            raise ValueError(f"unknown filler kind {kind!r}")
+        out.append((f"card_{i}", "Lesson card", _swap_words(md, token)))
+    return out
+
+
+def lesson_block(cards: list[tuple[str, str, str]]) -> str:
+    """The cards as prompt text. Empty when there are none, so an experiment
+    with no required lessons is never told it has any."""
+    if not cards:
+        return ""
+    body = "\n\n".join(f"### {title} ({exp_id})\n\n{md.strip()}"
+                        for exp_id, title, md in cards)
+    return ("## Lessons from earlier experiments\n\n"
+            "These cards were earned on earlier experiments and bear on this one. "
+            "`read_lessons` returns the same text.\n\n" + body + "\n\n")
+
+
 def run_experiment(
     spec: ExperimentSpec,
     curriculum: Curriculum,
@@ -142,18 +212,24 @@ def run_experiment(
     use_lessons: bool = True,
     audit: bool = True,
     audit_replay: bool = True,
+    filler: str | None = None,
 ) -> NotebookEntry:
     entry = notebook_entry
     model = model_config.for_experiment(spec.order, len(curriculum.experiments))
     entry.model = model
     entry.papers = list(spec.teaching.papers)
-    entry.applied_lesson_ids = list(spec.requires_lessons) if use_lessons else []
+    available = relevant_lessons(spec, earned_lessons) if use_lessons else []
+    entry.applied_lesson_ids = [exp_id for exp_id, _, _ in available]
+    if filler and available:
+        available = filler_cards(available, filler)
     entry.status = "running"
 
     log.append("experiment_started", {
         "order": spec.order, "title": spec.title, "type": spec.type,
         "model": model, "max_tool_calls": spec.limits.max_tool_calls,
-        "requires_lessons": entry.applied_lesson_ids,
+        "requires_lessons": list(spec.requires_lessons),
+        "lessons_shown": entry.applied_lesson_ids,
+        "lesson_filler": filler,
         "n_experiments": len(curriculum.experiments),
     }, experiment_id=spec.id)
 
@@ -163,17 +239,11 @@ def run_experiment(
         for path in spec.dataset_paths():
             executor.put_file(f"data/{path.name}", path.read_bytes(), read_only=True)
 
-        available = earned_lessons if use_lessons else []
         ctx = ToolContext(spec=spec, entry=entry, log=log, executor=executor,
                           earned_lessons=available, phase="attempt")
 
         schemas = tool_schemas(ctx)
-        lesson_hint = ""
-        if available:
-            ids = ", ".join(e for e, _, _ in available)
-            lesson_hint = (f"You have earned lesson cards from: {ids}. "
-                           f"Call `read_lessons` to retrieve them - this experiment "
-                           f"is designed to need them.\n\n")
+        lesson_hint = lesson_block(available)
         messages: list[dict[str, Any]] = [{
             "role": "user",
             "content": FIRST_USER.format(
