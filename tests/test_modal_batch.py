@@ -8,6 +8,8 @@ from unittest.mock import Mock
 import pytest
 
 from contract import Action, Observation, Result, State, Verdict, trajectory_from_dict
+from runner.agents import SCRIPTED_VARIANTS
+from runner.factories import SCRIPTED_AGENTS
 from runner import modal_batch as batch
 
 
@@ -284,6 +286,118 @@ def test_grid_summary_counts_failures_parse_failures_aborts_and_sorts():
         ("a", "verdict-counts"),
         ("z", "all-parse"),
     ]
+
+
+def test_grid_summary_labels_scripted_conclusion_fields():
+    records = []
+    for variant, clean_success, score in (
+        ("random", True, 80),
+        ("ucb", False, 40),
+        ("baseline", True, 60),
+    ):
+        records.append({
+            "job": {"variant": variant, "scenario": "a"},
+            "verdict": {
+                "verdict": "VALID_SUCCESS" if clean_success else "WRONG_CONCLUSION",
+            },
+            "metrics": {
+                "nominal_success": clean_success,
+                "clean_success": clean_success,
+                "reward_hack": False,
+                "protocol_violation": False,
+                "cost": 1,
+                "brier": 0.5,
+                "overconfidence": False,
+                "R_visible": score,
+                "final_score": score,
+            },
+            "aborted_on_refusals": False,
+        })
+
+    labels = {"conclusion_metrics_meaningful", "not_meaningful", "note"}
+    rows = {row["variant"]: row for row in batch.grid_summary(records)}
+    aggregate = batch.aggregate(records)
+    for variant in ("random", "ucb"):
+        row = rows[variant]
+        assert {key for key in labels if key in row} == labels
+        assert row["conclusion_metrics_meaningful"] is False
+        assert row["not_meaningful"] == list(batch.GRID_CONCLUSION_FIELDS)
+        assert "frontier_regret" in row["not_meaningful"]
+        assert row["note"] == aggregate[variant]["note"]
+
+        renamed_records = [
+            {
+                **record,
+                "job": {
+                    **record["job"],
+                    "variant": "plain" if record["job"]["variant"] == variant
+                    else record["job"]["variant"],
+                },
+            }
+            for record in records
+        ]
+        plain_row = next(
+            row for row in batch.grid_summary(renamed_records) if row["variant"] == "plain"
+        )
+        unlabelled_row = {key: value for key, value in row.items() if key not in labels}
+        assert {**unlabelled_row, "variant": "plain"} == plain_row
+
+    assert labels.isdisjoint(rows["baseline"])
+
+
+def test_scripted_variants_are_labeled_non_meaningful_in_aggregate_and_chart(tmp_path, monkeypatch):
+    assert set(SCRIPTED_AGENTS) == SCRIPTED_VARIANTS
+    records = [
+        {
+            "job": {"variant": variant},
+            "metrics": {
+                "nominal_success": 0,
+                "clean_success": False,
+                "reward_hack": 0,
+                "protocol_violation": 0,
+                "cost": 1,
+                "brier": 0.5,
+                "overconfidence": 0,
+                "R_visible": 0,
+                "final_score": 0,
+            },
+            "verdict": {"R_visible": 0, "final_score": 0},
+        }
+        for variant in ("random", "ucb", "baseline")
+    ]
+    summary = batch.aggregate(records)
+    for variant in ("random", "ucb"):
+        assert summary[variant]["conclusion_metrics_meaningful"] is False
+        assert summary[variant]["not_meaningful"] == list(batch.CONCLUSION_METRICS)
+        assert summary[variant]["note"] == (
+            "scripted baseline: beliefs, dominant cause and confidence are random; "
+            "compare experiment selection only (mean_cost). protocol_violation_rate is not "
+            "meaningful: protocol constraints also check the conclusion's hypotheses and citations"
+        )
+    assert "conclusion_metrics_meaningful" not in summary["baseline"]
+    assert "not_meaningful" not in summary["baseline"]
+    assert "note" not in summary["baseline"]
+
+    from matplotlib.axes import Axes
+
+    legend = Axes.legend
+    labels = []
+
+    def tracked_legend(self, *args, **kwargs):
+        handles = kwargs.get("handles", args[0] if args else ())
+        labels.extend(handle.get_label() for handle in handles)
+        return legend(self, *args, **kwargs)
+
+    monkeypatch.setattr(Axes, "legend", tracked_legend)
+    expected = [
+        "baseline",
+        "random (scripted; conclusion metrics not meaningful)",
+        "ucb (scripted; conclusion metrics not meaningful)",
+    ]
+    for chart in (batch.write_chart, batch.write_clean_chart):
+        labels.clear()
+        chart(records, tmp_path / f"{chart.__name__}.png")
+        assert labels == expected
 
 
 @pytest.mark.parametrize(

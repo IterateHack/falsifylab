@@ -54,6 +54,36 @@ from typing import Callable, Iterable, Mapping
 
 from contract import Agent, Env, Observation, Result, Trajectory, Turn, Verdict, trajectory_from_dict
 from env import EnvRejection
+from runner.agents import SCRIPTED_VARIANTS
+
+CONCLUSION_METRICS = (
+    "nominal_success_rate",
+    "clean_success_rate",
+    "reward_hack_rate",
+    "protocol_violation_rate",
+    "mean_brier",
+    "overconfidence_rate",
+    "mean_R_visible",
+    "raw_score_mean",
+)
+
+GRID_CONCLUSION_FIELDS = CONCLUSION_METRICS + (
+    "n_clean_success",
+    "clean_success_ci95",
+    "frontier_regret",
+    "verdict_counts",
+)
+
+
+def scripted_label(not_meaningful: Iterable[str]) -> dict:
+    return {
+        "conclusion_metrics_meaningful": False,
+        "not_meaningful": list(not_meaningful),
+        "note": "scripted baseline: beliefs, dominant cause and confidence are random; "
+        "compare experiment selection only (mean_cost). protocol_violation_rate is not "
+        "meaningful: protocol constraints also check the conclusion's hypotheses and citations",
+    }
+
 
 # A refused purchase is not a Turn (nothing ran, nothing was charged). The
 # reason is handed back to the agent as a zero-cost observation under this id so
@@ -271,6 +301,8 @@ def aggregate(records: list[dict]) -> dict:
             **metric_means(all_metrics),
             "completed_only": metric_means(completed) if completed else None,
         }
+        if variant in SCRIPTED_VARIANTS:
+            summary[variant].update(scripted_label(CONCLUSION_METRICS))
     return summary
 
 
@@ -319,7 +351,7 @@ def grid_summary(records: list[dict]) -> list[dict]:
         for row in rows:
             verdict_name = row["verdict"]["verdict"]
             verdict_counts[verdict_name if verdict_name in verdict_counts else "OTHER"] += 1
-        summary.append({
+        row = {
             "scenario": scenario,
             "variant": variant,
             "n_runs": n_runs,
@@ -338,7 +370,10 @@ def grid_summary(records: list[dict]) -> list[dict]:
                 if n_scored else None
             ),
             "verdict_counts": verdict_counts,
-        })
+        }
+        if variant in SCRIPTED_VARIANTS:
+            row.update(scripted_label(GRID_CONCLUSION_FIELDS))
+        summary.append(row)
     return sorted(
         summary,
         key=lambda row: (
@@ -366,7 +401,10 @@ def write_chart(records: list[dict], path: Path) -> None:
     for index, variant in enumerate(variants):
         color = palette[index % len(palette)]
         legend_handles.append(Line2D([], [], color=color, marker="o", linestyle="None",
-                                     label=variant))
+                                     label=(
+                                         f"{variant} (scripted; conclusion metrics not meaningful)"
+                                         if variant in SCRIPTED_VARIANTS else variant
+                                     )))
         for aborted, marker in ((False, "o"), (True, "x")):
             rows = [
                 r for r in records
@@ -417,7 +455,10 @@ def write_clean_chart(records: list[dict], path: Path) -> None:
             (variant_index - (len(variants) - 1) / 2) * 0.04 / max(len(variants) - 1, 1)
         )
         legend_handles.append(Line2D([], [], color=color, marker="o", linestyle="None",
-                                     label=variant))
+                                     label=(
+                                         f"{variant} (scripted; conclusion metrics not meaningful)"
+                                         if variant in SCRIPTED_VARIANTS else variant
+                                     )))
         for clean_success in (False, True):
             rows = [
                 row for row in records
