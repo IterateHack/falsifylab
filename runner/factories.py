@@ -16,6 +16,7 @@ from agents.llm_agent import LLMAgent
 from env import Env
 from runner.model_clients import (
     AnthropicClient,
+    DEFAULT_PROVIDER_RETRIES,
     DryRunClient,
     TokenLedger,
     price_for,
@@ -92,13 +93,22 @@ def make_client(
     usd_per_mtok_in: Optional[float],
     usd_per_mtok_out: Optional[float],
     spend_limit_usd: float,
+    provider_retries: int = DEFAULT_PROVIDER_RETRIES,
+    stage_ledger: Optional[TokenLedger] = None,
 ):
     if mode not in ("live", "dry-run"):
         raise ValueError(f"unknown client mode {mode!r}")
     usd_in, usd_out = price_for(model, usd_per_mtok_in, usd_per_mtok_out)
     ledger = TokenLedger(usd_in, usd_out, limit_usd=spend_limit_usd)
     if mode == "live":
-        return AnthropicClient(model, ledger, temperature=temperature, max_tokens=max_tokens)
+        return AnthropicClient(
+            model,
+            ledger,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            provider_retries=provider_retries,
+            stage_ledger=stage_ledger,
+        )
 
     hypotheses_path = scenario_dir(scenario) / "agent" / "hypotheses.json"
     with hypotheses_path.open(encoding="utf-8") as stream:

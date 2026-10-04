@@ -677,15 +677,77 @@ def test_worker_records_effective_sampling_with_live_stub(monkeypatch, model, se
     sdk = SimpleNamespace(messages=SimpleNamespace(create=Mock(return_value=SimpleNamespace(
         content=[SimpleNamespace(text=reply)], usage=SimpleNamespace(input_tokens=10, output_tokens=5),
         stop_reason="end_turn"))))
-    client = AnthropicClient(model, TokenLedger(2, 10, log=None), temperature=0.3, client=sdk)
-    monkeypatch.setattr(factories, "make_client", lambda **kwargs: client)
+    client = AnthropicClient(model, TokenLedger(2, 10, log=None), temperature=0.3,
+                             provider_retries=2, client=sdk)
+    made = {}
+
+    def fake_make_client(**kwargs):
+        made.update(kwargs)
+        return client
+
+    monkeypatch.setattr(factories, "make_client", fake_make_client)
     job = batch.build_jobs(["baseline"], [model], [0], 1)[0]
     result = batch.remote_episode(job, "runner.factories:make_env", "runner.factories:make_agent", 10,
                                  {"mode": "live", "temperature": 0.3, "max_tokens": 2048,
                                   "usd_per_mtok_in": None, "usd_per_mtok_out": None,
-                                  "spend_limit_usd": 0.5, "budget": 8})
+                                  "spend_limit_usd": 0.5, "provider_retries": 2, "budget": 8})
+    assert made["provider_retries"] == 2
+    assert result["sampling"]["provider_retries"] == 2
     assert result["sampling"]["temperature"] == (0.3 if sent else None)
     assert result["sampling"]["sampling_params_sent"] is sent
+
+
+def test_remote_episode_stage_ledger_keeps_episode_records_scoped(monkeypatch):
+    from runner import factories
+    from runner.model_clients import AnthropicClient, TokenLedger
+
+    class LocalEnv(FakeEnv):
+        def __init__(self, *, seed, scenario=None, budget=None):
+            super().__init__(seed=seed)
+
+    class ChargingAgent:
+        def __init__(self, *, variant, model, seed, client, scenario=None):
+            self.client = client
+
+        def act(self, observation, state):
+            self.client.complete("system", [{"role": "user", "content": "call"}])
+            return Action("conclude", dominant_cause="d", confidence=0.9,
+                          beliefs=dict.fromkeys(TRUTH["contribution_labels"], 0.5))
+
+    response = SimpleNamespace(
+        content=[SimpleNamespace(text="ok")],
+        usage=SimpleNamespace(input_tokens=10, output_tokens=5),
+        stop_reason="end_turn",
+    )
+    sdk = SimpleNamespace(messages=SimpleNamespace(create=Mock(return_value=response)))
+    stage = TokenLedger(2, 10, log=None)
+
+    def make_client(**kwargs):
+        assert kwargs["stage_ledger"] is stage
+        return AnthropicClient(
+            kwargs["model"], TokenLedger(2, 10, log=None),
+            stage_ledger=kwargs["stage_ledger"], client=sdk,
+        )
+
+    monkeypatch.setattr(factories, "make_client", make_client)
+    monkeypatch.setattr(batch, "resolve", lambda ref: {"env": LocalEnv, "agent": ChargingAgent}[ref])
+    jobs = batch.build_jobs(["v"], ["claude-sonnet-5-5"], [0], 2)
+    client_spec = {
+        "mode": "live", "temperature": 1.0, "max_tokens": 2048,
+        "usd_per_mtok_in": None, "usd_per_mtok_out": None,
+        "spend_limit_usd": 1.0, "provider_retries": 1, "budget": 8,
+    }
+    results = [
+        batch.remote_episode(job, "env", "agent", 10, client_spec=client_spec,
+                             stage_ledger=stage)
+        for job in jobs
+    ]
+
+    assert [result["tokens"]["model_calls"] for result in results] == [1, 1]
+    assert [len(result["model_call_log"]) for result in results] == [1, 1]
+    assert stage.calls == 2
+    assert stage.input_tokens == 20
+    assert stage.output_tokens == 10
 
 
 def test_remote_worker_catches_provider_refusal_and_keeps_partial_trajectory(monkeypatch):
