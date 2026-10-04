@@ -1147,7 +1147,6 @@ def _plot_experiment_selection(
         budget = scenario_data[scenario]["budget"]
         cost_axes, bought_axes = axes_grid[row_index]
         positions = list(range(len(series_keys)))
-        no_science_notes = []
         for index, key in enumerate(series_keys):
             row = rows_by_series.get(key)
             if row is None:
@@ -1164,7 +1163,6 @@ def _plot_experiment_selection(
                     fontsize=7,
                     color="#777777",
                 )
-                no_science_notes.append(no_science_label)
                 continue
             model, variant = key
             scripted = variant in SCRIPTED_VARIANTS
@@ -1187,6 +1185,7 @@ def _plot_experiment_selection(
             fontsize=9,
         )
         cost_axes.set_xlim(left=0)
+        cost_axes.set_ylim(-0.6, len(series_keys) - 0.4)
         cost_axes.grid(axis="x", alpha=0.2)
 
         experiment_labels = [
@@ -1238,17 +1237,6 @@ def _plot_experiment_selection(
                 edgecolor="#111111",
                 linewidth=1.2,
                 hatch=hatch,
-            )
-        if no_science_notes:
-            bought_axes.text(
-                0.5,
-                0.05,
-                "\n".join(no_science_notes),
-                transform=bought_axes.transAxes,
-                ha="center",
-                va="bottom",
-                fontsize=7,
-                color="#777777",
             )
         bought_axes.set_title(f"Scenario {scenario} · decisive bought", fontsize=12)
         bought_axes.set_ylabel("Fraction of episodes", fontsize=9)

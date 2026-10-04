@@ -809,7 +809,7 @@ def test_zero_science_provider_refusal_is_annotated_without_bars(
     assert annotations == [expected_label]
     assert horizontal_bars == []
     assert bars == []
-    assert text_labels.count(expected_label) == 2
+    assert text_labels.count(expected_label) == 1
 
 
 def test_decisive_experiment_extraction_is_recursive_ordered_and_conditional():
