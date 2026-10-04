@@ -124,6 +124,11 @@ def test_synthetic_cli_creates_all_stamped_assets_and_manifest(tmp_path, capsys)
         stamp = entry["stamp"]
         assert stamp["git_sha"]
         assert entry["source_files"]
+        if not (
+            entry["path"].startswith("auditor_validation.")
+            or entry["path"].startswith("replicates/")
+        ):
+            assert entry["summaries"] == "read"
         is_validation = entry["path"].startswith("auditor_validation.")
         assert stamp["synthetic"] is not is_validation
         if is_validation:
@@ -196,6 +201,87 @@ def _non_synthetic_batch_copy(tmp_path):
         encoding="utf-8",
     )
     return batch_dir
+
+
+def test_batch_assets_derive_missing_summaries_without_writing_input(tmp_path):
+    source_dir, _ = create_synthetic_inputs(tmp_path / "source")
+    batch_dir = tmp_path / "results-only"
+    shutil.copytree(source_dir, batch_dir)
+    (batch_dir / "summary.json").unlink()
+    (batch_dir / "grid_summary.json").unlink()
+    original_files = sorted(
+        path.relative_to(batch_dir).as_posix()
+        for path in batch_dir.rglob("*")
+        if path.is_file()
+    )
+
+    untouched_output = tmp_path / "untouched-assets"
+    untouched_output.mkdir()
+    slide_assets.generate_batch_assets(
+        source_dir,
+        untouched_output / "batch",
+        untouched_output,
+        git_stamp=("test-sha", False),
+    )
+
+    derived_output = tmp_path / "derived-assets"
+    derived_output.mkdir()
+    slide_assets.generate_assets(
+        [batch_dir],
+        slide_assets.DEFAULT_VALIDATION,
+        derived_output,
+        git_stamp=("test-sha", False),
+    )
+
+    untouched_rows = list(csv.DictReader(
+        (untouched_output / "batch" / "clean_success_ci.csv").open(
+            encoding="utf-8",
+        ),
+    ))
+    derived_rows = list(csv.DictReader(
+        (derived_output / "results-only" / "clean_success_ci.csv").open(
+            encoding="utf-8",
+        ),
+    ))
+    assert [
+        {key: value for key, value in row.items() if key != "stamp"}
+        for row in derived_rows
+    ] == [
+        {key: value for key, value in row.items() if key != "stamp"}
+        for row in untouched_rows
+    ]
+
+    manifest = json.loads(
+        (derived_output / "manifest.json").read_text(encoding="utf-8"),
+    )
+    batch_entries = [
+        entry for entry in manifest["assets"]
+        if entry["path"].startswith("results-only/")
+    ]
+    assert batch_entries
+    assert all(entry["summaries"] == slide_assets.DERIVED_SUMMARIES
+               for entry in batch_entries)
+    assert all(
+        str(batch_dir / "summary.json") not in entry["source_files"]
+        and str(batch_dir / "grid_summary.json") not in entry["source_files"]
+        for entry in batch_entries
+    )
+    assert all(
+        Path(source).is_file()
+        for entry in batch_entries
+        for source in entry["source_files"]
+    )
+    assert all(
+        entry["stamp"]["source"].endswith(
+            "; summaries derived from results.jsonl",
+        )
+        for entry in batch_entries
+    )
+    assert sorted(
+        path.relative_to(batch_dir).as_posix()
+        for path in batch_dir.rglob("*")
+        if path.is_file()
+    ) == original_files
 
 
 def test_wave_cli_stamps_wave_and_batch_mode_watermarks_non_wave(tmp_path, capsys):

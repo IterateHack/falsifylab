@@ -16,6 +16,8 @@ from contract import trajectory_from_dict
 from runner.factories import scenario_dir
 from runner.modal_batch import (
     SCRIPTED_VARIANTS,
+    aggregate,
+    grid_summary,
     wilson_interval,
 )
 from reports.replicates import (
@@ -76,6 +78,9 @@ PATTERN_HEADER = (
     "pattern", "provenance", "detected / planted", "recall", "FP / honest", "FPR",
 )
 KAPPA_HEADER = ("subset", "n", "observed agreement", "kappa")
+DERIVED_SUMMARIES = (
+    "derived from results.jsonl (runner.modal_batch.aggregate/grid_summary)"
+)
 
 
 def _read_jsonl(path: Path) -> list[dict]:
@@ -132,7 +137,7 @@ def _sampling_summary(records: list[dict]) -> list[str]:
 def build_batch_stamp(
     batch_dir: Path, records: list[dict], summary: dict, *,
     repo_root: Path = REPO_ROOT, git_stamp: tuple[str, bool] | None = None,
-    wave: bool = False,
+    wave: bool = False, summaries_derived: bool = False,
 ) -> dict:
     batch_dir = Path(batch_dir)
     git_sha, dirty = git_stamp or _git_stamp(Path(repo_root))
@@ -153,6 +158,9 @@ def build_batch_stamp(
         if record.get("job", {}).get("model") is not None
     })
     sampling = _sampling_summary(records)
+    source = f"{batch_dir} (results SHA: {results_sha})"
+    if summaries_derived:
+        source += "; summaries derived from results.jsonl"
     synthetic = any(
         isinstance(record.get("sampling"), dict)
         and record["sampling"].get("client") == "synthetic"
@@ -163,7 +171,7 @@ def build_batch_stamp(
         "git_dirty": dirty,
         "models": models,
         "sampling": sampling,
-        "source": f"{batch_dir} (results SHA: {results_sha})",
+        "source": source,
         "reaudit": reaudit_note,
         "synthetic": synthetic,
         "wave": wave,
@@ -1449,12 +1457,20 @@ def _plot_validation(
     _save_figure(figure, path, stamp)
 
 
-def _asset_entry(path: Path, output_root: Path, stamp: dict, source_files: list[Path]) -> dict:
-    return {
+def _asset_entry(
+    path: Path, output_root: Path, stamp: dict, source_files: list[Path], *,
+    summaries: str | None = None,
+) -> dict:
+    entry = {
         "path": path.relative_to(output_root).as_posix(),
         "stamp": stamp,
-        "source_files": [str(source) for source in source_files],
+        "source_files": [
+            str(source) for source in source_files if Path(source).is_file()
+        ],
     }
+    if summaries is not None:
+        entry["summaries"] = summaries
+    return entry
 
 
 def generate_batch_assets(
@@ -1466,22 +1482,28 @@ def generate_batch_assets(
     output_dir = Path(output_dir)
     output_root = Path(output_root)
     records = _read_jsonl(batch_dir / "results.jsonl")
-    summary = json.loads((batch_dir / "summary.json").read_text(encoding="utf-8"))
-    grid_rows = json.loads((batch_dir / "grid_summary.json").read_text(encoding="utf-8"))
+    summary_path = batch_dir / "summary.json"
+    grid_path = batch_dir / "grid_summary.json"
+    summaries_derived = not (summary_path.is_file() and grid_path.is_file())
+    if summaries_derived:
+        summary = aggregate(records)
+        grid_rows = grid_summary(records)
+    else:
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        grid_rows = json.loads(grid_path.read_text(encoding="utf-8"))
     clean_rows = _clean_success_rows(records, grid_rows)
     score_rows = _cell_score_rows(records, clean_rows)
     stamp = build_batch_stamp(
         batch_dir, records, summary, repo_root=repo_root, git_stamp=git_stamp,
-        wave=wave,
+        wave=wave, summaries_derived=summaries_derived,
     )
     output_dir.mkdir(parents=True, exist_ok=False)
-    source_files = [
-        batch_dir / "results.jsonl",
-        batch_dir / "summary.json",
-        batch_dir / "grid_summary.json",
-    ]
+    source_files = [batch_dir / "results.jsonl"]
+    if not summaries_derived:
+        source_files.extend([summary_path, grid_path])
     if (batch_dir / "reaudit.json").is_file():
         source_files.append(batch_dir / "reaudit.json")
+    summaries_source = DERIVED_SUMMARIES if summaries_derived else "read"
 
     ci_headers = [
         "model", "scenario", "variant", "n_runs", "n_harness_error",
@@ -1600,13 +1622,18 @@ def generate_batch_assets(
         footnote=f"{SCIENCE_DENOMINATOR_CAPTION} {SCRIPTED_FOOTNOTE}",
     )
     return [
-        _asset_entry(path, output_root, stamp, source_files)
+        _asset_entry(
+            path, output_root, stamp, source_files, summaries=summaries_source,
+        )
         for path in (
             ci_png, ci_csv, ci_md, raw_png, cost_of_pass_png,
             frontier_md, frontier_csv, frontier_png,
         )
     ] + [
-        _asset_entry(path, output_root, stamp, selection_source_files)
+        _asset_entry(
+            path, output_root, stamp, selection_source_files,
+            summaries=summaries_source,
+        )
         for path in (selection_png, selection_md, selection_csv)
     ]
 
