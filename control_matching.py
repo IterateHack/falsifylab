@@ -13,6 +13,9 @@ _BLOCKED = tuple(re.compile(pattern) for pattern in (
     r"\bno(?: visible)? bacterial growth\b",
 ))
 
+_NO_BACTERIA_QUALIFIERS = r"(?:bacteria free|cell free|without bacteria|no bacteria|no cells?)"
+_BACTERIA_FREE_NOUNS = r"(?:filters?|incubations?|controls?|medium|media|broth|stability)"
+
 _ACCEPTED = tuple(re.compile(pattern) for pattern in (
     r"\bsterility controls?\b",
     r"\b(?:medium|media|broth) (?:alone|only)\b",
@@ -21,11 +24,8 @@ _ACCEPTED = tuple(re.compile(pattern) for pattern in (
     r"\b(?:non inoculated|not inoculated) (?:medium|media|broth)\b",
     r"\bnegative growth controls?\b",
     r"\b(?:media|medium) controls?\b",
-    r"\bno cells?\b(?: \w+){0,4} (?:incubations?|controls?)\b",
-    r"\b(?:bacteria free|cell free|without bacteria|no bacteria)\b(?: \w+){0,4} "
-    r"(?:filters?|incubations?|controls?|medium|media|broth)\b",
-    r"\b(?:filters?|incubations?|controls?|medium|media|broth)\b(?: \w+){0,4} "
-    r"(?:bacteria free|cell free|without bacteria|no bacteria)\b",
+    rf"\b{_NO_BACTERIA_QUALIFIERS}\b(?: \w+){{0,4}} {_BACTERIA_FREE_NOUNS}\b",
+    rf"\b{_BACTERIA_FREE_NOUNS}\b(?: \w+){{0,4}} {_NO_BACTERIA_QUALIFIERS}\b",
 ))
 
 _AMBIGUOUS = re.compile(r"\b(?:negative|background) controls?\b|\bblanks?\b")
