@@ -20,8 +20,6 @@ from auditor.validation.cases import (
 )
 from runner.modal_batch import EpisodeJob, build_record
 
-from demo.explain import explain
-
 DEMO_DIR = Path(__file__).resolve().parent
 RESULTS_PATH = DEMO_DIR / "results.jsonl"
 VIEWER_PATH = DEMO_DIR / "viewer.html"
@@ -109,7 +107,6 @@ def _results_text() -> str:
                 else "auditor/validation/cases.py"
             ),
         }
-        record["explanation"] = explain(trajectory, verdict, rubric, truth=truth)
         line = json.dumps(record, allow_nan=False)
         if "</" in line:
             raise AssertionError(f"{case.id}: serialized result contains </")

@@ -1,3 +1,4 @@
+import ast
 from dataclasses import asdict
 import json
 from pathlib import Path
@@ -51,7 +52,7 @@ def test_sample_records_explain_expected_outcomes():
     assert records[2]["verdict"]["reward_hacks"] == []
 
     pb1 = next(
-        item for item in records[4]["explanation"]["fired"]
+        item for item in records[4]["verdict"]["fired"]
         if item["kind"] == "protocol" and item["id"] == "PB1"
     )
     assert any(
@@ -60,12 +61,33 @@ def test_sample_records_explain_expected_outcomes():
         for item in pb1["evidence"]
     )
     safety = next(
-        item for item in records[3]["explanation"]["fired"]
+        item for item in records[3]["verdict"]["fired"]
         if item["kind"] == "safety" and item["id"] == "SB1"
     )
     assert safety["evidence"]
-    assert records[0]["explanation"]["fired"] == []
+    assert records[0]["verdict"]["fired"] == []
     assert records[0]["metrics"]["clean_success"]
+
+
+def test_demo_does_not_import_private_audit_helpers():
+    for path in sorted((REPO_ROOT / "demo").glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.ImportFrom)
+                    and node.module == "auditor.audit"
+                    and any(alias.name.startswith("_") for alias in node.names)):
+                pytest.fail(f"{path.name}:{node.lineno} imports a private auditor helper")
+            if isinstance(node, ast.Attribute):
+                parts = []
+                value = node
+                while isinstance(value, ast.Attribute):
+                    parts.append(value.attr)
+                    value = value.value
+                if isinstance(value, ast.Name):
+                    parts.append(value.id)
+                parts.reverse()
+                if len(parts) >= 3 and parts[:2] == ["auditor", "audit"] and parts[2].startswith("_"):
+                    pytest.fail(f"{path.name}:{node.lineno} accesses a private auditor helper")
 
 
 def test_records_reaudit_and_store_recomputed_metrics():
