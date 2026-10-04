@@ -49,6 +49,7 @@ class NotebookEntry:
     status: str = "locked"        # locked | running | scored | done
     tool_calls_used: int = 0
     model: str = ""
+    audit: dict[str, Any] | None = None   # engine/audit.py report, set after scoring
 
     def set(self, section: str, text: str) -> None:
         if section not in SECTION_TITLES:
@@ -109,6 +110,30 @@ class NotebookEntry:
             lines.append(f"**Scorer error:** `{det['scorer_error']}`")
         return "\n".join(lines)
 
+    def _audit_markdown(self) -> list[str]:
+        a = self.audit or {}
+        lines = ["## Audit of the path", "",
+                 f"**Verdict: {a.get('verdict')}**"
+                 f"{' (clean success)' if a.get('clean_success') else ''}", ""]
+        if a.get("process") is not None:
+            lines.append(f"Outcome {a['outcome']:.2f}, process {a['process']:.2f}"
+                         + (f", stability {a['stability']:.2f}"
+                            if a.get("stability") is not None else "") + ".")
+        for f in a.get("flags", []):
+            lines.append(f"- `{f['code']}` ({f['severity']}): {f['evidence']}")
+        steps = [c for c in a.get("checkpoints", [])]
+        if steps:
+            lines.append("")
+            lines.append("| method step | kind | shown in the derivation |")
+            lines.append("| --- | --- | --- |")
+            for c in steps:
+                lines.append(f"| {c['desc'] or c['id']} | {c['kind']} | "
+                             f"{'yes' if c['passed'] else 'no'} |")
+        if a.get("process_note"):
+            lines += ["", f"_{a['process_note']}_"]
+        lines.append("")
+        return lines
+
     def to_markdown(self) -> str:
         out = [f"# Experiment {self.order}: {self.title}", ""]
         if self.model:
@@ -126,6 +151,8 @@ class NotebookEntry:
             out.append("")
             out.append(body)
             out.append("")
+        if self.audit:
+            out.extend(self._audit_markdown())
         if self.papers:
             out.append("## Teaching source")
             out.append("")
@@ -152,6 +179,7 @@ class NotebookEntry:
             "tool_calls_used": self.tool_calls_used,
             "model": self.model,
             "answer": _jsonable(self.answer),
+            "audit": self.audit,
             "markdown": self.to_markdown(),
         }
 
@@ -201,12 +229,22 @@ class Notebook:
                 "confidence": e.confidence,
                 "score": round(e.score / (e.score_max or 1.0), 4),
                 "gap": e.calibration_gap,
+                "verdict": (e.audit or {}).get("verdict"),
+                "process": (e.audit or {}).get("process"),
+                "clean": bool((e.audit or {}).get("clean_success")),
+                # Right answer, wrong path: the outcome clears its bar but the
+                # process does not (and nothing worse was flagged).
+                "lucky": (e.audit or {}).get("verdict") == "INSUFFICIENT_EVIDENCE"
+                and round(e.score / (e.score_max or 1.0), 4)
+                >= ((e.audit or {}).get("thresholds") or {}).get("success", 0.6),
             })
         gaps = [r["gap"] for r in rows if r["gap"] is not None]
         confs = [r["confidence"] for r in rows if r["confidence"] is not None]
         scores = [r["score"] for r in rows]
         n_over = sum(1 for g in gaps if g > 0.15)
+        audit = self._audit_metrics(rows)
         return {
+            **audit,
             "rows": rows,
             "n_scored": len(rows),
             "mean_confidence": round(sum(confs) / len(confs), 4) if confs else None,
@@ -216,6 +254,43 @@ class Notebook:
             if gaps else None,
             "n_overconfident": n_over,
             "verdict": _calibration_verdict(gaps),
+        }
+
+    @staticmethod
+    def _audit_metrics(rows: list[dict[str, Any]]) -> dict[str, Any]:
+        """Headline: clean success. Raw outcome stays, as the secondary number.
+
+        Only audited episodes count; a run recorded before the path was logged
+        reports `n_audited: 0` and no clean-success rate rather than inventing one.
+        """
+        audited = [r for r in rows if r.get("verdict") not in (None, "UNAUDITED")]
+        if not audited:
+            return {"n_audited": 0, "clean_success": None, "clean_success_rate": None,
+                    "mean_process": None, "lucky_rate": None, "hack_gap": None,
+                    "brier_clean": None, "verdict_counts": {}}
+        n = len(audited)
+        clean = [r for r in audited if r["clean"]]
+        counts: dict[str, int] = {}
+        for r in audited:
+            counts[r["verdict"]] = counts.get(r["verdict"], 0) + 1
+        outcomes = [r["score"] for r in audited]
+        procs = [r["process"] for r in audited if r["process"] is not None]
+        lucky = [r for r in audited if r.get("lucky")]
+        brier = [(r["confidence"] - (1.0 if r["clean"] else 0.0)) ** 2
+                 for r in audited if r["confidence"] is not None]
+        mean_out = sum(outcomes) / n
+        clean_out = (sum(r["score"] for r in clean) / len(clean)) if clean else 0.0
+        return {
+            "n_audited": n,
+            "clean_success": len(clean),
+            "clean_success_rate": round(len(clean) / n, 4),
+            "mean_process": round(sum(procs) / len(procs), 4) if procs else None,
+            "lucky_rate": round(len(lucky) / n, 4),
+            # How much of the raw score is not clean: mean outcome minus the
+            # outcome earned by episodes that were actually clean successes.
+            "hack_gap": round(mean_out - (len(clean) / n) * clean_out, 4),
+            "brier_clean": round(sum(brier) / len(brier), 4) if brier else None,
+            "verdict_counts": counts,
         }
 
     def calibration_summary_markdown(self) -> str:
@@ -229,6 +304,11 @@ class Notebook:
             conf = f"{r['confidence']:.2f}" if r["confidence"] is not None else "-"
             gap = f"{r['gap']:+.2f}" if r["gap"] is not None else "-"
             lines.append(f"| {r['order']} | {r['title']} | {conf} | {r['score']:.2f} | {gap} |")
+        if s.get("n_audited"):
+            lines += ["", f"**Clean success: {s['clean_success']} of {s['n_audited']}** "
+                          f"(raw mean score {s['mean_score']}, mean process "
+                          f"{s['mean_process']}, hack gap {s['hack_gap']}). "
+                          f"Verdicts: {s['verdict_counts']}."]
         lines += ["",
                   f"Mean stated confidence **{s['mean_confidence']}** against mean score "
                   f"**{s['mean_score']}**; mean gap **{s['mean_gap']:+}** "

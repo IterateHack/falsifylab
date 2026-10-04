@@ -9,6 +9,13 @@ export const SCENE_H = 208;
 
 export const WALL_H = 48;
 
+/**
+ * The dado rail along the bottom of the tiled wall. Every lab corridor has one
+ * and it is the one place the room gets to be a colour, which keeps the white
+ * from reading as unfinished.
+ */
+export const WALL_RAIL = { y: WALL_H - 4, h: 4 };
+
 /** The bench: 19 tiles wide, with a worktop surface band and a front face. */
 export const BENCH = { x: 40, y: 88, w: 304, h: 64 };
 
@@ -39,6 +46,20 @@ export function stationStandX(index: number): number {
 export const SCIENTIST = { y: 140, w: 16, h: 24, homeX: 20 };
 
 /**
+ * The speech bubble, on the floor below the scientist. It has SCENE_H - SPEECH_Y
+ * to live in and the scene clips, so a long line used to run off the bottom
+ * edge mid-word. Three things keep it inside: the text is cut to roughly what
+ * fits, the CSS clamps to whole lines so a cut never slices through glyphs, and
+ * the height is capped as a backstop.
+ */
+export const SPEECH_Y = 162;
+export const SPEECH_W = 190;
+export const SPEECH_LINES = 3;
+export const SPEECH_MAX_H = SCENE_H - SPEECH_Y - 6;
+/** Three ragged lines at SPEECH_W, with room left for the ellipsis. */
+export const SPEECH_MAX_CHARS = 74;
+
+/**
  * Decor sits in the gaps between stations and on the end caps, never over a
  * station's footprint or its click target.
  */
@@ -57,9 +78,16 @@ export const DECOR_SLOTS: { x: number; sprite: string }[] = [
 export const FLOOR_DECOR = [
   { x: 348, y: 150, sprite: "decor_petri" },
   { x: 356, y: 118, sprite: "decor_pipettes" },
-  // Kept clear of SCIENTIST.homeX so the idle scientist is not standing on it.
-  { x: 4, y: 178, sprite: "decor_clipboard" },
 ];
+
+/**
+ * The lab notebook, lying on the floor where the scientist left it. Drawn like
+ * the rest of the clutter but clickable, so the notebook can be opened from
+ * inside the room and not only from the top bar.
+ *
+ * Kept clear of SCIENTIST.homeX so the idle scientist is not standing on it.
+ */
+export const NOTEBOOK_PROP = { x: 4, y: 178, sprite: "decor_clipboard", size: TILE };
 
 export const WALL_DECOR = [
   { x: 24, y: 10, sprite: "whiteboard", w: 64, h: 32 },

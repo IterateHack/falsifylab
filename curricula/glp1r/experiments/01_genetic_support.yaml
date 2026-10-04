@@ -7,6 +7,7 @@ requires_lessons: []
 inputs:
   datasets: [data/exp1_gwas_targets.csv]
   tools: [run_python]
+audit: audit/exp1.yaml
 limits: {max_tool_calls: 30, timeout_s: 420, max_python_seconds: 60}
 task: |
   `data/exp1_gwas_targets.csv` lists 174 genes at loci associated with body mass

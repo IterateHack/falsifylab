@@ -61,6 +61,7 @@ def score(answer: Any, ground_truth: dict[str, Any]) -> dict[str, Any]:
             "mechanism_missed": rub["missed"],
             "mechanism_penalised": rub["penalised"],
             "breakdown": rub["breakdown"],
+            "rubric_density": rub["rubric_density"],
             "truth_duration_classes": ground_truth["duration_classes"],
         },
     }

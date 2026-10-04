@@ -29,6 +29,7 @@ def score(answer: Any, ground_truth: dict[str, Any]) -> dict[str, Any]:
             "missed": rub["missed"],
             "penalised": rub["penalised"],
             "breakdown": rub["breakdown"],
+            "rubric_density": rub["rubric_density"],
             "residue_33_by_species": ground_truth["residue_33_by_species"],
         },
     }

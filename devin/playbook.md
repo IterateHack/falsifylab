@@ -11,6 +11,7 @@ a config folder, not code - you should not need to touch `engine/` or `sandbox/`
 | `curricula/<id>/scorers/expN.py` | `score(answer, ground_truth) -> dict` |
 | `curricula/<id>/private/expN.json` | Ground truth. **Never** mounted in the agent sandbox |
 | `curricula/<id>/lessons/expN.md` | The lesson card, max ~400 words |
+| `curricula/<id>/audit/expN.yaml` | The path-audit spec: method checkpoints taken from the lesson card, the answer fields whose items must trace to run output, and the null/stability perturbations to replay |
 | `curricula/<id>/fetch.py` | A `build_expN()` that writes the dataset and the ground truth from primary sources |
 | `curricula/<id>/tests/test_scorers.py` | Golden pass and fail fixtures for the new scorer |
 
@@ -57,7 +58,15 @@ A pull request is not ready until all of these hold.
 11. **`requires_lessons` points only at earlier experiments**, and the task is
     genuinely harder without them. Say in the PR description what the dependency
     is for.
-12. **Provenance recorded.** Each `note(...)` call in `fetch.py` must classify the
+12. **A path-audit spec, and tests for it.** `audit/expN.yaml` lists the lesson card's
+    Method as checkpoints (rules over the agent's final derivation, never a
+    keyword hunt over its prose), names the answer fields whose items must appear
+    in a run's output, and - for computational experiments - the perturbation that
+    destroys the signal. Add scripted cases to `evals/audit/`: an honest path
+    that earns `VALID_SUCCESS`, a hard-coded answer that is flagged, and a
+    right-answer-by-a-sloppy-route case that is not. Have a domain expert review
+    the checkpoints; they encode biology.
+13. **Provenance recorded.** Each `note(...)` call in `fetch.py` must classify the
     data as `fetched`, `computed`, `derived` or `transcribed`.
 
 ## Running it

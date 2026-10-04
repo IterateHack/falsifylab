@@ -92,6 +92,8 @@ def list_runs() -> dict[str, Any]:
                     "mean_score": cal.get("mean_score"),
                     "mean_confidence": cal.get("mean_confidence"),
                     "mean_gap": cal.get("mean_gap"),
+                    "clean_success": cal.get("clean_success"),
+                    "n_audited": cal.get("n_audited", 0),
                 })
             except json.JSONDecodeError:
                 pass

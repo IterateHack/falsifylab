@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { Lab } from "./components/Lab";
 import { NotebookOverlay } from "./components/Notebook";
+import { ProgressBar } from "./components/ProgressBar";
 import { api, type LabEvent, type Notebook, type RunSummary } from "./lib/api";
 import { SCENE_H, SCENE_W } from "./lib/scene";
 import { usePlayback } from "./lib/usePlayback";
@@ -42,6 +43,11 @@ export default function App() {
 
   const eventsByExp = useRef<Map<string, LabEvent[]>>(new Map());
   const sse = useRef<EventSource | null>(null);
+  // The room is sized from the space actually left for it, so these two are
+  // measured rather than guessed at: the slot gives the width and the top edge,
+  // the strip under the room gives back what it takes.
+  const slotRef = useRef<HTMLDivElement>(null);
+  const underRef = useRef<HTMLDivElement>(null);
 
   const refreshNotebook = useCallback(async (id: string) => {
     try {
@@ -160,7 +166,7 @@ export default function App() {
       sse.current = es;
       const types = [
         "run_started", "experiment_started", "prediction_written", "plan_written",
-        "tool_call", "tool_result", "scored", "teaching_started", "lesson_learned",
+        "tool_call", "tool_result", "scored", "audited", "teaching_started", "lesson_learned",
         "notebook_entry_ready", "experiment_done", "run_finished", "error",
       ];
       for (const t of types) {
@@ -190,14 +196,25 @@ export default function App() {
         ? "Curriculum complete"
         : `Next: Experiment ${cursor + 1}`;
 
-  const scale = useScale();
+  // The notebook is a view over what has happened so far, not over the whole
+  // recorded run: only experiments the animation has finished are visible.
+  // ?notebook=... deep links bypass this so a page can be opened directly.
+  const revealAll = params.has("notebook");
+  const visibleNotebook = useMemo(
+    () =>
+      revealAll || !notebook
+        ? notebook
+        : filterNotebook(notebook, scene.finishedIndexes),
+    [notebook, scene.finishedIndexes, revealAll],
+  );
+
+  const scale = useScale(slotRef, underRef);
 
   return (
     <div className="app">
       <header className="topbar">
         <div className="brand">
           <span className="brand-mark">FalsifyLab</span>
-          <span className="brand-sub">a scientist that finds out it was wrong</span>
         </div>
         <div className="controls">
           <select
@@ -262,26 +279,34 @@ export default function App() {
       <p className="hypothesis">{hypothesis}</p>
       {error && <p className="error">{error}</p>}
 
-      <div className="stage" style={{ width: SCENE_W * scale, height: SCENE_H * scale }}>
-        <div className="stage-inner" style={{ transform: `scale(${scale})` }}>
-          <Lab
-            scene={scene}
-            titles={titles}
-            reducedMotion={!!reducedMotion}
-            onOpenStation={(i) => setOpenIndex(i)}
-          />
+      <div className="stage-slot" ref={slotRef}>
+        <div className="stage" style={{ width: SCENE_W * scale, height: SCENE_H * scale }}>
+          <div className="stage-inner" style={{ transform: `scale(${scale})` }}>
+            <Lab
+              scene={scene}
+              titles={titles}
+              reducedMotion={!!reducedMotion}
+              onOpenStation={(i) => setOpenIndex(i)}
+              onOpenNotebook={() => setOpenIndex(0)}
+            />
+          </div>
         </div>
       </div>
 
-      <footer className="legend">
-        <span><i className="dot locked" /> locked</span>
-        <span><i className="dot ready" /> ready</span>
-        <span><i className="dot running" /> running</span>
-        <span><i className="dot done" /> done - click a finished station to open its notebook page</span>
-      </footer>
+      {/* Pinned to the room's own width, so the bar reads as part of it. */}
+      <div className="under-stage" ref={underRef} style={{ width: SCENE_W * scale }}>
+        <ProgressBar scene={scene} titles={titles} live={mode === "live"} />
+
+        <footer className="legend">
+          <span><i className="dot locked" /> locked</span>
+          <span><i className="dot ready" /> ready</span>
+          <span><i className="dot running" /> running</span>
+          <span><i className="dot done" /> done - click a finished station to open its notebook page</span>
+        </footer>
+      </div>
 
       <NotebookOverlay
-        data={notebook}
+        data={visibleNotebook}
         openIndex={openIndex}
         titles={titles}
         showCalibration={openCalibration}
@@ -298,18 +323,107 @@ export default function App() {
   );
 }
 
-/** Integer scaling only: a fractional scale would blur the pixel art. */
-function useScale(): number {
+/** Keep only entries (and calibration rows) for experiments finished so far. */
+function filterNotebook(nb: Notebook, finished: number[]): Notebook {
+  const orders = new Set(finished.map((i) => i + 1));
+  const entries = nb.entries.filter((e) => orders.has(e.order));
+  const c = nb.calibration;
+  const rows = c.rows.filter((r) => orders.has(r.order));
+  if (rows.length === c.rows.length) return { ...nb, entries };
+  const mean = (xs: number[]) =>
+    xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
+  // Audit headline for the experiments finished so far (the written verdict and
+  // Brier score describe the whole run, so they are withheld while partial).
+  const audited = rows.filter((r) => r.verdict && r.verdict !== "UNAUDITED");
+  const clean = audited.filter((r) => r.clean);
+  const counts: Record<string, number> = {};
+  audited.forEach((r) => {
+    counts[r.verdict as string] = (counts[r.verdict as string] ?? 0) + 1;
+  });
+  const meanOut = mean(audited.map((r) => r.score));
+  const cleanOut = clean.length ? mean(clean.map((r) => r.score)) ?? 0 : 0;
+  const gaps = rows.flatMap((r) => (r.gap != null ? [r.gap] : []));
+  const confs = rows.flatMap((r) => (r.confidence != null ? [r.confidence] : []));
+  return {
+    ...nb,
+    entries,
+    calibration: {
+      rows,
+      n_scored: rows.length,
+      mean_confidence: mean(confs),
+      mean_score: mean(rows.map((r) => r.score)),
+      mean_gap: mean(gaps),
+      mean_absolute_gap: mean(gaps.map(Math.abs)),
+      n_overconfident: gaps.filter((g) => g > 0.15).length,
+      verdict: "", // the written verdict describes the whole run
+      n_audited: audited.length,
+      clean_success: audited.length ? clean.length : null,
+      clean_success_rate: audited.length ? clean.length / audited.length : null,
+      mean_process: mean(audited.flatMap((r) => (r.process != null ? [r.process] : []))),
+      lucky_rate: audited.length
+        ? audited.filter((r) => r.lucky).length / audited.length : null,
+      hack_gap: meanOut == null ? null
+        : meanOut - (clean.length / audited.length) * cleanOut,
+      brier_clean: null,
+      verdict_counts: counts,
+    },
+  };
+}
+
+const MAX_SCALE = 6;
+/** Breathing room under the room, so it is not flush against the viewport. */
+const STAGE_MARGIN = 4;
+
+/**
+ * How many screen pixels one scene pixel gets.
+ *
+ * A scene pixel has to land on whole device pixels or the art blurs, which
+ * normally means whole steps. On a 2x display a half step qualifies too - 3.5
+ * CSS pixels is exactly 7 device pixels - and since the scene is 384x208, every
+ * sprite position stays whole as well. That half step is most of a size up, and
+ * on a laptop it is usually the difference between the room filling the window
+ * and leaving a third of it empty.
+ *
+ * The space itself is measured rather than assumed: the slot gives the width
+ * the room may use and where it starts, the strip below gives back its own
+ * height, and the shell gives back its bottom padding - miss that last one and
+ * the room claims a couple of pixels it does not have, which costs a scrollbar.
+ * Measuring rather than reserving a constant also means the fit holds when the
+ * header wraps or the legend runs to two lines.
+ */
+function useScale(
+  slot: RefObject<HTMLDivElement>,
+  under: RefObject<HTMLDivElement>,
+): number {
   const [scale, setScale] = useState(3);
   useEffect(() => {
     const compute = () => {
-      const w = Math.max(320, window.innerWidth - 32);
-      const h = Math.max(240, window.innerHeight - 260);
-      setScale(Math.max(1, Math.min(4, Math.floor(Math.min(w / SCENE_W, h / SCENE_H)))));
+      const el = slot.current;
+      if (!el) return;
+      const shell = el.parentElement;
+      const padBottom = shell
+        ? parseFloat(getComputedStyle(shell).paddingBottom) || 0
+        : 0;
+      const top = el.getBoundingClientRect().top;
+      const below = under.current?.getBoundingClientRect().height ?? 0;
+      const w = Math.max(320, el.clientWidth);
+      const h = Math.max(
+        240, window.innerHeight - top - below - padBottom - STAGE_MARGIN);
+      const step = (window.devicePixelRatio || 1) >= 2 ? 0.5 : 1;
+      const fit = Math.min(w / SCENE_W, h / SCENE_H);
+      setScale(Math.max(1, Math.min(MAX_SCALE, Math.floor(fit / step) * step)));
     };
     compute();
     window.addEventListener("resize", compute);
-    return () => window.removeEventListener("resize", compute);
-  }, []);
+    // The header and the hypothesis arrive with the curriculum and can wrap,
+    // which moves the top edge; watching the document catches that without the
+    // scale feeding back into it, since neither measurement includes the room.
+    const ro = new ResizeObserver(compute);
+    ro.observe(document.body);
+    return () => {
+      window.removeEventListener("resize", compute);
+      ro.disconnect();
+    };
+  }, [slot, under]);
   return scale;
 }

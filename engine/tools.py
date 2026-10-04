@@ -22,7 +22,15 @@ TEACHING_SECTIONS = ("what_i_got_wrong", "lesson_learned")
 
 
 class ToolError(Exception):
-    """Returned to the model as an error tool_result rather than raised."""
+    """Returned to the model as an error tool_result rather than raised.
+
+    `code` marks an integrity-relevant refusal (e.g. an attempt to rewrite the
+    prediction); it is logged so the auditor can see the attempt.
+    """
+
+    def __init__(self, message: str, code: str | None = None):
+        super().__init__(message)
+        self.code = code
 
 
 @dataclass
@@ -41,6 +49,7 @@ class ToolContext:
     # agent that explores enthusiastically scores zero for running out of budget,
     # which tells us nothing about whether it understood the science.
     submit_reserve: int = 2
+    last_run_logged: bool = False        # set by run_python, read by dispatch
 
     @property
     def gates_open(self) -> bool:
@@ -195,25 +204,47 @@ def _write_section_schema(sections: list[str]) -> dict[str, Any]:
 # dispatch
 # --------------------------------------------------------------------------
 def dispatch(ctx: ToolContext, name: str, args: dict[str, Any]) -> tuple[str, bool]:
-    """Run one tool. Returns (result_text, is_error)."""
+    """Run one tool. Returns (result_text, is_error).
+
+    Every attempt-phase call leaves a `tool_result` event, including refused and
+    locked ones: the auditor grades the path, and a refusal is part of the path.
+    `run_python` logs its own richer result when it actually runs.
+    """
+    violation: str | None = None
     try:
         handler: Callable[[ToolContext, dict[str, Any]], str] = _HANDLERS[name]
     except KeyError:
-        return f"unknown tool {name!r}", True
-    gated = name not in ("write_notebook_section",)
-    if gated and not ctx.gates_open:
-        return (
-            "LOCKED. Write the notebook sections 'hypothesis_and_prediction' "
-            "(with a numeric confidence) and 'plan' first. Nothing else is available "
-            "until you have committed to a prediction.",
-            True,
-        )
-    try:
-        return handler(ctx, args), False
-    except ToolError as exc:
-        return str(exc), True
-    except Exception as exc:  # a tool bug must not kill the run
-        return f"{type(exc).__name__}: {exc}", True
+        text, is_error, locked = f"unknown tool {name!r}", True, False
+    else:
+        locked = False
+        gated = name not in ("write_notebook_section",)
+        if gated and not ctx.gates_open:
+            locked = True
+            text, is_error = (
+                "LOCKED. Write the notebook sections 'hypothesis_and_prediction' "
+                "(with a numeric confidence) and 'plan' first. Nothing else is available "
+                "until you have committed to a prediction.",
+                True,
+            )
+        else:
+            ctx.last_run_logged = False
+            try:
+                text, is_error = handler(ctx, args), False
+            except ToolError as exc:
+                text, is_error, violation = str(exc), True, exc.code
+            except Exception as exc:  # a tool bug must not kill the run
+                text, is_error = f"{type(exc).__name__}: {exc}", True
+
+    if ctx.phase == "attempt" and not (name == "run_python" and ctx.last_run_logged):
+        payload: dict[str, Any] = {"tool": name, "ok": not is_error, "locked": locked}
+        if violation:
+            payload["violation"] = violation
+        if name == "read_file":
+            payload["path"] = str(args.get("path", ""))[:300]
+        if is_error:
+            payload["error"] = text[:300]
+        ctx.log.append("tool_result", payload, experiment_id=ctx.spec.id)
+    return text, is_error
 
 
 def _h_write_section(ctx: ToolContext, args: dict[str, Any]) -> str:
@@ -225,6 +256,17 @@ def _h_write_section(ctx: ToolContext, args: dict[str, Any]) -> str:
                         f"{ctx.phase} phase; allowed: {list(allowed)}")
     if not text.strip():
         raise ToolError("section text is empty")
+
+    # Write-once after the gate opens. Without this the agent could see the data
+    # and then quietly "predict" what it found, which empties the gate of meaning.
+    if (ctx.phase == "attempt" and ctx.gates_open
+            and section in ("hypothesis_and_prediction", "plan")):
+        raise ToolError(
+            f"'{section}' is already recorded and cannot be changed now that the "
+            f"data tools are open. Describe anything that changed in 'what_i_did'.",
+            code=("prediction_rewritten" if section == "hypothesis_and_prediction"
+                  else "plan_rewritten"),
+        )
 
     confidence = args.get("confidence")
     if section == "hypothesis_and_prediction":
@@ -292,6 +334,10 @@ def _h_read_file(ctx: ToolContext, args: dict[str, Any]) -> str:
     return content
 
 
+_EVENT_CODE_CAP = 12000
+_EVENT_TEXT_CAP = 12000
+
+
 def _h_run_python(ctx: ToolContext, args: dict[str, Any]) -> str:
     code = args.get("code", "")
     if not code.strip():
@@ -300,12 +346,21 @@ def _h_run_python(ctx: ToolContext, args: dict[str, Any]) -> str:
     if note:
         ctx.status_lines.append(note)
     res = ctx.executor.run_python(code, timeout_s=ctx.spec.limits.max_python_seconds)
+    # The code, its output and what it did are recorded in full (capped): the
+    # auditor needs the path, and a result with only "ok: true" has none.
     ctx.log.append("tool_result", {
         "tool": "run_python", "ok": res.ok, "timed_out": res.timed_out,
         "duration_s": round(res.duration_s, 2),
         "figures": res.figures,
         "note": note,
+        "code": code[:_EVENT_CODE_CAP],
+        "code_truncated": len(code) > _EVENT_CODE_CAP,
+        "stdout": res.stdout[:_EVENT_TEXT_CAP],
+        "stderr": res.stderr[-2000:],
+        "trace": res.trace,
+        "files_written": res.files_written,
     }, experiment_id=ctx.spec.id)
+    ctx.last_run_logged = True
     return res.as_tool_result()
 
 

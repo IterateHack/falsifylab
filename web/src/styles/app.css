@@ -28,9 +28,11 @@ body {
 img, .sprite { image-rendering: pixelated; }
 
 .app {
-  max-width: 1100px;
+  /* Wide enough for the room at 4x (384 x 4 = 1536) plus its gutters; the
+     text inside stays narrower on its own. */
+  max-width: 1760px;
   margin: 0 auto;
-  padding: 16px 16px 40px;
+  padding: 12px 16px 6px;
 }
 
 /* ---------- top bar ---------- */
@@ -40,20 +42,28 @@ img, .sprite { image-rendering: pixelated; }
   gap: 12px;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 10px;
+  margin-bottom: 7px;
+}
+
+.brand {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 13px;
 }
 
 .brand-mark {
   font-family: "Press Start 2P", ui-monospace, monospace;
-  font-size: 15px;
+  font-size: 23px;
   color: var(--accent);
   letter-spacing: 0.5px;
+  /* The arcade face has no descenders to speak of; a little glow stops it
+     looking flat at this size. */
+  text-shadow: 0 0 18px rgba(86, 206, 214, 0.35);
 }
 
 .brand-sub {
-  display: block;
-  margin-top: 6px;
-  font-size: 12px;
+  font-size: 13px;
   color: #9a93b8;
 }
 
@@ -68,9 +78,9 @@ img, .sprite { image-rendering: pixelated; }
   background: var(--panel-2);
   color: #e8e4f4;
   border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 7px 8px;
-  font-size: 12px;
+  border-radius: 7px;
+  padding: 9px 10px;
+  font-size: 12.5px;
   max-width: 190px;
 }
 
@@ -85,8 +95,8 @@ img, .sprite { image-rendering: pixelated; }
   background: var(--panel-2);
   color: #9a93b8;
   border: 0;
-  padding: 7px 10px;
-  font-size: 12px;
+  padding: 9px 12px;
+  font-size: 12.5px;
   cursor: pointer;
 }
 
@@ -102,19 +112,24 @@ img, .sprite { image-rendering: pixelated; }
 }
 
 button.primary, button.ghost {
-  border-radius: 6px;
-  padding: 8px 14px;
-  font-size: 12px;
+  border-radius: 8px;
+  padding: 12px 22px;
+  font-size: 14px;
   cursor: pointer;
   border: 1px solid var(--line);
   position: relative;
+  transition: transform 90ms ease, filter 90ms ease;
 }
+
+button.primary:hover:not(:disabled), button.ghost:hover { filter: brightness(1.08); }
+button.primary:active:not(:disabled), button.ghost:active { transform: translateY(1px); }
 
 button.primary {
   background: var(--accent);
   color: #0e0c18;
   border-color: var(--accent);
   font-weight: 700;
+  box-shadow: 0 2px 14px rgba(86, 206, 214, 0.28);
 }
 
 button.primary:disabled { opacity: 0.45; cursor: not-allowed; }
@@ -122,7 +137,7 @@ button.ghost { background: var(--panel-2); color: #e8e4f4; }
 
 .pulse-dot {
   position: absolute;
-  top: 3px; right: 3px;
+  top: 5px; right: 5px;
   width: 7px; height: 7px;
   border-radius: 50%;
   background: var(--accent-2);
@@ -130,12 +145,27 @@ button.ghost { background: var(--panel-2); color: #e8e4f4; }
 }
 
 .hypothesis {
-  margin: 0 0 12px;
-  font-size: 12.5px;
-  color: #a9a2c6;
-  border-left: 3px solid var(--accent);
-  padding-left: 10px;
-  white-space: pre-line;
+  margin: 0 auto 8px;
+  max-width: 980px;
+  text-align: center;
+  font-size: 16px;
+  line-height: 1.4;
+  color: #d3cdea;
+  /* The curriculum's own line break reads as an accident once the text is
+     centred, and letting it flow fits on one line at this width - which buys
+     back more height than the larger type costs. */
+  white-space: normal;
+  text-wrap: balance;
+}
+
+.hypothesis::after {
+  content: "";
+  display: block;
+  width: 56px;
+  height: 2px;
+  margin: 5px auto 0;
+  background: var(--accent);
+  opacity: 0.65;
 }
 
 .error {
@@ -148,6 +178,10 @@ button.ghost { background: var(--panel-2); color: #e8e4f4; }
 }
 
 /* ---------- stage ---------- */
+.stage-slot { width: 100%; }
+
+.under-stage { margin: 0 auto; max-width: 100%; padding-top: 9px; }
+
 .stage {
   margin: 0 auto;
   position: relative;
@@ -179,6 +213,16 @@ button.ghost { background: var(--panel-2); color: #e8e4f4; }
   background-image: url(/sprites/floor.png);
   background-size: 16px 16px;
   background-repeat: repeat;
+}
+
+/* Sits over the tiled wall, under everything hanging on it. The darker lower
+   edge is what stops it reading as a flat stripe. */
+.wall-rail {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  background: #5f9fa8;
+  box-shadow: inset 0 -1px 0 #3f757d;
 }
 
 .station-prop.dim { opacity: 0.45; filter: grayscale(0.7); }
@@ -228,6 +272,39 @@ button.ghost { background: var(--panel-2); color: #e8e4f4; }
 
 .score-badge.good { color: var(--good); }
 .score-badge.poor { color: var(--poor); }
+/* A flagged path: the raw score stands, but it is not a clean success. */
+.score-badge.flagged { border-style: dashed; color: var(--amber); }
+
+.verdict-chip {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid currentColor;
+}
+.verdict-chip.v-clean { color: #1f7a3a; }
+.verdict-chip.v-wrong { color: #8a6a1f; }
+.verdict-chip.v-weak { color: #a8641a; }
+.verdict-chip.v-bad { color: #a33; }
+.verdict-chip.v-none { color: #6a6350; }
+
+.audit-box {
+  background: #efe9d6;
+  border-left: 4px solid #b9ae8b;
+  padding: 9px 12px;
+  margin: 0 0 14px;
+  border-radius: 0 5px 5px 0;
+  font-size: 12.5px;
+}
+.audit-box ul { margin: 6px 0 0 18px; padding: 0; }
+.audit-box li { margin-bottom: 3px; }
+.audit-box .flag-hard { color: #a33; font-weight: 700; }
+.audit-box .flag-soft { color: #8a6a1f; }
+.audit-steps { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12px; }
+.audit-steps td { padding: 2px 6px; border-top: 1px solid #ddd5bd; }
+.audit-steps td:last-child { width: 48px; text-align: right; font-weight: 700; }
 
 .station-hit {
   position: absolute;
@@ -237,6 +314,35 @@ button.ghost { background: var(--panel-2); color: #e8e4f4; }
   padding: 0;
 }
 
+/* The notebook lying on the floor is a control, so it has to look like one
+   before it is hovered: nothing else in the room invites a click. The resting
+   state is a faint ring rather than a box - against a white floor anything
+   stronger turns a prop into a button. */
+.notebook-hit {
+  position: absolute;
+  padding: 0;
+  background: transparent;
+  border: 1px solid rgba(86, 206, 214, 0.45);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.notebook-hit:hover {
+  border-color: var(--accent);
+  background: rgba(86, 206, 214, 0.2);
+}
+
+.notebook-hit:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* Something has been filed since the run started. A brighter ring and a glow,
+   not a blink - it sits in the corner of the eye for the whole run. The room
+   keeps to its own accent here; the pink belongs to the chrome. */
+.notebook-hit.unread {
+  border-color: var(--accent);
+  background: rgba(86, 206, 214, 0.14);
+  box-shadow: 0 0 6px rgba(86, 206, 214, 0.5);
+}
+
 .station-hit.clickable { cursor: pointer; }
 .station-hit.clickable:hover { border-color: var(--accent); background: rgba(86, 206, 214, 0.12); }
 .station-hit.active { border-color: var(--amber); }
@@ -244,7 +350,10 @@ button.ghost { background: var(--panel-2); color: #e8e4f4; }
 
 .speech {
   position: absolute;
-  max-width: 148px;
+  /* Clamped to whole lines: the height cap alone cut the last one through the
+     middle of its glyphs. Width, line count and cap all come from scene.ts. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
   background: var(--paper);
   color: var(--ink);
   font-size: 5.5px;
@@ -254,6 +363,9 @@ button.ghost { background: var(--panel-2); color: #e8e4f4; }
   border: 2px solid #3a3350;
   border-radius: 3px;
   word-break: break-word;
+  /* The text is cut to fit, so this only ever catches a wrap worse than the
+     estimate - but it is what guarantees the bubble stays inside the room. */
+  overflow: hidden;
 }
 
 /* The tail points up at the scientist, since the bubble sits below them. */
@@ -271,13 +383,94 @@ button.ghost { background: var(--panel-2); color: #e8e4f4; }
 .speech-score { background: #ffe9c9; }
 .speech-lesson { background: #e2f3df; }
 
+/* ---------- work bar ---------- */
+.workbar {
+  margin: 0 auto;
+}
+
+.workbar-top {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 5px;
+  font-size: 11.5px;
+  color: #8e87ab;
+}
+
+/* The experiment name takes what room is left; the phase and the percentage
+   keep their own, so the bar's right edge does not jitter as labels change. */
+.workbar-what {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #a9a2c6;
+}
+
+.workbar-phase {
+  flex: 0 1 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 45%;
+}
+
+.workbar-pct {
+  flex: 0 0 auto;
+  font-family: "Press Start 2P", ui-monospace, monospace;
+  font-size: 9px;
+  color: var(--accent);
+}
+
+.workbar-track {
+  position: relative;
+  height: 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.workbar-fill {
+  height: 100%;
+  min-width: 0;
+  border-radius: 5px;
+  background: linear-gradient(90deg, #3aa8b4, var(--accent));
+  /* --fill-ms is the on-screen hold of the event that set this milestone, so
+     the fill arrives exactly as the next one lands. */
+  transition: width var(--fill-ms, 400ms) linear;
+}
+
+.workbar.done .workbar-phase, .workbar.done .workbar-pct { color: var(--good); }
+.workbar.done .workbar-fill { background: linear-gradient(90deg, #4fae72, var(--good)); }
+.workbar.failed .workbar-phase, .workbar.failed .workbar-pct { color: var(--poor); }
+.workbar.failed .workbar-fill { background: linear-gradient(90deg, #b74b4b, var(--poor)); }
+.workbar.idle { opacity: 0.55; }
+
+/* In flight with nothing to apply - a live run between model turns. The fill
+   holds its place and a stripe sweeps the track, because the honest claim is
+   "still working", not a number that keeps climbing on its own. */
+.workbar.waiting .workbar-phase { color: var(--amber); }
+.workbar.paused .workbar-phase { color: #8e87ab; }
+
+.workbar-wait {
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(
+    90deg, transparent, rgba(240, 176, 76, 0.5), transparent);
+  background-size: 38% 100%;
+  background-repeat: no-repeat;
+  animation: workbar-sweep 1.5s ease-in-out infinite;
+}
+
 /* ---------- legend ---------- */
 .legend {
   display: flex;
   flex-wrap: wrap;
   gap: 14px;
   justify-content: center;
-  margin-top: 12px;
+  margin-top: 5px;
   font-size: 11.5px;
   color: #8e87ab;
 }
@@ -325,6 +518,7 @@ button.ghost { background: var(--panel-2); color: #e8e4f4; }
   padding: 12px 16px;
   background: #ece6d4;
   border-bottom: 2px solid #d8d0b8;
+  flex-shrink: 0;
 }
 
 .notebook-head h2 {
@@ -353,6 +547,9 @@ button.ghost { background: var(--panel-2); color: #e8e4f4; }
   padding: 8px 12px 0;
   background: #ece6d4;
   overflow-x: auto;
+  /* overflow makes the min height 0, so without this a long entry squashes
+     the tab row to a sliver. Only .notebook-page should give way. */
+  flex-shrink: 0;
 }
 
 .tab {
@@ -379,6 +576,8 @@ button.ghost { background: var(--panel-2); color: #e8e4f4; }
 
 .notebook-page {
   padding: 18px 22px 28px;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   line-height: 1.62;
 }
@@ -494,12 +693,18 @@ button.ghost { background: var(--panel-2); color: #e8e4f4; }
 @keyframes blink { 50% { opacity: 0.35; } }
 @keyframes pulse { 50% { transform: scale(1.5); opacity: 0.55; } }
 @keyframes bob { 50% { transform: translateY(-3px); } }
+@keyframes workbar-sweep {
+  from { background-position-x: -40%; }
+  to { background-position-x: 140%; }
+}
 
 @media (prefers-reduced-motion: reduce) {
-  .sprite, .status-light.blink, .pulse-dot, .book-pop {
+  .sprite, .status-light.blink, .pulse-dot, .book-pop, .workbar-wait {
     animation: none !important;
   }
   .scientist-layer { transition: none !important; }
+  /* The fill still moves, it just arrives at once rather than gliding. */
+  .workbar-fill { transition: none !important; }
 }
 
 @media (max-width: 720px) {
@@ -512,10 +717,17 @@ button.ghost { background: var(--panel-2); color: #e8e4f4; }
   .toggle { flex: 0 0 auto; white-space: nowrap; }
   button.primary { flex: 1 1 100%; }
   button.ghost { flex: 0 1 auto; }
-  .hypothesis { font-size: 12px; }
+  .hypothesis { font-size: 14px; }
+  .brand-mark { font-size: 17px; }
+  .brand-sub { font-size: 12px; }
+  button.primary, button.ghost { padding: 11px 16px; font-size: 13px; }
   .notebook-page { padding: 14px; }
   .notebook-head h2 { font-size: 10px; }
   .legend { gap: 10px; font-size: 11px; }
+  /* Too narrow for three labels on one line: the experiment title is the one
+     already on screen at the station, so it gives way. */
+  .workbar-what { display: none; }
+  .workbar-phase { flex: 1 1 auto; max-width: none; }
 }
 
 /* Nothing may scroll the page sideways; the scene is already integer-scaled

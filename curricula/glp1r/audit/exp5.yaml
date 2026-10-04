@@ -1,0 +1,27 @@
+# Reasoning experiment: limited coverage. Method from lessons/exp5.md (Kawai et
+# al. 2020).
+experiment: exp5_small_molecule_feasibility
+paper: "doi:10.1073/pnas.2014879117"
+success_threshold: 0.6
+process_threshold: 0.6
+required:
+  assay_model: {type: str, min_len: 10}
+  prediction: {type: str, min_len: 10}
+  default_choice_outcome: {type: str, min_len: 10}
+  reasoning: {type: str, min_len: 20}
+checkpoints:
+  - id: retrieves_earned_lessons
+    desc: Retrieved the lesson cards earned so far
+    event: read_lessons_called
+  - id: aligns_orthologues_first
+    desc: Looked at the ortholog alignment before choosing a species
+    strings_any_of: ["exp5_ortholog_alignment"]
+  - id: chooses_human_or_humanised_receptor
+    desc: Chose a human, humanised or primate receptor for primary pharmacology
+    answer_any_of: ["humaniz", "humanis", "recombinant human", "human glp-1r", "rhesus", "macaque", "primate"]
+  - id: applies_structure_lesson
+    desc: Used experiment 2 (the pill cannot use the peptide's site; Trp33) in the notebook
+    section_any_of: {section: lessons_applied, any_of: ["exp2", "trp33", "orthosteric", "contact"]}
+  - id: applies_potency_lesson
+    desc: Used experiment 4 (partial agonism, bias) in the notebook
+    section_any_of: {section: lessons_applied, any_of: ["exp4", "partial", "emax", "potency", "ec50", "bias"]}

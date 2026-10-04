@@ -1,0 +1,23 @@
+# Reasoning experiment: limited coverage. Method from lessons/exp3.md (Lau et al.
+# 2015). There is no data to perturb, so there is no replay and the process
+# score rests on lesson use and the stated mechanism.
+experiment: exp3_peptide_engineering
+paper: "doi:10.1021/acs.jmedchem.5b00726"
+success_threshold: 0.6
+process_threshold: 0.6
+required:
+  ranking: {type: list, min_len: 5}
+  reasoning: {type: str, min_len: 40}
+checkpoints:
+  - id: retrieves_earned_lessons
+    desc: Retrieved the lesson cards earned so far
+    event: read_lessons_called
+  - id: inspects_the_analogue_table
+    desc: Looked at the analogue table provided
+    strings_any_of: ["exp3_analogues"]
+  - id: applies_structure_lesson
+    desc: Used experiment 2 (the N-terminus is the activation trigger) in the notebook
+    section_any_of: {section: lessons_applied, any_of: ["exp2", "n-terminus", "n-terminal", "contact", "orthosteric"]}
+  - id: predicts_from_clearance_mechanism
+    desc: Explained duration through clearance (DPP-4, albumin binding, renal), not potency
+    answer_any_of: ["albumin", "dpp-4", "dpp4", "clearance", "renal", "half-life"]

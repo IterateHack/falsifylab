@@ -82,8 +82,15 @@ def score_rubric(answer_text: str, rubric: list[dict[str, Any]],
         })
 
     fraction = max(0.0, min(1.0, (earned - deducted) / total_weight))
+    # Phrase matching can be gamed by listing rubric terms. Record how dense the
+    # matches are so the audit can look; no threshold is applied here until one
+    # has been calibrated on labelled runs (docs/eval-hygiene.md).
+    n_words = len(text.split())
+    n_hits = sum(1 for b in breakdown if b["kind"] == "rubric" and b["awarded"] > 0)
     return {
         "score": round(fraction, 4),
+        "rubric_density": {"words": n_words, "items_matched": n_hits,
+                           "per_100_words": round(100.0 * n_hits / max(n_words, 1), 2)},
         "max": 1.0,
         "earned_weight": round(earned, 3),
         "deducted_weight": round(deducted, 3),

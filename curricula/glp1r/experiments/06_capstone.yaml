@@ -12,6 +12,7 @@ requires_lessons:
 inputs:
   datasets: []
   tools: [run_python]
+audit: audit/exp6.yaml
 limits: {max_tool_calls: 16, timeout_s: 420, max_python_seconds: 30}
 task: |
   Write an evidence-weighted verdict on the headline hypothesis:

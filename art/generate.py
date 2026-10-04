@@ -18,16 +18,31 @@ from PIL import Image, ImageDraw
 OUT = Path(__file__).resolve().parent.parent / "web" / "public" / "sprites"
 TILE = 16
 
+# Mirrors web/src/lib/scene.ts. The bench is drawn here but the stations are
+# placed there, and the two have to agree: a drawer seam laid out on the tile
+# grid rather than the station pitch lands straight through the labels for
+# stations 2, 4 and 6, because 32 and 48 only line up every third station.
+BENCH_X = 40
+STATION_X0 = 56
+STATION_W = 32
+STATION_PITCH = 48
+
 # A 20-ish colour ramp. Named by role so the drawing code reads like intent.
 C = {
     "transparent": (0, 0, 0, 0),
     "outline":     (38, 32, 52, 255),
-    "floor_a":     (92, 100, 122, 255),
-    "floor_b":     (82, 90, 112, 255),
-    "floor_line":  (70, 78, 98, 255),
-    "wall":        (58, 66, 92, 255),
-    "wall_light":  (72, 82, 112, 255),
-    "wall_dark":   (44, 50, 72, 255),
+    "floor_a":     (208, 215, 211, 255),
+    "floor_b":     (198, 206, 202, 255),
+    # Close to floor_b on purpose: at 3.5x a darker grout turns the floor into
+    # a grid that competes with the scientist standing on it.
+    "floor_line":  (184, 193, 189, 255),
+    "wall":        (230, 236, 236, 255),
+    "wall_light":  (242, 246, 246, 255),
+    "wall_dark":   (203, 213, 213, 255),
+    # Was wall_dark, which it has no business being: the wall can be repainted
+    # without the scientist changing trousers.
+    "trouser":     (44, 50, 72, 255),
+    "screen_line": (44, 50, 72, 255),
     "bench":       (150, 122, 96, 255),
     "bench_light": (176, 146, 116, 255),
     "bench_dark":  (116, 92, 70, 255),
@@ -105,8 +120,8 @@ def _sci_base(d: ImageDraw.ImageDraw, bob: int = 0) -> None:
 
 def _sci_legs(d: ImageDraw.ImageDraw, left_fwd: int, right_fwd: int, bob: int = 0) -> None:
     y = bob
-    rect(d, 5, 18 + y, 6, 21 + y - left_fwd, C["wall_dark"])
-    rect(d, 9, 18 + y, 10, 21 + y - right_fwd, C["wall_dark"])
+    rect(d, 5, 18 + y, 6, 21 + y - left_fwd, C["trouser"])
+    rect(d, 9, 18 + y, 10, 21 + y - right_fwd, C["trouser"])
     rect(d, 5, 22 + y - left_fwd, 7, 22 + y - left_fwd, C["outline"])
     rect(d, 8, 22 + y - right_fwd, 10, 22 + y - right_fwd, C["outline"])
 
@@ -233,11 +248,14 @@ def tile_floor() -> Image.Image:
 
 
 def tile_wall() -> Image.Image:
+    """A glazed wall tile: grout along two edges so the courses read both ways,
+    and a sheen under the top edge so it looks ceramic rather than painted."""
     t = img(TILE, TILE)
     d = ImageDraw.Draw(t)
     rect(d, 0, 0, TILE - 1, TILE - 1, C["wall"])
-    rect(d, 0, 0, TILE - 1, 1, C["wall_light"])
-    rect(d, 0, TILE - 2, TILE - 1, TILE - 1, C["wall_dark"])
+    rect(d, 1, 1, TILE - 1, 2, C["wall_light"])
+    rect(d, 0, 0, TILE - 1, 0, C["wall_dark"])
+    rect(d, 0, 0, 0, TILE - 1, C["wall_dark"])
     return t
 
 
@@ -283,8 +301,13 @@ def prop_shelf() -> Image.Image:
     return w
 
 
-def prop_bench(width_tiles: int = 19) -> Image.Image:
-    """The long bench: a worktop, a front panel with drawer lines, and a shadow."""
+def prop_bench(width_tiles: int = 19, stations: int = 6) -> Image.Image:
+    """The long bench: a worktop, a front panel with drawer lines, and a shadow.
+
+    One drawer per station. The seams fall on the midpoints between station
+    centres and the handles directly under them, so a number always sits on its
+    own drawer front with a seam either side of it and never across it.
+    """
     w, h = TILE * width_tiles, TILE * 4
     b = img(w, h)
     d = ImageDraw.Draw(b)
@@ -294,9 +317,18 @@ def prop_bench(width_tiles: int = 19) -> Image.Image:
     rect(d, 0, h - 6, w - 1, h - 3, C["bench_dark"])        # plinth
     rect(d, 0, top, w - 1, top, C["paper"])                 # worktop highlight
     rect(d, 0, h - 2, w - 1, h - 1, C["shadow"])
-    for x in range(TILE, w - TILE, TILE * 2):               # drawer seams
-        rect(d, x, top + 9, x, h - 8, C["bench_dark"])
-        rect(d, x + 6, top + 13, x + 10, top + 13, C["steel"])
+
+    # Station centres, in the bench's own coordinates.
+    centres = [STATION_X0 + STATION_W // 2 - BENCH_X + i * STATION_PITCH
+               for i in range(stations)]
+    for x in [c - STATION_PITCH // 2 for c in centres] + [centres[-1] + STATION_PITCH // 2]:
+        if 0 <= x < w:
+            rect(d, x, top + 9, x, h - 8, C["bench_dark"])  # drawer seam
+    for c in centres:                                       # handle, under the number
+        # Odd width: an even one has no centre column and sits a pixel off the
+        # number it is supposed to line up with.
+        rect(d, c - 4, top + 22, c + 4, top + 22, C["steel"])
+        rect(d, c - 4, top + 23, c + 4, top + 23, C["bench_dark"])
     return b
 
 
@@ -432,8 +464,8 @@ def decor_laptop() -> Image.Image:
         d = ImageDraw.Draw(f)
         rect(d, 3, 4, 12, 11, C["steel_dark"])
         rect(d, 4, 5, 11, 10, C["screen"] if i == 0 else C["screen_off"])
-        rect(d, 5, 7, 9, 7, C["wall_dark"])
-        rect(d, 5, 9, 8, 9, C["wall_dark"])
+        rect(d, 5, 7, 9, 7, C["screen_line"])
+        rect(d, 5, 9, 8, 9, C["screen_line"])
         rect(d, 2, 12, 13, 14, C["steel"])
         sheet.paste(f, (i * TILE, 0), f)
     return sheet

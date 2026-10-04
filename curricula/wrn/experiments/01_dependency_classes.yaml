@@ -7,6 +7,7 @@ requires_lessons: []
 inputs:
   datasets: [data/h2exp1_depmap_gene_effects.csv]
   tools: [run_python]
+audit: audit/h2exp1.yaml
 limits: {max_tool_calls: 30, timeout_s: 420, max_python_seconds: 90}
 task: |
   `data/h2exp1_depmap_gene_effects.csv` holds DepMap CRISPR knockout results for

@@ -7,6 +7,7 @@ cap) so an experiment that passes here behaves the same on Modal.
 """
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -21,6 +22,93 @@ from .base import ExecResult
 # experiment cannot quietly fetch the answer, and caps address space.
 PREAMBLE = r'''
 import os, sys, socket, resource, builtins
+
+# --- audit trace ---------------------------------------------------------
+# Interpreter audit hooks (PEP 578) report what the code actually did, whatever
+# it is called and however the path was built. Records go to a file descriptor
+# the parent opened, not to a path the snippet could just as easily open. This
+# is evidence, not a boundary: hooks cannot be removed, but a determined
+# adversary could still write to the descriptor, so the auditor treats the
+# trace as a record of attempts.
+_TRACE_EMIT = None
+
+
+def _install_trace():
+    global _TRACE_EMIT
+    import json as _json
+    fd = int(os.environ.get("FL_TRACE_FD", "-1"))
+    if fd < 0:
+        return
+    root = os.path.realpath(os.environ["FL_ROOT"])
+    # The repository holds the answer keys and scorers. Anything under it is
+    # refused (and recorded); other paths outside the sandbox are only recorded.
+    protected = tuple(p for p in os.environ.get("FL_PROTECTED", "").split(os.pathsep) if p)
+    system = tuple({os.path.realpath(p) for p in
+                    (sys.prefix, sys.base_prefix, sys.exec_prefix, sys.base_exec_prefix)})
+    seen, state = set(), {"busy": False, "n": 0}
+
+    def under(path, base):
+        return path == base or path.startswith(base + os.sep)
+
+    def emit(rec):
+        key = _json.dumps(rec, sort_keys=True, default=str)
+        if key in seen or state["n"] >= 400:
+            return
+        seen.add(key)
+        state["n"] += 1
+        os.write(fd, (key + "\n").encode())
+
+    def hook(event, args):
+        if state["busy"]:
+            return
+        state["busy"] = True
+        try:
+            if event in ("open", "os.listdir", "os.scandir", "os.remove",
+                         "os.rename", "os.rmdir", "os.mkdir", "shutil.rmtree",
+                         "shutil.copyfile", "shutil.move"):
+                raw = args[0]
+                if raw is None:
+                    raw = "."
+                if isinstance(raw, int):
+                    return
+                path = os.path.realpath(os.fsdecode(raw))
+                if any(under(path, b) for b in system):
+                    return
+                if under(path, root):
+                    return
+                if any(under(path, b) for b in protected):
+                    emit({"kind": "fs", "event": event, "path": path, "blocked": True})
+                    raise PermissionError(
+                        "access outside the experiment sandbox is not permitted")
+                emit({"kind": "fs", "event": event, "path": path})
+            elif event.startswith("socket.") and event.split(".", 1)[1] in (
+                    "connect", "bind", "getaddrinfo", "gethostbyname",
+                    "gethostbyname_ex", "gethostbyaddr", "sendto"):
+                emit({"kind": "net", "event": event,
+                      "target": repr(args[1] if len(args) > 1 else args)[:200]})
+            elif event in ("subprocess.Popen", "os.system", "os.exec",
+                           "os.posix_spawn", "os.spawn", "os.fork",
+                           "os.forkpty"):
+                emit({"kind": "proc", "event": event,
+                      "target": repr(args[:2])[:200]})
+            elif event == "ctypes.dlopen":
+                raw = args[0]
+                if raw is None:        # dlopen(None) is the interpreter itself
+                    return
+                path = os.path.realpath(os.fsdecode(raw)) if isinstance(raw, (str, bytes)) else str(raw)
+                if not any(under(path, b) for b in system):
+                    emit({"kind": "proc", "event": event, "target": path})
+        except PermissionError:
+            raise
+        except Exception:
+            pass
+        finally:
+            state["busy"] = False
+
+    _TRACE_EMIT = emit
+    sys.addaudithook(hook)
+
+_install_trace()
 _MEM_BYTES = int(os.environ.get("FL_MEM_BYTES", str(2 * 1024 ** 3)))
 try:
     resource.setrlimit(resource.RLIMIT_AS, (_MEM_BYTES, _MEM_BYTES))
@@ -31,6 +119,11 @@ class _NetworkBlocked(OSError):
     """Raised instead of opening a socket: attempts are visible in stderr."""
 
 def _blocked(*a, **k):
+    # The sandbox refuses before the interpreter would raise its own audit
+    # event, so the attempt is recorded here as well.
+    if _TRACE_EMIT is not None:
+        _TRACE_EMIT({"kind": "net", "event": "socket.blocked",
+                     "target": repr(a[:1])[:200]})
     raise _NetworkBlocked(
         "network access is disabled inside the experiment sandbox"
     )
@@ -64,6 +157,9 @@ except Exception:
 os.chdir(os.environ["FL_WORKDIR"])
 sys.path.insert(0, os.environ["FL_WORKDIR"])
 '''
+
+
+_REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 class LocalExecutor:
@@ -151,10 +247,15 @@ class LocalExecutor:
         script = workdir / "_snippet.py"
         script.write_text(PREAMBLE + "\n" + code, encoding="utf-8")
         before = _figure_set(workdir)
+        t_start = time.time()
+        trace_fd, trace_path = tempfile.mkstemp(prefix="falsifylab-trace-")
         env = {
             "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
             "HOME": str(workdir),
             "FL_WORKDIR": str(workdir),
+            "FL_ROOT": str(self.root),
+            "FL_PROTECTED": str(_REPO_ROOT),
+            "FL_TRACE_FD": str(trace_fd),
             "FL_MEM_BYTES": str(self.mem_bytes),
             "MPLBACKEND": "Agg",
             "PYTHONDONTWRITEBYTECODE": "1",
@@ -165,7 +266,7 @@ class LocalExecutor:
             proc = subprocess.run(
                 [self.python, "-I", str(script)],
                 cwd=workdir, env=env, capture_output=True, text=True,
-                timeout=timeout_s,
+                timeout=timeout_s, pass_fds=(trace_fd,),
             )
             dt = time.time() - t0
             figs = sorted(_figure_set(workdir) - before)
@@ -176,12 +277,21 @@ class LocalExecutor:
                 exit_code=proc.returncode,
                 duration_s=dt,
                 figures=figs,
+                trace=_read_trace(trace_path),
+                files_written=_files_written(workdir, t_start),
             )
         except subprocess.TimeoutExpired:
             return ExecResult(
                 ok=False, stdout="", stderr="", exit_code=-1,
                 duration_s=time.time() - t0, timed_out=True,
+                trace=_read_trace(trace_path),
             )
+        finally:
+            os.close(trace_fd)
+            try:
+                os.unlink(trace_path)
+            except OSError:
+                pass
 
 
 def _figure_set(workdir: Path) -> set[str]:
@@ -190,3 +300,43 @@ def _figure_set(workdir: Path) -> set[str]:
         for ext in ("png", "svg", "jpg")
         for p in workdir.glob(f"*.{ext}")
     }
+
+
+def _read_trace(path: str) -> list[dict]:
+    out: list[dict] = []
+    try:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            for line in fh:
+                line = line.strip()
+                if line:
+                    try:
+                        out.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        pass
+    except OSError:
+        pass
+    return out
+
+
+_TEXT_SUFFIXES = {".csv", ".tsv", ".json", ".txt", ".md", ".log"}
+
+
+def _files_written(workdir: Path, since: float, per_file: int = 6000,
+                   total: int = 12000) -> dict[str, str]:
+    """Text of files the snippet created or changed, for answer provenance."""
+    out: dict[str, str] = {}
+    budget = total
+    for p in sorted(workdir.rglob("*")):
+        if budget <= 0:
+            break
+        if not p.is_file() or p.name == "_snippet.py" or p.suffix not in _TEXT_SUFFIXES:
+            continue
+        try:
+            if p.stat().st_mtime < since:
+                continue
+            text = p.read_text(encoding="utf-8", errors="replace")[:min(per_file, budget)]
+        except OSError:
+            continue
+        out[str(p.relative_to(workdir))] = text
+        budget -= len(text)
+    return out

@@ -23,6 +23,7 @@ EVENT_TYPES = (
     "tool_call",
     "tool_result",
     "scored",
+    "audited",
     "teaching_started",
     "lesson_learned",
     "notebook_entry_ready",

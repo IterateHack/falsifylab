@@ -7,6 +7,7 @@ requires_lessons: [exp2_structure_contacts, exp4_potency]
 inputs:
   datasets: [data/exp5_ortholog_alignment.csv]
   tools: [run_python]
+audit: audit/exp5.yaml
 limits: {max_tool_calls: 28, timeout_s: 480, max_python_seconds: 60}
 task: |
   A medicinal chemistry programme has an orally available non-peptide small

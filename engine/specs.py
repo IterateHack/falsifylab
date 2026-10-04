@@ -57,6 +57,7 @@ class ExperimentSpec:
     scorer: ScorerSpec | None = None
     teaching: TeachingSpec = field(default_factory=TeachingSpec)
     root: Path = field(default=Path("."))
+    audit: str = ""              # path to the audit spec, relative to the curriculum
 
     @property
     def lesson_card_path(self) -> Path:
@@ -67,6 +68,10 @@ class ExperimentSpec:
         if not self.scorer or not self.scorer.ground_truth:
             return None
         return self.root / self.scorer.ground_truth
+
+    @property
+    def audit_path(self) -> Path | None:
+        return self.root / self.audit if self.audit else None
 
     @property
     def scorer_path(self) -> Path:
@@ -132,6 +137,7 @@ def load_experiment(path: str | Path, root: Path) -> ExperimentSpec:
             lesson_card=te.get("lesson_card", ""),
         ),
         root=root,
+        audit=raw.get("audit", ""),
     )
     _validate(spec)
     return spec
@@ -149,6 +155,8 @@ def _validate(spec: ExperimentSpec) -> None:
         raise FileNotFoundError(f"{spec.id}: ground truth missing at {gt}")
     if spec.teaching.lesson_card and not spec.lesson_card_path.exists():
         raise FileNotFoundError(f"{spec.id}: lesson card missing at {spec.lesson_card_path}")
+    if spec.audit and not spec.audit_path.exists():
+        raise FileNotFoundError(f"{spec.id}: audit spec missing at {spec.audit_path}")
     for d in spec.dataset_paths():
         if not d.exists():
             raise FileNotFoundError(

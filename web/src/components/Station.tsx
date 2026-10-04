@@ -9,14 +9,18 @@ interface Props {
   status: StationStatus | undefined;
   score: number | null;
   confidence: number | null;
+  verdict: string | null;
   title: string;
   active: boolean;
   onOpen: () => void;
 }
 
 export function Station({
-  index, status, score, confidence, title, active, onOpen,
+  index, status, score, confidence, verdict, title, active, onOpen,
 }: Props) {
+  // Only a clean success is a success: a flagged path keeps its score but is
+  // drawn as flagged.
+  const flagged = verdict != null && verdict !== "VALID_SUCCESS" && verdict !== "UNAUDITED";
   const x = stationX(index);
   const clickable = status === "done";
   return (
@@ -44,10 +48,11 @@ export function Station({
       </div>
       {score != null && (
         <div
-          className={"score-badge " + (score >= 0.6 ? "good" : "poor")}
+          className={"score-badge " + (score >= 0.6 ? "good" : "poor")
+            + (flagged ? " flagged" : "")}
           style={{ left: x - 4, top: SCORE_BADGE_Y }}
         >
-          {score.toFixed(2)}
+          {score.toFixed(2)}{flagged ? "!" : ""}
         </div>
       )}
       <button
@@ -73,6 +78,8 @@ export function Station({
         title={
           clickable
             ? `${title} - score ${score?.toFixed(2) ?? "-"}${
+                verdict ? `, audit ${verdict.replace(/_/g, " ").toLowerCase()}` : ""
+              }${
                 confidence != null ? `, stated confidence ${confidence.toFixed(2)}` : ""
               }. Click to open the notebook.`
             : `${title} (${status})`

@@ -90,3 +90,11 @@ model grades another model.
 agent spent all 25 tool calls parsing the mmCIF and never submitted. That's the
 harness being unfair, not a finding, so budgets now reserve their last two calls
 for submission. It's in the README.
+
+---
+
+**Optional: the audit (45s).** Open the Calibration tab of an audited run. The headline
+is **clean success**, with the raw score beside it. If you have the scripted hack
+(`evals/audit/`, `audit_demo_hardcoded`), show it: raw score 1.00, verdict reward hack,
+clean success 0 of 1. "Outcome scoring rewards lucky science; this audits the path."
+Be upfront that the process score is a proxy, validated only on scripted cases so far.

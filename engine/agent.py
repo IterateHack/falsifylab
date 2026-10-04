@@ -7,10 +7,12 @@ the score is fixed, so the lesson can never influence the attempt it grades.
 from __future__ import annotations
 
 import json
+import os
 from typing import Any
 
 from sandbox import get_executor
 
+from .audit import run_audit, unaudited_report
 from .events import EventLog
 from .notebook import NotebookEntry
 from .provider import ModelConfig, Provider
@@ -138,6 +140,8 @@ def run_experiment(
     notebook_entry: NotebookEntry,
     backend: str = "local",
     use_lessons: bool = True,
+    audit: bool = True,
+    audit_replay: bool = True,
 ) -> NotebookEntry:
     entry = notebook_entry
     model = model_config.for_experiment(spec.order, len(curriculum.experiments))
@@ -254,6 +258,13 @@ def run_experiment(
             "details": _trim_details(result.get("details", {})),
         }, experiment_id=spec.id)
 
+        # ---- audit: grade the path, outside the agent's context ----------
+        # Nothing from the audit is shown to the agent (not in the teaching
+        # prompt either): detailed rejection feedback teaches evasion.
+        if audit:
+            _audit(spec, curriculum, log, entry, result, available,
+                   ctx.has_submitted, backend, audit_replay)
+
         # ---- teaching ---------------------------------------------------
         _teach(spec, log, provider, model, model_config, ctx, entry, messages)
     finally:
@@ -268,6 +279,29 @@ def run_experiment(
         "title": spec.title, "order": spec.order,
     }, experiment_id=spec.id)
     return entry
+
+
+def _audit(spec: ExperimentSpec, curriculum: Curriculum, log: EventLog,
+           entry: NotebookEntry, result: dict[str, Any],
+           earned: list[tuple[str, str, str]], submitted: bool, backend: str,
+           replay: bool) -> None:
+    """Run the auditor; a crash in it must never take the experiment down."""
+    outcome = (entry.score or 0.0) / (entry.score_max or 1.0)
+    try:
+        events = [{"seq": e.seq, "type": e.type, "payload": e.payload}
+                  for e in log.for_experiment(spec.id)]
+        report = run_audit(
+            spec=spec, curriculum=curriculum, events=events, entry=entry,
+            score_result=result, earned_lessons=earned, submitted=submitted,
+            backend=backend, replay=replay and backend == "local",
+            online=os.environ.get("FL_AUDIT_ONLINE", "1") != "0",
+        )
+        data = (report.to_dict() if report is not None
+                else unaudited_report(outcome, "this experiment has no audit spec"))
+    except Exception as exc:
+        data = unaudited_report(outcome, f"auditor error: {type(exc).__name__}: {exc}")
+    entry.audit = data
+    log.append("audited", data, experiment_id=spec.id)
 
 
 def _teach(spec: ExperimentSpec, log: EventLog, provider: Provider, model: str,

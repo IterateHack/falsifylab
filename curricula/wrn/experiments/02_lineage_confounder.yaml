@@ -7,6 +7,7 @@ requires_lessons: [h2exp1_dependency_classes]
 inputs:
   datasets: [data/h2exp1_depmap_gene_effects.csv]
   tools: [run_python]
+audit: audit/h2exp2.yaml
 limits: {max_tool_calls: 28, timeout_s: 420, max_python_seconds: 90}
 task: |
   You established in experiment 1 which genes are selective dependencies. WRN is

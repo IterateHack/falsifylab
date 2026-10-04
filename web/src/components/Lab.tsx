@@ -9,8 +9,9 @@ import { Sprite } from "./Sprite";
 import { Scientist } from "./Scientist";
 import { Station } from "./Station";
 import {
-  BENCH, DECOR_SLOTS, DECOR_Y, FLOOR_DECOR, SCENE_H, SCENE_W, TILE, WALL_DECOR,
-  WALL_H,
+  BENCH, DECOR_SLOTS, DECOR_Y, FLOOR_DECOR, NOTEBOOK_PROP, SCENE_H, SCENE_W,
+  SPEECH_LINES, SPEECH_MAX_CHARS, SPEECH_MAX_H, SPEECH_W, SPEECH_Y, TILE,
+  WALL_DECOR, WALL_H, WALL_RAIL,
 } from "../lib/scene";
 import type { SceneState } from "../lib/usePlayback";
 
@@ -32,15 +33,19 @@ interface Props {
   titles: string[];
   reducedMotion: boolean;
   onOpenStation: (index: number) => void;
+  onOpenNotebook: () => void;
 }
 
-export function Lab({ scene, titles, reducedMotion, onOpenStation }: Props) {
+export function Lab({
+  scene, titles, reducedMotion, onOpenStation, onOpenNotebook,
+}: Props) {
   const running =
     scene.activeIndex !== null && scene.statuses[scene.activeIndex] === "running";
 
   return (
     <div className="scene" style={{ width: SCENE_W, height: SCENE_H }}>
       <div className="wall" style={{ height: WALL_H }} />
+      <div className="wall-rail" style={{ top: WALL_RAIL.y, height: WALL_RAIL.h }} />
       <div className="floor" style={{ top: WALL_H, height: SCENE_H - WALL_H }} />
 
       {WALL_DECOR.map((d) => (
@@ -77,6 +82,7 @@ export function Lab({ scene, titles, reducedMotion, onOpenStation }: Props) {
           status={scene.statuses[i]}
           score={scene.scores[i]}
           confidence={scene.confidences[i]}
+          verdict={scene.verdicts[i]}
           title={title}
           active={scene.activeIndex === i}
           onOpen={() => onOpenStation(i)}
@@ -87,6 +93,22 @@ export function Lab({ scene, titles, reducedMotion, onOpenStation }: Props) {
         <Sprite key={`floor-${i}`} sheet={d.sprite} frameW={TILE} frameH={TILE}
                 x={d.x} y={d.y} className="decor" />
       ))}
+
+      <Sprite sheet={NOTEBOOK_PROP.sprite} frameW={TILE} frameH={TILE}
+              x={NOTEBOOK_PROP.x} y={NOTEBOOK_PROP.y} className="decor" />
+      <button
+        type="button"
+        className={"notebook-hit" + (scene.notebookPulse > 0 ? " unread" : "")}
+        style={{
+          left: NOTEBOOK_PROP.x - 2,
+          top: NOTEBOOK_PROP.y - 2,
+          width: NOTEBOOK_PROP.size + 4,
+          height: NOTEBOOK_PROP.size + 4,
+        }}
+        onClick={onOpenNotebook}
+        aria-label="Open the lab notebook"
+        title="The lab notebook. Click to open it."
+      />
 
       <Scientist
         x={scene.scientistX}
@@ -103,13 +125,29 @@ export function Lab({ scene, titles, reducedMotion, onOpenStation }: Props) {
           style={{
             // Below the scientist, on the empty floor: above would cover the
             // bench and the stations the viewer is meant to be watching.
-            left: Math.max(4, Math.min(scene.scientistX - 70, SCENE_W - 152)),
-            top: 170,
+            left: Math.max(4, Math.min(scene.scientistX - 70, SCENE_W - SPEECH_W - 4)),
+            top: SPEECH_Y,
+            maxWidth: SPEECH_W,
+            maxHeight: SPEECH_MAX_H,
+            WebkitLineClamp: SPEECH_LINES,
           }}
         >
-          {scene.speech}
+          {clamp(scene.speech)}
         </div>
       )}
     </div>
   );
+}
+
+/**
+ * Cut to what the bubble can show, with the cut marked rather than implied.
+ * On a word boundary where there is one: the line clamp is a backstop and its
+ * own ellipsis is all but invisible at this size, so the text has to end
+ * somewhere a reader would accept on its own.
+ */
+function clamp(text: string): string {
+  if (text.length <= SPEECH_MAX_CHARS) return text;
+  const cut = text.slice(0, SPEECH_MAX_CHARS);
+  const space = cut.lastIndexOf(" ");
+  return (space > SPEECH_MAX_CHARS * 0.6 ? cut.slice(0, space) : cut).trimEnd() + "...";
 }

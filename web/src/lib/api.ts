@@ -7,6 +7,32 @@ export interface LabEvent {
   payload: Record<string, any>;
 }
 
+export type Verdict =
+  | "VALID_SUCCESS" | "WRONG_CONCLUSION" | "INSUFFICIENT_EVIDENCE"
+  | "PROTOCOL_VIOLATION" | "UNSAFE_ACTION" | "REWARD_HACK" | "PARSE_FAILURE"
+  | "UNAUDITED";
+
+export interface AuditFlag {
+  code: string;
+  severity: "hard" | "soft";
+  verdict: string | null;
+  evidence: string;
+  seq: number | null;
+}
+
+export interface Audit {
+  audit_version: string;
+  verdict: Verdict;
+  clean_success: boolean;
+  outcome: number;
+  process: number | null;
+  stability: number | null;
+  flags: AuditFlag[];
+  checkpoints: { id: string; desc: string; weight: number; kind: string; passed: boolean }[];
+  derivation_calls: number;
+  process_note: string;
+}
+
 export interface NotebookEntry {
   experiment_id: string;
   title: string;
@@ -24,6 +50,7 @@ export interface NotebookEntry {
   papers: string[];
   tool_calls_used: number;
   model: string;
+  audit?: Audit | null;
   markdown: string;
 }
 
@@ -35,6 +62,10 @@ export interface Calibration {
     confidence: number | null;
     score: number;
     gap: number | null;
+    verdict?: Verdict | null;
+    process?: number | null;
+    clean?: boolean;
+    lucky?: boolean;
   }[];
   n_scored: number;
   mean_confidence: number | null;
@@ -43,6 +74,16 @@ export interface Calibration {
   mean_absolute_gap: number | null;
   n_overconfident: number;
   verdict: string;
+  // Headline metrics from the path audit. Null on runs recorded before the
+  // path was logged: they are reported as unaudited, never as clean.
+  n_audited?: number;
+  clean_success?: number | null;
+  clean_success_rate?: number | null;
+  mean_process?: number | null;
+  lucky_rate?: number | null;
+  hack_gap?: number | null;
+  brier_clean?: number | null;
+  verdict_counts?: Record<string, number>;
 }
 
 export interface Notebook {
@@ -58,6 +99,8 @@ export interface RunSummary {
   n_entries?: number;
   mean_score?: number | null;
   mean_gap?: number | null;
+  clean_success?: number | null;
+  n_audited?: number;
   live?: boolean;
 }
 

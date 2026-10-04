@@ -1,6 +1,76 @@
 /** The notebook overlay: one paper-styled tab per experiment. */
 import { useEffect, useMemo, useState } from "react";
-import type { Notebook as NotebookData, NotebookEntry } from "../lib/api";
+import type { Audit, Notebook as NotebookData, NotebookEntry } from "../lib/api";
+
+const VERDICT_LABEL: Record<string, string> = {
+  VALID_SUCCESS: "Clean success",
+  WRONG_CONCLUSION: "Wrong conclusion",
+  INSUFFICIENT_EVIDENCE: "Insufficient evidence",
+  PROTOCOL_VIOLATION: "Protocol violation",
+  UNSAFE_ACTION: "Unsafe action",
+  REWARD_HACK: "Reward hack",
+  PARSE_FAILURE: "Parse failure",
+  UNAUDITED: "Unaudited",
+};
+
+function verdictClass(v: string): string {
+  if (v === "VALID_SUCCESS") return "v-clean";
+  if (v === "WRONG_CONCLUSION") return "v-wrong";
+  if (v === "INSUFFICIENT_EVIDENCE") return "v-weak";
+  if (v === "UNAUDITED") return "v-none";
+  return "v-bad";
+}
+
+export function VerdictChip({ verdict }: { verdict: string }) {
+  return (
+    <span className={"verdict-chip " + verdictClass(verdict)}>
+      {VERDICT_LABEL[verdict] ?? verdict}
+    </span>
+  );
+}
+
+function AuditBox({ audit }: { audit: Audit }) {
+  const unaudited = audit.verdict === "UNAUDITED";
+  return (
+    <div className="audit-box">
+      <div>
+        <strong>Audit of the path: </strong>
+        <VerdictChip verdict={audit.verdict} />{" "}
+        {!unaudited && (
+          <span className="muted">
+            outcome {audit.outcome.toFixed(2)}
+            {audit.process != null && <>, process {audit.process.toFixed(2)}</>}
+            {audit.stability != null && <>, stability {audit.stability.toFixed(2)}</>}
+          </span>
+        )}
+      </div>
+      {unaudited && audit.process_note && <p className="muted">{audit.process_note}</p>}
+      {audit.flags.length > 0 && (
+        <ul>
+          {audit.flags.map((f, i) => (
+            <li key={i} className={f.severity === "hard" ? "flag-hard" : "flag-soft"}>
+              {f.code.replace(/_/g, " ")}
+              <span className="muted"> - {f.evidence}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {audit.checkpoints.length > 0 && (
+        <table className="audit-steps">
+          <tbody>
+            {audit.checkpoints.map((c) => (
+              <tr key={c.id}>
+                <td>{c.desc || c.id}</td>
+                <td className={c.passed ? "good" : "poor"}>{c.passed ? "shown" : "not shown"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {!unaudited && audit.process_note && <p className="muted">{audit.process_note}</p>}
+    </div>
+  );
+}
 
 interface Props {
   data: NotebookData | null;
@@ -77,6 +147,10 @@ export function NotebookOverlay({
                     {e.score.toFixed(2)}
                   </span>
                 )}
+                {e?.audit && e.audit.verdict !== "VALID_SUCCESS" && (
+                  <span title={VERDICT_LABEL[e.audit.verdict] ?? e.audit.verdict}
+                        className="tab-score poor">!</span>
+                )}
               </button>
             );
           })}
@@ -127,6 +201,8 @@ function EntryPage({ entry }: { entry: NotebookEntry }) {
         )}
       </div>
 
+      {entry.audit && <AuditBox audit={entry.audit} />}
+
       {entry.applied_lesson_ids.length > 0 && (
         <div className="applied">
           Applied lessons from: {entry.applied_lesson_ids.join(", ")}
@@ -168,6 +244,32 @@ function CalibrationPage({ data }: { data: NotebookData | null }) {
   return (
     <article>
       <h3>Calibration summary</h3>
+      {c.n_audited ? (
+        <div className="audit-box">
+          <strong>
+            Clean success: {c.clean_success} of {c.n_audited}
+          </strong>
+          <span className="muted">
+            {" "}
+            (raw mean score {c.mean_score?.toFixed(2)}
+            {c.mean_process != null && <>, mean process {c.mean_process.toFixed(2)}</>}
+            {c.hack_gap != null && <>, hack gap {c.hack_gap.toFixed(2)}</>}
+            {c.lucky_rate != null && c.lucky_rate > 0 && (
+              <>, right-answer-wrong-path {Math.round(c.lucky_rate * 100)}%</>
+            )}
+            )
+          </span>
+          <p className="muted" style={{ margin: "4px 0 0" }}>
+            Only an attempt whose answer, method and integrity all hold counts. The raw
+            score stays beside it because a flagged path can still score high.
+          </p>
+        </div>
+      ) : (
+        <p className="muted">
+          This run has no path audit (it was recorded before the path was logged), so no
+          clean-success figure is claimed.
+        </p>
+      )}
       <p className="muted">
         Stated confidence is written before any tool unlocks. The gap is
         confidence minus score: positive means overconfident.
@@ -180,6 +282,7 @@ function CalibrationPage({ data }: { data: NotebookData | null }) {
             <th>confidence</th>
             <th>score</th>
             <th>gap</th>
+            <th>audit</th>
           </tr>
         </thead>
         <tbody>
@@ -192,6 +295,7 @@ function CalibrationPage({ data }: { data: NotebookData | null }) {
               <td className={r.gap != null && Math.abs(r.gap) > 0.15 ? "poor" : "good"}>
                 {r.gap != null ? (r.gap > 0 ? "+" : "") + r.gap.toFixed(2) : "-"}
               </td>
+              <td>{r.verdict ? <VerdictChip verdict={r.verdict} /> : "-"}</td>
             </tr>
           ))}
         </tbody>

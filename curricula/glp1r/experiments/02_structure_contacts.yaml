@@ -7,6 +7,7 @@ requires_lessons: []
 inputs:
   datasets: [data/exp2_7ki0.cif]
   tools: [run_python]
+audit: audit/exp2.yaml
 limits: {max_tool_calls: 42, timeout_s: 480, max_python_seconds: 90}
 task: |
   `data/exp2_7ki0.cif` is the deposited mmCIF for PDB 7KI0, a 2.5 A cryo-EM

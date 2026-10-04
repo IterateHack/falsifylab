@@ -7,6 +7,7 @@ requires_lessons: [exp3_peptide_engineering]
 inputs:
   datasets: [data/exp4_dose_response.csv, data/exp4_chembl_activities.csv]
   tools: [run_python]
+audit: audit/exp4.yaml
 limits: {max_tool_calls: 42, timeout_s: 540, max_python_seconds: 90}
 task: |
   Two files, both about the potency of GLP-1R agonists.

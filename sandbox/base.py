@@ -15,6 +15,13 @@ class ExecResult:
     duration_s: float
     timed_out: bool = False
     figures: list[str] = field(default_factory=list)   # paths inside the workspace
+    # Evidence for the auditor (engine/audit.py). `trace` is what the code *did*,
+    # as reported by interpreter audit hooks: file opens outside the sandbox,
+    # sockets, subprocesses. `files_written` is the text of files the snippet
+    # created or changed, so an answer can be traced to where it was computed.
+    # Backends that cannot provide them (Modal, so far) leave them empty.
+    trace: list[dict] = field(default_factory=list)
+    files_written: dict[str, str] = field(default_factory=dict)
 
     def as_tool_result(self, max_chars: int = 6000) -> str:
         parts = []
