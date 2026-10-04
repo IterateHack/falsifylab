@@ -15,6 +15,23 @@ WAVE1_A_GREEDY_FIXTURE = (
     Path(__file__).parent / "fixtures" / "wave1_a_greedy_00000002.json"
 )
 
+# These rows must never be broken by a pattern change; widen or narrow other cases instead.
+MUST_ACCEPT = [
+    "cell-free 7H9 medium",
+    "cell-free Middlebrook 7H9 medium",
+    "cell-free growth medium",
+    "cell-free assay medium",
+    "cell-free complete medium",
+    "cell-free compound-spiked medium",
+    "bacteria-free culture broth",
+    "bacteria-free compound incubation",
+    "bacteria-free compound stability control",
+    "no-cell culture medium",
+    "no-cell 7H9 broth",
+    "no-cell compound stability",
+    "cell-free drug stability",
+]
+
 
 def _e6_observation(controls):
     environment = Env(scenario_dir("a"))
@@ -75,6 +92,15 @@ def test_no_bacteria_accepted_aliases(wording):
     alias = "bacteria_free_control"
     assert matches_control_aliases([wording], alias) is True
     assert blocked_control_wordings([wording], alias) == []
+
+    observation = _e6_observation([wording])
+    assert observation.structured["bacteria_free_control_returned"] is True
+    assert _has_control_line(observation)
+
+
+@pytest.mark.parametrize("wording", MUST_ACCEPT)
+def test_must_accept_wordings(wording):
+    assert matches_control_aliases([wording], "bacteria_free_control") is True
 
     observation = _e6_observation([wording])
     assert observation.structured["bacteria_free_control_returned"] is True
