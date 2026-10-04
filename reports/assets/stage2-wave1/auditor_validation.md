@@ -20,4 +20,4 @@
 | overall | 52 | 0.920 | 0.806 |
 | explicit patterns only | 30 | 1.000 | 1.000 |
 
-*git_sha=6c10edc-dirty | git_dirty=true | models=none (scripted validation cases) | sampling=n/a | reaudit=none | synthetic=false | source=/home/ubuntu/repos/falsifylab/auditor/validation/REPORT.md (last commit: 12c29ce)*
+*git_sha=9688daf | git_dirty=false | models=none (scripted validation cases) | sampling=n/a | reaudit=none | synthetic=false | source=/home/ubuntu/repos/falsifylab/auditor/validation/REPORT.md (last commit: 12c29ce)*

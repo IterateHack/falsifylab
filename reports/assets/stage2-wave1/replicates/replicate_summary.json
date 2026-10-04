@@ -1,7 +1,7 @@
 {
   "stamp": {
-    "git_sha": "6c10edc-dirty",
-    "git_dirty": true,
+    "git_sha": "9688daf",
+    "git_dirty": false,
     "models": [
       "claude-sonnet-5-5"
     ],

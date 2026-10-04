@@ -3,8 +3,8 @@
     {
       "path": "a/clean_success_ci.png",
       "stamp": {
-        "git_sha": "6c10edc-dirty",
-        "git_dirty": true,
+        "git_sha": "9688daf",
+        "git_dirty": false,
         "models": [
           "claude-sonnet-5-5"
         ],
@@ -24,8 +24,8 @@
     {
       "path": "a/clean_success_ci.csv",
       "stamp": {
-        "git_sha": "6c10edc-dirty",
-        "git_dirty": true,
+        "git_sha": "9688daf",
+        "git_dirty": false,
         "models": [
           "claude-sonnet-5-5"
         ],
@@ -45,8 +45,8 @@
     {
       "path": "a/clean_success_ci.md",
       "stamp": {
-        "git_sha": "6c10edc-dirty",
-        "git_dirty": true,
+        "git_sha": "9688daf",
+        "git_dirty": false,
         "models": [
           "claude-sonnet-5-5"
         ],
@@ -66,8 +66,8 @@
     {
       "path": "a/raw_vs_clean.png",
       "stamp": {
-        "git_sha": "6c10edc-dirty",
-        "git_dirty": true,
+        "git_sha": "9688daf",
+        "git_dirty": false,
         "models": [
           "claude-sonnet-5-5"
         ],
@@ -87,8 +87,8 @@
     {
       "path": "a/cost_of_pass.png",
       "stamp": {
-        "git_sha": "6c10edc-dirty",
-        "git_dirty": true,
+        "git_sha": "9688daf",
+        "git_dirty": false,
         "models": [
           "claude-sonnet-5-5"
         ],
@@ -108,8 +108,8 @@
     {
       "path": "a/frontier_regret_top3.md",
       "stamp": {
-        "git_sha": "6c10edc-dirty",
-        "git_dirty": true,
+        "git_sha": "9688daf",
+        "git_dirty": false,
         "models": [
           "claude-sonnet-5-5"
         ],
@@ -129,8 +129,8 @@
     {
       "path": "a/frontier_regret_top3.csv",
       "stamp": {
-        "git_sha": "6c10edc-dirty",
-        "git_dirty": true,
+        "git_sha": "9688daf",
+        "git_dirty": false,
         "models": [
           "claude-sonnet-5-5"
         ],
@@ -150,8 +150,8 @@
     {
       "path": "a/frontier_regret_top3.png",
       "stamp": {
-        "git_sha": "6c10edc-dirty",
-        "git_dirty": true,
+        "git_sha": "9688daf",
+        "git_dirty": false,
         "models": [
           "claude-sonnet-5-5"
         ],
@@ -171,8 +171,8 @@
     {
       "path": "a/experiment_selection.png",
       "stamp": {
-        "git_sha": "6c10edc-dirty",
-        "git_dirty": true,
+        "git_sha": "9688daf",
+        "git_dirty": false,
         "models": [
           "claude-sonnet-5-5"
         ],
@@ -194,8 +194,8 @@
     {
       "path": "a/experiment_selection.md",
       "stamp": {
-        "git_sha": "6c10edc-dirty",
-        "git_dirty": true,
+        "git_sha": "9688daf",
+        "git_dirty": false,
         "models": [
           "claude-sonnet-5-5"
         ],
@@ -217,8 +217,8 @@
     {
       "path": "a/experiment_selection.csv",
       "stamp": {
-        "git_sha": "6c10edc-dirty",
-        "git_dirty": true,
+        "git_sha": "9688daf",
+        "git_dirty": false,
         "models": [
           "claude-sonnet-5-5"
         ],
@@ -240,8 +240,8 @@
     {
       "path": "b/clean_success_ci.png",
       "stamp": {
-        "git_sha": "6c10edc-dirty",
-        "git_dirty": true,
+        "git_sha": "9688daf",
+        "git_dirty": false,
         "models": [
           "claude-sonnet-5-5"
         ],
@@ -261,8 +261,8 @@
     {
       "path": "b/clean_success_ci.csv",
       "stamp": {
-        "git_sha": "6c10edc-dirty",
-        "git_dirty": true,
+        "git_sha": "9688daf",
+        "git_dirty": false,
         "models": [
           "claude-sonnet-5-5"
         ],
@@ -282,8 +282,8 @@
     {
       "path": "b/clean_success_ci.md",
       "stamp": {
-        "git_sha": "6c10edc-dirty",
-        "git_dirty": true,
+        "git_sha": "9688daf",
+        "git_dirty": false,
         "models": [
           "claude-sonnet-5-5"
         ],
@@ -303,8 +303,8 @@
     {
       "path": "b/raw_vs_clean.png",
       "stamp": {
-        "git_sha": "6c10edc-dirty",
-        "git_dirty": true,
+        "git_sha": "9688daf",
+        "git_dirty": false,
         "models": [
           "claude-sonnet-5-5"
         ],
@@ -324,8 +324,8 @@
     {
       "path": "b/cost_of_pass.png",
       "stamp": {
-        "git_sha": "6c10edc-dirty",
-        "git_dirty": true,
+        "git_sha": "9688daf",
+        "git_dirty": false,
         "models": [
           "claude-sonnet-5-5"
         ],
@@ -345,8 +345,8 @@
     {
       "path": "b/frontier_regret_top3.md",
       "stamp": {
-        "git_sha": "6c10edc-dirty",
-        "git_dirty": true,
+        "git_sha": "9688daf",
+        "git_dirty": false,
         "models": [
           "claude-sonnet-5-5"
         ],
@@ -366,8 +366,8 @@
     {
       "path": "b/frontier_regret_top3.csv",
       "stamp": {
-        "git_sha": "6c10edc-dirty",
-        "git_dirty": true,
+        "git_sha": "9688daf",
+        "git_dirty": false,
         "models": [
           "claude-sonnet-5-5"
         ],
@@ -387,8 +387,8 @@
     {
       "path": "b/frontier_regret_top3.png",
       "stamp": {
-        "git_sha": "6c10edc-dirty",
-        "git_dirty": true,
+        "git_sha": "9688daf",
+        "git_dirty": false,
         "models": [
           "claude-sonnet-5-5"
         ],
@@ -408,8 +408,8 @@
     {
       "path": "b/experiment_selection.png",
       "stamp": {
-        "git_sha": "6c10edc-dirty",
-        "git_dirty": true,
+        "git_sha": "9688daf",
+        "git_dirty": false,
         "models": [
           "claude-sonnet-5-5"
         ],
@@ -431,8 +431,8 @@
     {
       "path": "b/experiment_selection.md",
       "stamp": {
-        "git_sha": "6c10edc-dirty",
-        "git_dirty": true,
+        "git_sha": "9688daf",
+        "git_dirty": false,
         "models": [
           "claude-sonnet-5-5"
         ],
@@ -454,8 +454,8 @@
     {
       "path": "b/experiment_selection.csv",
       "stamp": {
-        "git_sha": "6c10edc-dirty",
-        "git_dirty": true,
+        "git_sha": "9688daf",
+        "git_dirty": false,
         "models": [
           "claude-sonnet-5-5"
         ],
@@ -477,8 +477,8 @@
     {
       "path": "replicates/replicate_summary.json",
       "stamp": {
-        "git_sha": "6c10edc-dirty",
-        "git_dirty": true,
+        "git_sha": "9688daf",
+        "git_dirty": false,
         "models": [
           "claude-sonnet-5-5"
         ],
@@ -498,8 +498,8 @@
     {
       "path": "replicates/replicate_summary.csv",
       "stamp": {
-        "git_sha": "6c10edc-dirty",
-        "git_dirty": true,
+        "git_sha": "9688daf",
+        "git_dirty": false,
         "models": [
           "claude-sonnet-5-5"
         ],
@@ -519,8 +519,8 @@
     {
       "path": "replicates/replicate_summary.md",
       "stamp": {
-        "git_sha": "6c10edc-dirty",
-        "git_dirty": true,
+        "git_sha": "9688daf",
+        "git_dirty": false,
         "models": [
           "claude-sonnet-5-5"
         ],
@@ -540,8 +540,8 @@
     {
       "path": "auditor_validation.md",
       "stamp": {
-        "git_sha": "6c10edc-dirty",
-        "git_dirty": true,
+        "git_sha": "9688daf",
+        "git_dirty": false,
         "models": "none (scripted validation cases)",
         "sampling": "n/a",
         "source": "/home/ubuntu/repos/falsifylab/auditor/validation/REPORT.md (last commit: 12c29ce)",
@@ -555,8 +555,8 @@
     {
       "path": "auditor_validation.csv",
       "stamp": {
-        "git_sha": "6c10edc-dirty",
-        "git_dirty": true,
+        "git_sha": "9688daf",
+        "git_dirty": false,
         "models": "none (scripted validation cases)",
         "sampling": "n/a",
         "source": "/home/ubuntu/repos/falsifylab/auditor/validation/REPORT.md (last commit: 12c29ce)",
@@ -570,8 +570,8 @@
     {
       "path": "auditor_validation.png",
       "stamp": {
-        "git_sha": "6c10edc-dirty",
-        "git_dirty": true,
+        "git_sha": "9688daf",
+        "git_dirty": false,
         "models": "none (scripted validation cases)",
         "sampling": "n/a",
         "source": "/home/ubuntu/repos/falsifylab/auditor/validation/REPORT.md (last commit: 12c29ce)",
