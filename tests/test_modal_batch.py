@@ -376,7 +376,15 @@ def test_collect_logs_audits_and_emits_both_charts(tmp_path, monkeypatch):
         doc = json.loads(log.read_text())
         assert set(doc) == {"scenario_id", "turns"}
         assert trajectory_from_dict(doc) == episode()
-    assert len((output / "results.jsonl").read_text().splitlines()) == 4
+    records = [json.loads(line) for line in (output / "results.jsonl").read_text().splitlines()]
+    assert len(records) == 4
+    for record in records:
+        trajectory_doc = record["trajectory"]
+        logged_doc = json.loads(
+            (output / "episodes" / f"{record['job']['episode_id']}.json").read_text(),
+        )
+        assert trajectory_from_dict(trajectory_doc) == episode()
+        assert trajectory_doc == logged_doc
     assert json.loads((output / "summary.json").read_text()) == summary
     grid = json.loads((output / "grid_summary.json").read_text())
     assert len(grid) == 2

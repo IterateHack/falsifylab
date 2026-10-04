@@ -35,7 +35,8 @@ are interpreted. Rubric and truth stay in the local auditing process and are
 never passed to agent factories or Modal episode workers.
 
 Outputs: episodes/<id>.json (exact contract shape), results.jsonl (metadata,
-verdict and metrics), summary.json, grid_summary.json, reward_vs_audit.png,
+verdict, metrics and the full contract trajectory for re-auditing), summary.json,
+grid_summary.json, reward_vs_audit.png,
 spend.json, and raw_vs_clean.png. Rates pool all models/seeds/repeats within a
 variant. Refusal-aborted episodes remain in primary failure metrics and the
 charts, carrying the auditor's own R_visible and final_score, with
@@ -558,6 +559,37 @@ def write_clean_chart(records: list[dict], path: Path) -> None:
     figure.savefig(path, dpi=160)
 
 
+def build_record(job: EpisodeJob, trajectory: Trajectory, verdict: Verdict, truth: Mapping, *,
+                 refusals: list, aborted_on_refusals: bool, extra: Mapping) -> dict:
+    record = {
+        "job": asdict(job),
+        "verdict": asdict(verdict),
+        "refusals": refusals,
+        "refusal_count": len(refusals),
+        "aborted_on_refusals": aborted_on_refusals,
+        "metrics": aborted_metrics(trajectory, verdict) if aborted_on_refusals
+        else episode_metrics(trajectory, verdict, truth),
+        "trajectory": asdict(trajectory),
+    }
+    for field_name in ("sampling", "tokens", "model_call_log", "worker"):
+        if field_name in extra:
+            record[field_name] = extra[field_name]
+    return record
+
+
+def write_summaries(records: list[dict], output: Path, *, summary_name: str = "summary.json",
+                    grid_name: str = "grid_summary.json") -> tuple[dict, list]:
+    summary = aggregate(records)
+    grid = grid_summary(records)
+    (output / summary_name).write_text(
+        json.dumps(summary, indent=2, allow_nan=False) + "\n", encoding="utf-8",
+    )
+    (output / grid_name).write_text(
+        json.dumps(grid, indent=2, allow_nan=False) + "\n", encoding="utf-8",
+    )
+    return summary, grid
+
+
 def collect_results(results: Iterable[dict], output: Path, rubric: dict, truth: Mapping,
                     audit_fn: Callable[[Trajectory, dict, dict], Verdict],
                     spend_limit_usd: float | None = None) -> dict:
@@ -582,15 +614,10 @@ def collect_results(results: Iterable[dict], output: Path, rubric: dict, truth: 
             verdict = audit_fn(deepcopy(trajectory), deepcopy(rubric), deepcopy(truth))
             refusals = result.get("refusals", [])
             aborted_on_refusals = result.get("aborted_on_refusals", False)
-            record = {"job": asdict(job), "verdict": asdict(verdict),
-                      "refusals": refusals,
-                      "refusal_count": len(refusals),
-                      "aborted_on_refusals": aborted_on_refusals,
-                      "metrics": aborted_metrics(trajectory, verdict) if aborted_on_refusals
-                      else episode_metrics(trajectory, verdict, truth)}
-            for field_name in ("sampling", "tokens", "model_call_log", "worker"):
-                if field_name in result:
-                    record[field_name] = result[field_name]
+            record = build_record(
+                job, trajectory, verdict, truth,
+                refusals=refusals, aborted_on_refusals=aborted_on_refusals, extra=result,
+            )
             stream.write(json.dumps(record, allow_nan=False) + "\n")
             stream.flush()
             records.append(record)
@@ -616,16 +643,9 @@ def collect_results(results: Iterable[dict], output: Path, rubric: dict, truth: 
                         f"${spend_limit_usd:.2f} after {len(records)} episodes; "
                         "results.jsonl holds them; no summary/chart written"
                     )
-    summary = aggregate(records)
-    grid = grid_summary(records)
     write_chart(records, output / "reward_vs_audit.png")
     write_clean_chart(records, output / "raw_vs_clean.png")
-    (output / "summary.json").write_text(
-        json.dumps(summary, indent=2, allow_nan=False) + "\n", encoding="utf-8",
-    )
-    (output / "grid_summary.json").write_text(
-        json.dumps(grid, indent=2, allow_nan=False) + "\n", encoding="utf-8",
-    )
+    summary, _ = write_summaries(records, output)
     spend = {
         "episodes": len(records),
         "input_tokens": total_input_tokens,
