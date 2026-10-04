@@ -199,7 +199,7 @@ def test_anthropic_client_always_passes_temperature_and_logs_call():
     client = AnthropicClient("claude-sonnet-4-5", ledger, client=sdk_client)
 
     assert client.complete("system", [{"role": "user", "content": "hello"}]) == "reply"
-    assert create.call_args.kwargs["temperature"] == 1.0
+    assert create.call_args.kwargs["extra_body"]["temperature"] == 1.0
     assert client.call_log[0]["stop_reason"] == "end_turn"
     assert client.call_log[0]["input_tokens"] == 12
     assert client.call_log[0]["output_tokens"] == 4
@@ -349,3 +349,122 @@ def test_run_one_aborted_path_records_partial_trajectory(tmp_path):
     assert record["clean_success"] is False
     assert all(turn["action"]["kind"] != "conclude" for turn in record["trajectory"]["turns"])
     assert "NOTE: aborted_on_refusals" in out.getvalue()
+
+
+@pytest.mark.parametrize("scenario,own,other", [("a", "E", "B"), ("b", "B", "E")])
+def test_opening_and_retry_specs_use_explicit_scenario_ids(scenario, own, other):
+    client = StubClient("m", TokenLedger(0, 0, log=None), replies=["invalid", ABSTAIN])
+    agent = make_agent(variant="baseline", model="m", seed=0, client=client, scenario=scenario)
+    env = make_env(seed=0, scenario=scenario)
+    agent.act(env.reset(), env.state)
+    for prompt in (client.seen[0][0]["content"], client.seen[1][-1]["content"]):
+        assert '"experiment_id": one of ' in prompt
+        for i in range(1, 7):
+            assert f'"{own}{i}"' in prompt
+            assert f"{other}{i}" not in prompt
+        assert "E<n>" not in prompt
+        assert "B<n>" not in prompt
+
+
+@pytest.mark.parametrize("model,sent", [("claude-sonnet-4-5", True), ("claude-sonnet-5-5", False)])
+def test_sampling_request_and_record_match_model_support(tmp_path, model, sent):
+    response = SimpleNamespace(content=[SimpleNamespace(text=ABSTAIN)],
+                               usage=SimpleNamespace(input_tokens=12, output_tokens=4),
+                               stop_reason="end_turn")
+    create = Mock(return_value=response)
+    sdk = SimpleNamespace(messages=SimpleNamespace(create=create))
+    path = tmp_path / "sampling.json"
+    code = run_one.main(
+        ["--variant", "baseline", "--model", model, "--temperature", "0.3", "--out", str(path)],
+        client_factory=lambda model, ledger: AnthropicClient(model, ledger, temperature=0.3, client=sdk),
+        out=io.StringIO(),
+    )
+    assert code == 0
+    body = create.call_args.kwargs.get("extra_body", {})
+    assert ("temperature" in body) is sent
+    if sent:
+        assert body["temperature"] == 0.3
+    sampling = json.loads(path.read_text())["sampling"]
+    assert sampling["model"] == model
+    assert sampling["temperature"] == (0.3 if sent else None)
+    assert sampling["sampling_params_sent"] is sent
+
+
+def test_schema_uses_complete_ids_not_prefixes():
+    from agents.llm_agent import _response_spec, _retry_message
+
+    ids = ["opaque-17", "different_42", "X9"]
+    for spec in (_response_spec(ids), _retry_message("invalid", ids)):
+        assert '"experiment_id": one of "opaque-17", "different_42", "X9"' in spec
+        assert '"experiment": one of "opaque-17", "different_42", "X9"' in spec
+
+
+@pytest.mark.parametrize("model,sent", [("claude-sonnet-4-5", True), ("claude-sonnet-5-5", False)])
+def test_sdk_serializes_sampling_and_provider_refusal(monkeypatch, model, sent):
+    import anthropic
+
+    sdk = anthropic.Anthropic(api_key="test-placeholder")
+    request = Mock(return_value=SimpleNamespace(
+        content=[], usage=SimpleNamespace(input_tokens=12, output_tokens=0), stop_reason="refusal"))
+    monkeypatch.setattr(sdk.messages, "_post", request)
+    from runner.model_clients import ProviderRefusal
+
+    client = AnthropicClient(model, TokenLedger(2, 10, log=None), client=sdk)
+    with pytest.raises(ProviderRefusal):
+        client.complete("system", [{"role": "user", "content": "hello"}])
+    kwargs = request.call_args.kwargs
+    body = {**kwargs["body"], **kwargs.get("options", {}).get("extra_json", {})}
+    assert ("temperature" in body) is sent
+    if sent:
+        assert body["temperature"] == 1.0
+
+
+def test_sonnet_55_price():
+    assert price_for("claude-sonnet-5-5") == (2.0, 10.0)
+
+
+def test_provider_refusal_is_typed_and_charged():
+    from runner.model_clients import ProviderRefusal
+
+    response = SimpleNamespace(content=[], usage=SimpleNamespace(input_tokens=120, output_tokens=0),
+                               stop_reason="refusal")
+    create = Mock(return_value=response)
+    client = AnthropicClient("claude-sonnet-5-5", TokenLedger(2, 10, log=None),
+                             client=SimpleNamespace(messages=SimpleNamespace(create=create)))
+    with pytest.raises(ProviderRefusal):
+        client.complete("system", [{"role": "user", "content": "hello"}])
+    assert client.ledger.calls == 1
+    assert client.ledger.cost_usd == pytest.approx(0.00024)
+    assert client.call_log[0]["stop_reason"] == "refusal"
+    create.assert_called_once()
+
+
+@pytest.mark.parametrize("after_purchase", [False, True])
+def test_provider_refusal_ends_episode_without_parse_abstention(tmp_path, after_purchase):
+    from runner.model_clients import ProviderRefusal
+
+    class RefusingClient(StubClient):
+        def complete(self, system, messages):
+            if after_purchase and not self.seen:
+                self.seen.append(messages)
+                return _buy_reply("E6", E6_PARAMETERS)
+            self.ledger.record(100, 0)
+            raise ProviderRefusal("provider refused")
+
+    path = tmp_path / "refused.json"
+    out = io.StringIO()
+    code = run_one.main(
+        ["--variant", "baseline", "--model", "claude-sonnet-5-5", "--out", str(path)],
+        client_factory=RefusingClient, out=out,
+    )
+    record = json.loads(path.read_text())
+    assert code == 4
+    assert record["outcome"] == "provider_refusal"
+    assert record["provider_refusal"] is True
+    assert record["clean_success"] is False
+    assert record["refusal_count"] == 0
+    assert record["agent_stats"]["parse_failures"] == 0
+    assert not record["agent_stats"]["parse_failure_abstention"]
+    assert record["verdict"]["verdict"] != "PARSE_FAILURE"
+    assert len(record["trajectory"]["turns"]) == int(after_purchase)
+    assert "provider_refusal" in out.getvalue()

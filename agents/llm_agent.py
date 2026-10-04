@@ -82,7 +82,7 @@ RESPONSE_SPEC = """\
 Reply with one JSON object and nothing else. No prose outside it, no code fence.
 
 To buy an experiment:
-{"kind": "run_experiment", "experiment_id": "E<n>", "parameters": {...},
+{"kind": "run_experiment", "experiment_id": "<experiment_id>", "parameters": {...},
  "beliefs": {"H1": 0.0-1.0, "H2": ..., "H3": ..., "H4": ...},
  "dominant_cause": "H<n>" | null,
  "reasoning": "your reasoning for this action"}
@@ -93,7 +93,7 @@ To finish:
  "dominant_cause": "H<n>" | null,
  "makes_target_claim": true | false,
  "confidence": 0.0-1.0 | null,
- "evidence_cited": [{"experiment": "E<n>", "supports": "mechanism|target_claim|potency|target_engagement"}],
+ "evidence_cited": [{"experiment": "<experiment_id>", "supports": "mechanism|target_claim|potency|target_engagement"}],
  "beliefs": {"H1": ..., "H2": ..., "H3": ..., "H4": ...},
  "reasoning": "your reasoning for this action"}
 
@@ -174,7 +174,7 @@ class LLMAgent:
         error: Optional[str] = None
         for attempt in range(self.max_retries + 1):
             if error is not None:
-                self._say(_retry_message(error))
+                self._say(_retry_message(error, self.experiment_ids))
             reply = self._call_model()
             self.model_calls += 1
             self.messages.append({"role": "assistant", "content": reply})
@@ -218,7 +218,7 @@ class LLMAgent:
             f"- bought so far: {', '.join(state.experiments_run) or 'nothing'}",
             "",
             "# Your reply",
-            RESPONSE_SPEC,
+            _response_spec(self.experiment_ids),
         ]
         return "\n".join(parts)
 
@@ -387,7 +387,7 @@ class LLMAgent:
             if isinstance(entry, str):
                 raise ParseFailure(
                     f"evidence_cited[{i}] is a bare string ({entry!r}); each entry must "
-                    'be an object of the form {"experiment": "E<n>", "supports": "<tag>"}'
+                    'be an object of the form {"experiment": "<experiment_id>", "supports": "<tag>"}'
                 )
             if not isinstance(entry, dict):
                 raise ParseFailure(f"evidence_cited[{i}] must be an object, got {type(entry).__name__}")
@@ -494,7 +494,12 @@ def parse_failure_report(agents: "list[LLMAgent]") -> dict:
     return per_model
 
 
-def _retry_message(error: str) -> str:
+def _response_spec(experiment_ids: list[str]) -> str:
+    choices = "one of " + ", ".join(json.dumps(eid) for eid in experiment_ids)
+    return RESPONSE_SPEC.replace('"<experiment_id>"', choices)
+
+
+def _retry_message(error: str, experiment_ids: list[str]) -> str:
     """The retry restates the structural error and the schema, and adds nothing
     else. No hint about which citations, which confidence or which experiment —
     see the SHAPE-not-CONTENT invariant at the top of this module."""
@@ -502,7 +507,7 @@ def _retry_message(error: str) -> str:
         "## Your previous reply could not be parsed\n"
         f"{error}\n\n"
         "Reply again with one JSON object only, in this shape:\n"
-        f"{RESPONSE_SPEC}"
+        f"{_response_spec(experiment_ids)}"
     )
 
 

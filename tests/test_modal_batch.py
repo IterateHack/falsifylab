@@ -219,6 +219,7 @@ def test_per_variant_aggregation_pools_models_and_seeds():
     assert summary["v"]["refusals"] == 0
     assert set(summary["v"]) == {
         "episodes", "n_harness_error", "n_parse_failure", "parse_failure_rate", "n_scored",
+        "n_provider_refusal", "provider_refusal_rate", "cells",
         "completed_episodes", "aborted_on_refusals", "refusals",
         "nominal_success_rate", "clean_success_rate", "reward_hack_rate",
         "protocol_violation_rate", "mean_cost", "mean_brier", "overconfidence_rate",
@@ -274,7 +275,7 @@ def test_grid_summary_counts_failures_parse_failures_aborts_and_sorts():
     assert set(cells[("a", "all-fail")]) == {
         "scenario", "variant", "n_runs", "n_harness_error", "n_parse_failure",
         "parse_failure_rate",
-        "n_aborted_on_refusals",
+        "n_aborted_on_refusals", "n_provider_refusal", "provider_refusal_rate",
         "n_scored", "n_clean_success", "clean_success_rate", "clean_success_ci95",
         "frontier_regret", "raw_score_mean", "verdict_counts",
     }
@@ -640,6 +641,72 @@ def test_parse_failure_excluded_identically_from_summary_and_grid(tmp_path):
     assert summary["parse_failure_rate"] == 0.5
 
 
+@pytest.mark.parametrize("all_refused", [False, True])
+def test_provider_refusal_excluded_from_science_in_both_summaries(tmp_path, all_refused):
+    jobs = batch.build_jobs(["v"], ["m"], [7], 3)
+    results = [
+        {"job": asdict(job), "trajectory": asdict(episode()), "provider_refusal": all_refused or i == 0}
+        for i, job in enumerate(jobs)
+    ]
+    audit = Mock(side_effect=[verdict("INSUFFICIENT_EVIDENCE", score=0),
+                              verdict("PARSE_FAILURE", score=0), verdict("VALID_SUCCESS", score=90)])
+    output = tmp_path / "provider"
+    batch.collect_results(results, output, {}, TRUTH, audit)
+    summary = json.loads((output / "summary.json").read_text())["v"]
+    (cell,) = json.loads((output / "grid_summary.json").read_text())
+    for row in (summary, cell, summary["cells"][0]):
+        assert row["n_provider_refusal"] == (3 if all_refused else 1)
+        assert row["provider_refusal_rate"] == (1 if all_refused else 1 / 3)
+        assert row["n_parse_failure"] == (0 if all_refused else 1)
+        assert row["n_scored"] == (0 if all_refused else 1)
+        assert row["clean_success_rate"] == (None if all_refused else 1.0)
+        assert row["raw_score_mean"] == (None if all_refused else 90)
+    records = [json.loads(line) for line in (output / "results.jsonl").read_text().splitlines()]
+    assert records[0]["outcome"] == "provider_refusal"
+    assert records[0]["metrics"] is None
+    assert sum(cell["verdict_counts"].values()) == (0 if all_refused else 2)
+
+
+@pytest.mark.parametrize("model,sent", [("claude-sonnet-4-5", True), ("claude-sonnet-5-5", False)])
+def test_worker_records_effective_sampling_with_live_stub(monkeypatch, model, sent):
+    from runner import factories
+    from runner.model_clients import AnthropicClient, TokenLedger
+
+    reply = json.dumps({"kind": "conclude", "beliefs": dict.fromkeys(["H1", "H2", "H3", "H4"], 0.5),
+                        "dominant_cause": None, "evidence_cited": []})
+    sdk = SimpleNamespace(messages=SimpleNamespace(create=Mock(return_value=SimpleNamespace(
+        content=[SimpleNamespace(text=reply)], usage=SimpleNamespace(input_tokens=10, output_tokens=5),
+        stop_reason="end_turn"))))
+    client = AnthropicClient(model, TokenLedger(2, 10, log=None), temperature=0.3, client=sdk)
+    monkeypatch.setattr(factories, "make_client", lambda **kwargs: client)
+    job = batch.build_jobs(["baseline"], [model], [0], 1)[0]
+    result = batch.remote_episode(job, "runner.factories:make_env", "runner.factories:make_agent", 10,
+                                 {"mode": "live", "temperature": 0.3, "max_tokens": 2048,
+                                  "usd_per_mtok_in": None, "usd_per_mtok_out": None,
+                                  "spend_limit_usd": 0.5, "budget": 8})
+    assert result["sampling"]["temperature"] == (0.3 if sent else None)
+    assert result["sampling"]["sampling_params_sent"] is sent
+
+
+def test_remote_worker_catches_provider_refusal_and_keeps_partial_trajectory(monkeypatch):
+    from runner.model_clients import ProviderRefusal
+
+    class RefusingAgent(FakeAgent):
+        def act(self, observation, state):
+            if self.turn:
+                raise ProviderRefusal("provider refused")
+            return super().act(observation, state)
+
+    monkeypatch.setattr(batch, "resolve", lambda ref: {"env": FakeEnv, "agent": RefusingAgent}[ref])
+    job = batch.build_jobs(["v"], ["m"], [7], 1)[0]
+    result = batch.remote_episode(job, "env", "agent", 10)
+    assert result["provider_refusal"] is True
+    assert result["outcome"] == "provider_refusal"
+    assert result["refusals"] == []
+    assert not result["aborted_on_refusals"]
+    assert len(result["trajectory"]["turns"]) == 1
+
+
 def test_collect_spend_guard_persists_only_the_record_that_exceeds_limit(tmp_path):
     jobs = batch.build_jobs(["v"], ["m"], [7], 2)
     results = [
@@ -674,6 +741,8 @@ def test_remote_worker_resolves_factories_without_truth_or_rubric(monkeypatch):
         "trajectory": asdict(episode()),
         "refusals": [],
         "aborted_on_refusals": False,
+        "provider_refusal": False,
+        "outcome": "completed",
     }
 
 
@@ -684,6 +753,7 @@ def test_remote_episode_returns_harness_error_and_propagates_spend_limit(monkeyp
     client = SimpleNamespace(
         model="m",
         temperature=DEFAULT_TEMPERATURE,
+        sampling={"model": "m", "temperature": DEFAULT_TEMPERATURE, "sampling_params_sent": True},
         max_tokens=2048,
         ledger=SimpleNamespace(snapshot=lambda: {"cost_usd": 0.01}),
         call_log=[{"stop_reason": "end_turn"}],
