@@ -39,9 +39,9 @@ never passed to agent factories or Modal episode workers.
 Outputs: episodes/<id>.json (exact contract shape), results.jsonl (metadata,
 verdict, metrics and the full contract trajectory for re-auditing), summary.json,
 grid_summary.json, reward_vs_audit.png,
-spend.json, and raw_vs_clean.png. Rates pool all models/seeds/repeats within a
-variant. Refusal-aborted episodes remain in primary failure metrics and the
-charts, carrying the auditor's own R_visible and final_score, with
+spend.json, README.md, and raw_vs_clean.png. Rates pool all models/seeds/repeats
+within a variant. Refusal-aborted episodes remain in primary failure metrics and
+the charts, carrying the auditor's own R_visible and final_score, with
 completed-only metrics reported separately. HARNESS_ERROR rows are retained
 without an episode log, audit, or metrics; other collection and audit failures
 still abort the batch.
@@ -49,7 +49,8 @@ still abort the batch.
 PARSE_FAILURE episodes are excluded from every science metric in both
 summary.json and grid_summary.json through the same rule as root metrics.py
 (metrics.split_parse_failures), and each variant / cell reports n_parse_failure
-and parse_failure_rate so the exclusion stays visible.
+and parse_failure_rate so the exclusion stays visible. Provider-refusal and
+spend-cap-stop episodes are excluded likewise and reported with their own counts.
 
 frontier_regret (grid_summary.json): best-of-n minus mean (any clean success in
 cell minus clean_success_rate).
@@ -148,10 +149,13 @@ class EpisodeRun:
     refusals: list[Refusal]
     aborted_on_refusals: bool
     provider_refusal: bool = False
+    spend_cap_stop: bool = False
+    spend_cap_stop_reason: str | None = None
 
     @property
     def outcome(self) -> str:
         return ("provider_refusal" if self.provider_refusal else
+                "spend_cap_stop" if self.spend_cap_stop else
                 "aborted_on_refusals" if self.aborted_on_refusals else "completed")
 
     @property
@@ -269,6 +273,13 @@ def run_episode(job: EpisodeJob, env_factory: Callable, agent_factory: Callable,
             if log is not None:
                 log("[provider] episode ended: provider_refusal")
             return EpisodeRun(trajectory, refusals, aborted_on_refusals=False, provider_refusal=True)
+        except SpendLimitExceeded as exc:
+            if log is not None:
+                log(f"[spend] episode ended: {exc}")
+            return EpisodeRun(
+                trajectory, refusals, aborted_on_refusals=False,
+                spend_cap_stop=True, spend_cap_stop_reason=str(exc),
+            )
         if action.kind not in ("run_experiment", "conclude"):
             raise ValueError(f"Unknown action kind: {action.kind}")
         saved_action = deepcopy(action)
@@ -405,6 +416,8 @@ def remote_episode(job: EpisodeJob, env_factory: str, agent_factory: str,
             "refusals": [asdict(refusal) for refusal in episode.refusals],
             "aborted_on_refusals": episode.aborted_on_refusals,
             "provider_refusal": episode.provider_refusal,
+            "spend_cap_stop": episode.spend_cap_stop,
+            "spend_cap_stop_reason": episode.spend_cap_stop_reason,
             "outcome": episode.outcome,
         })
         return result
@@ -478,12 +491,14 @@ def split_parse_failure_records(rows: list[dict]) -> tuple[list[dict], list[dict
     return split_parse_failures(rows, lambda r: is_parse_failure_verdict(r["verdict"]["verdict"]))
 
 
-def split_science_records(rows: list[dict]) -> tuple[list[dict], list[dict], list[dict]]:
+def split_science_records(rows: list[dict]) -> tuple[list[dict], list[dict], list[dict], list[dict]]:
     provider_refusals = [r for r in rows if r.get("provider_refusal", False)]
-    scored, parse_failures = split_parse_failure_records(
-        [r for r in rows if not r.get("provider_refusal", False)]
-    )
-    return scored, parse_failures, provider_refusals
+    spend_cap_stops = [r for r in rows if r.get("spend_cap_stop", False)]
+    scored, parse_failures = split_parse_failure_records([
+        r for r in rows
+        if not r.get("provider_refusal", False) and not r.get("spend_cap_stop", False)
+    ])
+    return scored, parse_failures, provider_refusals, spend_cap_stops
 
 
 def aggregate(records: list[dict]) -> dict:
@@ -512,7 +527,7 @@ def aggregate(records: list[dict]) -> dict:
         non_harness_rows = [
             r for r in rows if r["verdict"]["verdict"] != HARNESS_ERROR_VERDICT
         ]
-        scored, excluded, provider_refusals = split_science_records(non_harness_rows)
+        scored, excluded, provider_refusals, spend_cap_stops = split_science_records(non_harness_rows)
         completed = [r["metrics"] for r in scored if not r.get("aborted_on_refusals", False)]
         summary[variant] = {
             "episodes": len(rows),
@@ -521,6 +536,8 @@ def aggregate(records: list[dict]) -> dict:
             "parse_failure_rate": len(excluded) / len(rows),
             "n_provider_refusal": len(provider_refusals),
             "provider_refusal_rate": len(provider_refusals) / len(rows),
+            "n_spend_cap_stop": len(spend_cap_stops),
+            "spend_cap_stop_rate": len(spend_cap_stops) / len(rows),
             "cells": grid_summary(rows),
             "n_scored": len(scored),
             "completed_episodes": len(completed),
@@ -569,7 +586,7 @@ def grid_summary(records: list[dict]) -> list[dict]:
         non_harness_rows = [
             r for r in rows if r["verdict"]["verdict"] != HARNESS_ERROR_VERDICT
         ]
-        scored_rows, excluded_rows, provider_refusals = split_science_records(non_harness_rows)
+        scored_rows, excluded_rows, provider_refusals, spend_cap_stops = split_science_records(non_harness_rows)
         n_parse_failure = len(excluded_rows)
         n_scored = len(scored_rows)
         n_clean_success = sum(
@@ -581,7 +598,7 @@ def grid_summary(records: list[dict]) -> list[dict]:
         )
         verdict_counts = dict.fromkeys((*verdict_names, "OTHER"), 0)
         for row in rows:
-            if row.get("provider_refusal", False):
+            if row.get("provider_refusal", False) or row.get("spend_cap_stop", False):
                 continue
             verdict_name = row["verdict"]["verdict"]
             verdict_counts[verdict_name if verdict_name in verdict_counts else "OTHER"] += 1
@@ -594,6 +611,8 @@ def grid_summary(records: list[dict]) -> list[dict]:
             "parse_failure_rate": n_parse_failure / n_runs,
             "n_provider_refusal": len(provider_refusals),
             "provider_refusal_rate": len(provider_refusals) / n_runs,
+            "n_spend_cap_stop": len(spend_cap_stops),
+            "spend_cap_stop_rate": len(spend_cap_stops) / n_runs,
             "n_aborted_on_refusals": n_aborted,
             "n_scored": n_scored,
             "n_clean_success": n_clean_success,
@@ -629,7 +648,7 @@ def write_chart(records: list[dict], path: Path) -> None:
     from matplotlib.figure import Figure
     from matplotlib.lines import Line2D
 
-    records, _, _ = split_science_records([
+    records, _, _, _ = split_science_records([
         record for record in records
         if record.get("verdict", {}).get("verdict") != HARNESS_ERROR_VERDICT
     ])
@@ -684,7 +703,7 @@ def write_clean_chart(records: list[dict], path: Path) -> None:
     from matplotlib.figure import Figure
     from matplotlib.lines import Line2D
 
-    records, _, _ = split_science_records([
+    records, _, _, _ = split_science_records([
         record for record in records
         if record.get("verdict", {}).get("verdict") != HARNESS_ERROR_VERDICT
     ])
@@ -746,6 +765,10 @@ def write_clean_chart(records: list[dict], path: Path) -> None:
 def build_record(job: EpisodeJob, trajectory: Trajectory, verdict: Verdict, truth: Mapping, *,
                  refusals: list, aborted_on_refusals: bool, extra: Mapping) -> dict:
     provider_refusal = bool(extra.get("provider_refusal", False))
+    spend_cap_stop = bool(
+        extra.get("spend_cap_stop", extra.get("outcome") == "spend_cap_stop")
+    )
+    excluded_from_science = provider_refusal or spend_cap_stop
     record = {
         "job": asdict(job),
         "verdict": asdict(verdict),
@@ -753,9 +776,12 @@ def build_record(job: EpisodeJob, trajectory: Trajectory, verdict: Verdict, trut
         "refusal_count": len(refusals),
         "aborted_on_refusals": aborted_on_refusals,
         "provider_refusal": provider_refusal,
+        "spend_cap_stop": spend_cap_stop,
+        "spend_cap_stop_reason": extra.get("spend_cap_stop_reason"),
         "outcome": ("provider_refusal" if provider_refusal else
+                    "spend_cap_stop" if spend_cap_stop else
                     "aborted_on_refusals" if aborted_on_refusals else "completed"),
-        "metrics": None if provider_refusal else (
+        "metrics": None if excluded_from_science else (
             aborted_metrics(trajectory, verdict) if aborted_on_refusals
             else episode_metrics(trajectory, verdict, truth)
         ),
@@ -776,6 +802,8 @@ def build_harness_error_record(job: EpisodeJob, error: Mapping, extra: Mapping) 
         "refusal_count": 0,
         "aborted_on_refusals": False,
         "provider_refusal": False,
+        "spend_cap_stop": False,
+        "spend_cap_stop_reason": None,
         "outcome": "harness_error",
         "metrics": None,
         "trajectory": None,
@@ -799,13 +827,49 @@ def write_summaries(records: list[dict], output: Path, *, summary_name: str = "s
     return summary, grid
 
 
+def write_results_readme(output: Path, *, episode_spend_limit_usd: float | None,
+                         batch_spend_limit_usd: float | None) -> None:
+    """Explain replicate and spend-cap semantics alongside the artifacts."""
+
+    def limit(value: float | None) -> str:
+        return "unlimited" if value is None else f"${value:.2f}"
+
+    (output / "README.md").write_text(
+        "# Batch results\n\n"
+        "Each episode is a replicate. `job.seed`, `job.effective_seed`, and `job.repeat` "
+        "label the replicate and select environment randomness only; "
+        "`sampling.seed_applied_to_model` is false, so no seed is sent to the model and "
+        "model output is not reproducible from a seed.\n\n"
+        "## Spend caps\n\n"
+        f"- Per-episode cap: {limit(episode_spend_limit_usd)} (enforced inside each worker).\n"
+        f"- Batch collection cap: {limit(batch_spend_limit_usd)} (checked after returned "
+        "results are collected).\n"
+        "- Concurrent Modal workers do not share an in-flight ledger. A batch's hard "
+        "arithmetic bound is per-episode cap × paid episodes in that batch; split waves "
+        "must sum their separate batch bounds.\n\n"
+        "## Excluded outcomes\n\n"
+        "`provider_refusal` and `spend_cap_stop` retain charged token usage, the model "
+        "call log, and any partial trajectory, but have no science metrics and are "
+        "excluded from scored rates. `PARSE_FAILURE` rows are also excluded from "
+        "science metrics; `HARNESS_ERROR` rows retain the worker failure and no "
+        "trajectory.\n",
+        encoding="utf-8",
+    )
+
+
 def collect_results(results: Iterable[dict], output: Path, rubric: dict, truth: Mapping,
                     audit_fn: Callable[[Trajectory, dict, dict], Verdict],
-                    spend_limit_usd: float | None = None, *,
+                    batch_spend_limit_usd: float | None = None, *,
+                    episode_spend_limit_usd: float | None = None,
                     code_sha: str | None = None) -> dict:
     """Persist each contract episode before auditing it, then emit one summary/chart."""
     validate_truth(truth)
     output.mkdir(parents=True, exist_ok=False)
+    write_results_readme(
+        output,
+        episode_spend_limit_usd=episode_spend_limit_usd,
+        batch_spend_limit_usd=batch_spend_limit_usd,
+    )
     episodes = output / "episodes"
     episodes.mkdir()
     records = []
@@ -844,19 +908,20 @@ def collect_results(results: Iterable[dict], output: Path, rubric: dict, truth: 
                 total_input_tokens += int(tokens["input_tokens"])
                 total_output_tokens += int(tokens["output_tokens"])
                 limit_label = (
-                    f"${spend_limit_usd:.2f}" if spend_limit_usd is not None else "unlimited"
+                    f"${batch_spend_limit_usd:.2f}"
+                    if batch_spend_limit_usd is not None else "unlimited"
                 )
                 print(
                     f"[spend] episode {job.episode_id}: ${episode_cost:.4f}  "
-                    f"stage cumulative ${stage_cost_usd:.4f} "
+                    f"batch cumulative ${stage_cost_usd:.4f} "
                     f"(limit {limit_label})",
                     file=sys.stderr,
                     flush=True,
                 )
-                if spend_limit_usd is not None and stage_cost_usd > spend_limit_usd:
+                if batch_spend_limit_usd is not None and stage_cost_usd > batch_spend_limit_usd:
                     raise SpendLimitExceeded(
-                        f"STOP: stage estimated spend ${stage_cost_usd:.4f} exceeded "
-                        f"${spend_limit_usd:.2f} after {len(records)} episodes; "
+                        f"STOP: batch estimated spend ${stage_cost_usd:.4f} exceeded "
+                        f"${batch_spend_limit_usd:.2f} after {len(records)} episodes; "
                         "results.jsonl holds them; no summary/chart written"
                     )
     write_chart(records, output / "reward_vs_audit.png")
@@ -870,7 +935,8 @@ def collect_results(results: Iterable[dict], output: Path, rubric: dict, truth: 
         "cost_per_episode_usd": (
             round(stage_cost_usd / len(records), 6) if records else None
         ),
-        "limit_usd": spend_limit_usd,
+        "episode_limit_usd": episode_spend_limit_usd,
+        "batch_limit_usd": batch_spend_limit_usd,
         "estimated": any(
             (record.get("sampling") or {}).get("client") == "dry-run" for record in records
         ),
@@ -901,7 +967,12 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--temperature", type=float, default=DEFAULT_TEMPERATURE)
     parser.add_argument("--provider-retries", type=int, default=DEFAULT_PROVIDER_RETRIES)
     parser.add_argument("--max-tokens", type=int, default=2048)
-    parser.add_argument("--max-spend-usd", type=float, default=20.0)
+    parser.add_argument(
+        "--max-spend-usd", type=float, default=20.0,
+        help="shared fallback for the episode and batch caps",
+    )
+    parser.add_argument("--max-episode-spend-usd", type=float)
+    parser.add_argument("--max-batch-spend-usd", type=float)
     parser.add_argument("--usd-per-mtok-in", type=float)
     parser.add_argument("--usd-per-mtok-out", type=float)
     parser.add_argument("--rubric", type=Path)
@@ -944,6 +1015,16 @@ def main(argv: list[str] | None = None) -> None:
         parser.error("temperature must be in [0, 1]")
     if args.provider_retries < 0:
         parser.error("--provider-retries must be nonnegative")
+    episode_spend_limit = (
+        args.max_episode_spend_usd
+        if args.max_episode_spend_usd is not None else args.max_spend_usd
+    )
+    batch_spend_limit = (
+        args.max_batch_spend_usd
+        if args.max_batch_spend_usd is not None else args.max_spend_usd
+    )
+    if min(episode_spend_limit, batch_spend_limit) < 0:
+        parser.error("spend limits must be nonnegative")
     if args.output.exists():
         parser.error("Output directory already exists; choose a new batch directory")
     from runner.factories import make_env as validate_env, scenario_dir
@@ -994,7 +1075,7 @@ def main(argv: list[str] | None = None) -> None:
         "max_tokens": args.max_tokens,
         "usd_per_mtok_in": args.usd_per_mtok_in,
         "usd_per_mtok_out": args.usd_per_mtok_out,
-        "spend_limit_usd": args.max_spend_usd,
+        "spend_limit_usd": episode_spend_limit,
         "provider_retries": args.provider_retries,
         "budget": budget,
     }
@@ -1013,7 +1094,8 @@ def main(argv: list[str] | None = None) -> None:
             )
             summary = collect_results(
                 results, args.output, rubric, truth, audit_fn,
-                spend_limit_usd=args.max_spend_usd,
+                batch_spend_limit_usd=batch_spend_limit,
+                episode_spend_limit_usd=episode_spend_limit,
                 code_sha=current_code_sha,
             )
         else:
@@ -1023,7 +1105,8 @@ def main(argv: list[str] | None = None) -> None:
                 f"agents={','.join(args.agents)} "
                 f"variants={','.join(variants)} model={','.join(models)} "
                 f"temperature={args.temperature} secrets={','.join(secrets)} "
-                f"spend_limit=${args.max_spend_usd:.2f}"
+                f"episode_spend_limit=${episode_spend_limit:.2f} "
+                f"batch_spend_limit=${batch_spend_limit:.2f}"
             )
             import modal
 
@@ -1066,7 +1149,8 @@ def main(argv: list[str] | None = None) -> None:
                 results = _ordered_worker_results(jobs, results)
                 summary = collect_results(
                     results, args.output, rubric, truth, audit_fn,
-                    spend_limit_usd=args.max_spend_usd,
+                    batch_spend_limit_usd=batch_spend_limit,
+                    episode_spend_limit_usd=episode_spend_limit,
                     code_sha=current_code_sha,
                 )
     except SpendLimitExceeded as exc:
