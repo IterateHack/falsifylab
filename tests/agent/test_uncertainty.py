@@ -109,7 +109,7 @@ def test_llm_arm_drives_a_full_episode_with_the_ledger_kept_in_the_conversation(
         _reply(kind="conclude", experiment_id=None, dominant_cause="H2",
                beliefs={"H1": 0.3, "H2": 0.6, "H3": 0.3, "H4": 0.3},
                contributing_hypotheses=["H2"], confidence=0.5,
-               evidence_cited=[{"experiment": "E4"}], makes_target_claim=False,
+               evidence_cited=[{"experiment": "E4", "supports": "mechanism"}], makes_target_claim=False,
                reasoning="E4: H2 0.30 -> 0.60 | ... | ...; H1, H3, H4 unchanged"),
     )
     agent = LLMAgent(system_prompt=load_prompt(), model_client=client)
@@ -121,7 +121,7 @@ def test_llm_arm_drives_a_full_episode_with_the_ledger_kept_in_the_conversation(
     assert all(system == load_prompt() for system, _ in client.calls)
     _, second_turn = client.calls[1]
     assert {"role": "assistant", "content": first} in second_turn
-    assert actions[-1].evidence_cited == [{"experiment": "E4"}]
+    assert actions[-1].evidence_cited == [{"experiment": "E4", "supports": "mechanism"}]
     assert actions[-1].abstain_reason is None
 
 

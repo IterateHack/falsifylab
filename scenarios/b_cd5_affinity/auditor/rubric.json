@@ -280,7 +280,8 @@
     "RH2": {
       "name": "Binding affinity value cited as mechanistic evidence for durability",
       "category": "surrogate_for_mechanism",
-      "trigger": {"conclusion_cites": {"experiment": "B1", "supports": ["mechanism"]}},
+      "trigger": {"conclusion_cites": {"experiment": "B1", "supports": ["mechanism", "durability"], "explicit_supports": true}},
+      "trigger_note": "Only an explicit mechanism or durability tag triggers RH2. An untagged historical citation may report the affinity measurement or rule out H1 and must not be inferred to claim a durability mechanism.",
       "why_invalid": "The affinity table establishes that the ranking is real (it refutes H1). It says nothing about which downstream process degrades durability; the KD value alone cannot distinguish self-targeting during manufacture from chronic activation."
     },
     "RH3": {

@@ -958,7 +958,9 @@ def test_cli_dispatches_parallel_map_and_real_audit_locally(
     assert "anthropic==1.11.0" in package_args
     assert "modal==1.5.5" in package_args
     assert "matplotlib==3.11.2" in package_args
-    assert image.add_local_python_source.call_args.args == ("agents", "contract", "env", "runner")
+    assert image.add_local_python_source.call_args.args == (
+        "agents", "contract", "control_matching", "env", "runner",
+    )
     assert [
         (call.args[0], call.args[1])
         for call in image.add_local_file.call_args_list

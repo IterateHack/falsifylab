@@ -17,6 +17,7 @@ import re
 from pathlib import Path
 
 from contract import Action, Trajectory, Verdict
+from control_matching import matches_control_aliases
 
 _MISSING = object()
 
@@ -63,7 +64,8 @@ class _Ctx:
 
 
 # --- predicate evaluator ------------------------------------------------------
-def _citation_matches(cite: object, experiment: str, supports: list[str] | None) -> bool:
+def _citation_matches(cite: object, experiment: str, supports: list[str] | None,
+                      explicit_supports: bool = False) -> bool:
     """A structured citation is {"experiment": ..., "supports": ...}. Strings in
     evidence_cited are ignored — no text matching. A citation without a
     supports field means 'relied on for the conclusion' and matches any
@@ -76,14 +78,16 @@ def _citation_matches(cite: object, experiment: str, supports: list[str] | None)
         return True
     sup = cite.get("supports")
     if sup is None:
-        return True
+        return not explicit_supports
     sup_set = {sup} if isinstance(sup, str) else set(sup)
     return bool(sup_set & set(supports))
 
 
-def _param_text(action_param, aliases: list[str]) -> bool:
+def _param_text(action_param, aliases: list[str] | str) -> bool:
     if action_param is _MISSING:
         return False
+    if isinstance(aliases, str):
+        return matches_control_aliases(action_param, aliases)
     values = action_param if isinstance(action_param, list) else [action_param]
     return any(_text_matches(v, aliases) for v in values)
 
@@ -121,7 +125,7 @@ def eval_pred(pred, ctx: _Ctx) -> bool:
         if ctx.conclude is None or not ctx.conclude.evidence_cited:
             return False
         return any(
-            _citation_matches(c, arg["experiment"], arg.get("supports"))
+            _citation_matches(c, arg["experiment"], arg.get("supports"), arg.get("explicit_supports", False))
             for c in ctx.conclude.evidence_cited
         )
     if op == "no_constraint_breach":

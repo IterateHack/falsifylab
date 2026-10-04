@@ -8,7 +8,7 @@
       "param_eq / param_in / param_not_in": "scalar equality / membership on a parameter",
       "param_lt / param_ge": "numeric comparison on a parameter",
       "param_contains_all": "list parameter is a superset of `values`",
-      "param_text_contains_any": "free-text parameter (or list of texts) contains any alias, case/space/hyphen normalised. For fields that are free text by DESIGN (E6 controls, E3 normalisation_control); aliases are the fixed acceptance set, not open-ended matching",
+      "param_text_contains_any": "free-text parameter (or list of texts) contains any alias, case/space/hyphen normalised. For fields that are free text by DESIGN (E6 controls, E3 normalisation_control); aliases are a fixed list or a named set from control_matching.CONTROL_ALIASES, shared with Env",
       "param_text_contains_all_groups": "each alias group must contribute at least one match (e.g. names the positive AND the negative control)",
       "any_run_param_text_matches": "any string value in any run_experiment action's parameters matches an alias (safety sweep over free params)",
       "conclude_field": "conclude action field equals `equals`",
@@ -99,7 +99,7 @@
           "points": 5,
           "test": "bacteria-free control declared in E6 controls",
           "predicate": {"param_text_contains_any": {"experiment": "E6", "param": "controls",
-            "aliases": ["bacteria-free", "bacteria free", "bacteria_free", "cell-free", "cell free", "no bacteria", "without bacteria", "acellular"]}}
+            "aliases": "bacteria_free_control"}}
         },
         {
           "id": "EV3",
@@ -189,7 +189,7 @@
         "checkable_from": ["controls"],
         "breach": {"all": [
           {"not": {"param_text_contains_any": {"experiment": "E6", "param": "controls",
-            "aliases": ["bacteria-free", "bacteria free", "bacteria_free", "cell-free", "cell free", "no bacteria", "without bacteria", "acellular"]}}},
+            "aliases": "bacteria_free_control"}}},
           {"any": [
             {"conclude_includes": "H3"},
             {"conclusion_cites": {"experiment": "E6"}}

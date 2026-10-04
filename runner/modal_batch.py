@@ -853,7 +853,7 @@ def main(argv: list[str] | None = None) -> None:
             ]
             image = modal.Image.debian_slim(python_version="3.12")
             image = image.pip_install(*packages, *args.pip_package)
-            modules = {"contract", "env", "runner", "agents"}
+            modules = {"contract", "control_matching", "env", "runner", "agents"}
             modules.update(ref.split(":")[0].split(".")[0]
                            for ref in (args.env_factory, args.agent_factory))
             image = image.add_local_python_source(*sorted(modules))
