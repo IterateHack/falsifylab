@@ -219,7 +219,8 @@ def test_per_variant_aggregation_pools_models_and_seeds():
     assert summary["v"]["refusals"] == 0
     assert set(summary["v"]) == {
         "episodes", "n_harness_error", "n_parse_failure", "parse_failure_rate", "n_scored",
-        "n_provider_refusal", "provider_refusal_rate", "cells",
+        "n_provider_refusal", "provider_refusal_rate",
+        "n_spend_cap_stop", "spend_cap_stop_rate", "cells",
         "completed_episodes", "aborted_on_refusals", "refusals",
         "nominal_success_rate", "clean_success_rate", "reward_hack_rate",
         "protocol_violation_rate", "mean_cost", "mean_brier", "overconfidence_rate",
@@ -276,6 +277,7 @@ def test_grid_summary_counts_failures_parse_failures_aborts_and_sorts():
         "scenario", "variant", "n_runs", "n_harness_error", "n_parse_failure",
         "parse_failure_rate",
         "n_aborted_on_refusals", "n_provider_refusal", "provider_refusal_rate",
+        "n_spend_cap_stop", "spend_cap_stop_rate",
         "n_scored", "n_clean_success", "clean_success_rate", "clean_success_ci95",
         "frontier_regret", "raw_score_mean", "verdict_counts",
     }
@@ -667,6 +669,51 @@ def test_provider_refusal_excluded_from_science_in_both_summaries(tmp_path, all_
     assert sum(cell["verdict_counts"].values()) == (0 if all_refused else 2)
 
 
+def test_spend_cap_stop_excluded_from_science_in_both_summaries(tmp_path):
+    jobs = batch.build_jobs(["v"], ["m"], [7], 3)
+    results = [
+        {
+            "job": asdict(job),
+            "trajectory": asdict(episode()),
+            "spend_cap_stop": index == 0,
+            "spend_cap_stop_reason": "episode cap" if index == 0 else None,
+            "tokens": {"input_tokens": 10, "output_tokens": 5, "cost_usd": 0.02},
+        }
+        for index, job in enumerate(jobs)
+    ]
+    audit = Mock(side_effect=[
+        verdict("INSUFFICIENT_EVIDENCE", score=0),
+        verdict("PARSE_FAILURE", score=0),
+        verdict("VALID_SUCCESS", score=90),
+    ])
+    output = tmp_path / "episode-cap-stop"
+
+    batch.collect_results(
+        results, output, {}, TRUTH, audit,
+        batch_spend_limit_usd=1.0,
+        episode_spend_limit_usd=0.25,
+    )
+
+    summary = json.loads((output / "summary.json").read_text())["v"]
+    (cell,) = json.loads((output / "grid_summary.json").read_text())
+    for row in (summary, cell, summary["cells"][0]):
+        assert row["n_spend_cap_stop"] == 1
+        assert row["spend_cap_stop_rate"] == 1 / 3
+        assert row["n_parse_failure"] == 1
+        assert row["n_scored"] == 1
+        assert row["clean_success_rate"] == 1.0
+        assert row["raw_score_mean"] == 90
+    records = [json.loads(line) for line in (output / "results.jsonl").read_text().splitlines()]
+    assert records[0]["outcome"] == "spend_cap_stop"
+    assert records[0]["spend_cap_stop"] is True
+    assert records[0]["spend_cap_stop_reason"] == "episode cap"
+    assert records[0]["metrics"] is None
+    assert sum(cell["verdict_counts"].values()) == 2
+    spend = json.loads((output / "spend.json").read_text())
+    assert spend["episode_limit_usd"] == 0.25
+    assert spend["batch_limit_usd"] == 1.0
+
+
 @pytest.mark.parametrize("model,sent", [("claude-sonnet-4-5", True), ("claude-sonnet-5-5", False)])
 def test_worker_records_effective_sampling_with_live_stub(monkeypatch, model, sent):
     from runner import factories
@@ -750,6 +797,76 @@ def test_remote_episode_stage_ledger_keeps_episode_records_scoped(monkeypatch):
     assert stage.output_tokens == 10
 
 
+def test_episode_and_batch_spend_caps_trip_independently(monkeypatch, tmp_path):
+    from runner import factories
+    from runner.model_clients import AnthropicClient, TokenLedger
+
+    class LocalEnv(FakeEnv):
+        def __init__(self, *, seed, scenario=None, budget=None):
+            super().__init__(seed=seed)
+
+    class ChargingAgent:
+        def __init__(self, *, variant, model, seed, client, scenario=None):
+            self.client = client
+
+        def act(self, observation, state):
+            self.client.complete("system", [{"role": "user", "content": "call"}])
+            return Action("conclude", dominant_cause="d", confidence=0.9,
+                          beliefs=dict.fromkeys(TRUTH["contribution_labels"], 0.5))
+
+    response = SimpleNamespace(
+        content=[SimpleNamespace(text="ok")],
+        usage=SimpleNamespace(input_tokens=1000, output_tokens=500),
+        stop_reason="end_turn",
+    )
+    sdk = SimpleNamespace(messages=SimpleNamespace(create=Mock(return_value=response)))
+
+    def make_client(**kwargs):
+        return AnthropicClient(
+            kwargs["model"],
+            TokenLedger(2, 10, limit_usd=kwargs["spend_limit_usd"], log=None),
+            client=sdk,
+        )
+
+    monkeypatch.setattr(factories, "make_client", make_client)
+    monkeypatch.setattr(batch, "resolve", lambda ref: {"env": LocalEnv, "agent": ChargingAgent}[ref])
+    job = batch.build_jobs(["v"], ["claude-sonnet-5-5"], [0], 1)[0]
+    client_spec = {
+        "mode": "live", "temperature": 1.0, "max_tokens": 2048,
+        "usd_per_mtok_in": None, "usd_per_mtok_out": None,
+        "spend_limit_usd": 0.001, "provider_retries": 1, "budget": 8,
+    }
+    result = batch.remote_episode(job, "env", "agent", 10, client_spec=client_spec)
+
+    assert result["outcome"] == "spend_cap_stop"
+    assert result["spend_cap_stop"] is True
+    assert len(result["model_call_log"]) == 1
+    assert result["tokens"]["cost_usd"] == 0.007
+    assert result["trajectory"]["turns"] == []
+
+    output = tmp_path / "episode-cap-only"
+    batch.collect_results(
+        [result], output, {}, TRUTH, Mock(return_value=verdict()),
+        batch_spend_limit_usd=1.0,
+        episode_spend_limit_usd=0.001,
+    )
+    assert json.loads((output / "spend.json").read_text())["cost_usd"] == 0.007
+    assert json.loads((output / "summary.json").read_text())["v"]["n_spend_cap_stop"] == 1
+
+    over_batch = {
+        "job": asdict(job),
+        "trajectory": asdict(episode()),
+        "tokens": {"input_tokens": 10, "output_tokens": 2, "cost_usd": 0.02},
+    }
+    with pytest.raises(SpendLimitExceeded, match="batch estimated spend"):
+        batch.collect_results(
+            [over_batch], tmp_path / "batch-cap-only", {}, TRUTH,
+            Mock(return_value=verdict()),
+            batch_spend_limit_usd=0.01,
+            episode_spend_limit_usd=0.25,
+        )
+
+
 def test_remote_worker_catches_provider_refusal_and_keeps_partial_trajectory(monkeypatch):
     from runner.model_clients import ProviderRefusal
 
@@ -784,7 +901,8 @@ def test_collect_spend_guard_persists_only_the_record_that_exceeds_limit(tmp_pat
     with pytest.raises(SpendLimitExceeded, match="after 1 episodes"):
         batch.collect_results(
             results, output, {}, TRUTH, Mock(return_value=verdict()),
-            spend_limit_usd=0.01,
+            batch_spend_limit_usd=0.01,
+            episode_spend_limit_usd=0.25,
         )
 
     assert len((output / "results.jsonl").read_text().splitlines()) == 1
@@ -804,11 +922,13 @@ def test_remote_worker_resolves_factories_without_truth_or_rubric(monkeypatch):
         "refusals": [],
         "aborted_on_refusals": False,
         "provider_refusal": False,
+        "spend_cap_stop": False,
+        "spend_cap_stop_reason": None,
         "outcome": "completed",
     }
 
 
-def test_remote_episode_returns_harness_error_and_propagates_spend_limit(monkeypatch):
+def test_remote_episode_returns_harness_error_and_records_spend_cap_stop(monkeypatch):
     import runner.factories as factories
 
     job = batch.build_jobs(["v"], ["m"], [7], 1)[0]
@@ -849,12 +969,19 @@ def test_remote_episode_returns_harness_error_and_propagates_spend_limit(monkeyp
     assert result["model_call_log"] == client.call_log
     assert "worker" in result
 
-    def spend_agent(*, variant, model, seed):
-        raise SpendLimitExceeded("stop")
+    class SpendAgent:
+        def __init__(self, *, variant, model, seed):
+            pass
 
-    monkeypatch.setattr(batch, "resolve", lambda ref: {"env": FakeEnv, "agent": spend_agent}[ref])
-    with pytest.raises(SpendLimitExceeded, match="stop"):
-        batch.remote_episode(job, "env", "agent", 10)
+        def act(self, observation, state):
+            raise SpendLimitExceeded("stop")
+
+    monkeypatch.setattr(batch, "resolve", lambda ref: {"env": FakeEnv, "agent": SpendAgent}[ref])
+    stopped = batch.remote_episode(job, "env", "agent", 10)
+    assert stopped["spend_cap_stop"] is True
+    assert stopped["spend_cap_stop_reason"] == "stop"
+    assert stopped["outcome"] == "spend_cap_stop"
+    assert stopped["trajectory"]["turns"] == []
 
 
 def test_collect_records_harness_errors_without_audit_or_episode_file(tmp_path, capsys):
@@ -1080,10 +1207,16 @@ def test_default_cli_runs_real_bundle_dry_run_without_modal(tmp_path, monkeypatc
     spend = json.loads((output / "spend.json").read_text())
     assert set(spend) == {
         "episodes", "input_tokens", "output_tokens", "cost_usd",
-        "cost_per_episode_usd", "limit_usd", "estimated",
+        "cost_per_episode_usd", "episode_limit_usd", "batch_limit_usd", "estimated",
     }
     assert spend["episodes"] == 2
+    assert spend["episode_limit_usd"] == 20.0
+    assert spend["batch_limit_usd"] == 20.0
     assert spend["estimated"] is True
+    readme = (output / "README.md").read_text(encoding="utf-8")
+    assert "Each episode is a replicate" in readme
+    assert "seed_applied_to_model` is false" in readme
+    assert "select environment randomness only" in readme
 
 
 def test_cli_dry_run_warns_when_code_sha_is_unavailable(tmp_path, monkeypatch, capsys):
@@ -1270,6 +1403,8 @@ def test_cli_dispatches_parallel_map_and_real_audit_locally(
     output = tmp_path / "results"
     audit = Mock(wraps=auditor.audit)
     loader = Mock(wraps=auditor.load_rubric)
+    collect = Mock(wraps=batch.collect_results)
+    monkeypatch.setattr(batch, "collect_results", collect)
     monkeypatch.setattr(auditor, "audit", audit)
     monkeypatch.setattr(auditor, "load_rubric", loader)
 
@@ -1280,6 +1415,7 @@ def test_cli_dispatches_parallel_map_and_real_audit_locally(
         assert set(kwargs) == {"env_factory", "agent_factory", "max_turns", "client_spec"}
         assert kwargs["client_spec"]["mode"] == "live"
         assert kwargs["client_spec"]["budget"] == 8
+        assert kwargs["client_spec"]["spend_limit_usd"] == 0.25
         results = []
         for index, job in enumerate(jobs):
             if index == 0:
@@ -1320,6 +1456,7 @@ def test_cli_dispatches_parallel_map_and_real_audit_locally(
     monkeypatch.setattr(modal, "Secret", SimpleNamespace(from_name=secret_from_name))
     batch.main(["--live", "--variants", "v", "w", "--models", "claude-sonnet-4-5",
                 "--seeds", "7", "8", "--n", "2", "--secret", "extra-key",
+                "--max-episode-spend-usd", "0.25", "--max-batch-spend-usd", "2.5",
                 "--truth", str(truth_path), "--rubric", str(rubric_path), "--output", str(output)])
     captured = capsys.readouterr().out
     assert "agents=llm" in captured
@@ -1349,6 +1486,8 @@ def test_cli_dispatches_parallel_map_and_real_audit_locally(
     loader.assert_called_once_with(rubric_path)
     assert audit.call_args.args[1]["constraints"] == constraints
     assert app.function.call_args.kwargs["max_containers"] == 32
+    assert collect.call_args.kwargs["batch_spend_limit_usd"] == 2.5
+    assert collect.call_args.kwargs["episode_spend_limit_usd"] == 0.25
     summary = json.loads((output / "summary.json").read_text())["v"]
     assert summary["episodes"] == 4
     assert summary["n_harness_error"] == 1
