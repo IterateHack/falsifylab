@@ -2,6 +2,7 @@
 import csv
 import json
 from pathlib import Path
+import shutil
 import subprocess
 from unittest.mock import Mock
 
@@ -74,11 +75,31 @@ def test_synthetic_cli_creates_all_stamped_assets_and_manifest(tmp_path, capsys)
         "auditor_validation.png",
         "auditor_validation.csv",
         "auditor_validation.md",
+        "replicates/replicate_summary.json",
+        "replicates/replicate_summary.csv",
+        "replicates/replicate_summary.md",
     }
     manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
     entries = manifest["assets"]
     assert {entry["path"] for entry in entries} == expected
     assert not (output / "_synthetic_input" / "REPORT.md").exists()
+    replicate_entry = next(
+        entry for entry in entries
+        if entry["path"] == "replicates/replicate_summary.json"
+    )
+    replicate_records = _load_records(Path(replicate_entry["source_files"][0]).parent)
+    replicate_summary = json.loads(
+        (output / "replicates" / "replicate_summary.json").read_text(
+            encoding="utf-8",
+        ),
+    )
+    assert replicate_summary["stamp"]["synthetic"] is True
+    assert replicate_summary["stamp"]["wave"] is False
+    assert replicate_summary["excluded_scripted_variants"] == ["random", "ucb"]
+    assert sum(row["n_runs"] for row in replicate_summary["rows"]) == sum(
+        record["job"]["variant"] not in batch.SCRIPTED_VARIANTS
+        for record in replicate_records
+    )
     for label in ("synthetic_batch", "synthetic_reaudit"):
         ci_csv = output / label / "clean_success_ci.csv"
         headers = next(csv.reader(ci_csv.open(encoding="utf-8")))
@@ -104,6 +125,7 @@ def test_synthetic_cli_creates_all_stamped_assets_and_manifest(tmp_path, capsys)
             assert "SYNTHETIC DATA" not in slide_assets._stamp_line(stamp)
         else:
             assert "SYNTHETIC DATA" in slide_assets._stamp_line(stamp)
+            assert stamp["wave"] is False
         if entry["path"].endswith("experiment_selection.png") or \
                 entry["path"].endswith("experiment_selection.md") or \
                 entry["path"].endswith("experiment_selection.csv"):
@@ -149,6 +171,67 @@ def test_synthetic_accepts_and_honors_explicit_validation_path(tmp_path, monkeyp
 
     assert captured["validation"] == validation_path
     assert len(captured["batch_dirs"]) == 2
+
+
+def _non_synthetic_batch_copy(tmp_path):
+    source_dir, _ = create_synthetic_inputs(tmp_path / "source")
+    batch_dir = tmp_path / "dry-run-batch"
+    shutil.copytree(source_dir, batch_dir)
+    records = _load_records(batch_dir)
+    for record in records:
+        sampling = record.get("sampling")
+        if isinstance(sampling, dict):
+            sampling["client"] = "dry-run"
+    (batch_dir / "results.jsonl").write_text(
+        "".join(json.dumps(record, allow_nan=False) + "\n" for record in records),
+        encoding="utf-8",
+    )
+    return batch_dir
+
+
+def test_wave_cli_stamps_wave_and_batch_mode_watermarks_non_wave(tmp_path, capsys):
+    batch_dir = _non_synthetic_batch_copy(tmp_path)
+    wave_output = tmp_path / "wave-slides"
+    slide_assets.main([
+        "--wave", str(batch_dir),
+        "--output", str(wave_output),
+    ])
+    capsys.readouterr()
+    wave_summary_path = wave_output / "replicates" / "replicate_summary.json"
+    wave_summary = json.loads(wave_summary_path.read_text(encoding="utf-8"))
+    assert wave_summary["stamp"]["wave"] is True
+    assert wave_summary["stamp"]["synthetic"] is False
+    assert "NOT WAVE DATA" not in slide_assets._stamp_line(wave_summary["stamp"])
+    wave_figure = slide_assets._figure(wave_summary["stamp"])
+    assert not any("DATA" in text.get_text() for text in wave_figure.texts)
+    wave_manifest = json.loads(
+        (wave_output / "manifest.json").read_text(encoding="utf-8"),
+    )
+    assert {
+        "replicates/replicate_summary.json",
+        "replicates/replicate_summary.csv",
+        "replicates/replicate_summary.md",
+    } <= {entry["path"] for entry in wave_manifest["assets"]}
+    assert all(
+        entry["stamp"]["wave"] is True
+        for entry in wave_manifest["assets"]
+        if not entry["path"].startswith("auditor_validation.")
+    )
+
+    batch_output = tmp_path / "batch-slides"
+    slide_assets.main([
+        "--batch", str(batch_dir),
+        "--output", str(batch_output),
+    ])
+    capsys.readouterr()
+    batch_summary = json.loads(
+        (batch_output / "replicates" / "replicate_summary.json").read_text(
+            encoding="utf-8",
+        ),
+    )
+    assert batch_summary["stamp"]["wave"] is False
+    assert "NOT WAVE DATA" in slide_assets._stamp_line(batch_summary["stamp"])
+    assert slide_assets._watermark(batch_summary["stamp"]) == "NOT WAVE DATA"
 
 
 def test_clean_success_rows_match_grid_and_reject_tampering(tmp_path):
@@ -748,6 +831,8 @@ def test_stamp_reflects_models_sampling_and_missing_sampling(tmp_path):
     records = _load_records(batch_dir)
     summary = json.loads((batch_dir / "summary.json").read_text(encoding="utf-8"))
     stamp = slide_assets.build_batch_stamp(batch_dir, records, summary)
+    assert stamp["wave"] is False
+    assert "wave=false" in slide_assets._stamp_line(stamp)
     assert stamp["models"] == ["model-x", "model-y", "scripted"]
     assert "T=0.5 client=synthetic max_tokens=512" in stamp["sampling"]
     assert "T=0.7 client=synthetic max_tokens=512" in stamp["sampling"]

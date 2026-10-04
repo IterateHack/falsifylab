@@ -20,6 +20,12 @@ from runner.modal_batch import (
     split_science_records,
     wilson_interval,
 )
+from reports.replicates import (
+    BOOTSTRAP_RESAMPLES,
+    BOOTSTRAP_SEED,
+    REPLICATE_HEADERS,
+    replicate_rows,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_VALIDATION = REPO_ROOT / "auditor" / "validation" / "REPORT.md"
@@ -46,6 +52,19 @@ PASS_K_CAPTION = (
 COST_OF_PASS_CAPTION = (
     "cost_of_pass = mean_cost / clean_success_rate (Cost-of-Pass, arXiv:2504.13359). "
     "Cost is experiment budget units spent per episode, not inference dollars."
+)
+REPLICATE_CAPTION = (
+    "n = science runs. Refusal (provider refusal + env-refusal abort) and cap-stop "
+    "(max_turns) runs are reported as rates over all runs and excluded from clean "
+    "success and cost-of-pass. 95% percentile bootstrap over runs "
+    f"(B={BOOTSTRAP_RESAMPLES}, seed={BOOTSTRAP_SEED}); CIs are null when n < 2. "
+    "cost_of_pass = mean_cost / clean_success_mean (Cost-of-Pass, arXiv:2504.13359); "
+    "the upper bound is null when resamples with zero successes make it unbounded. "
+    "Cost is experiment budget units, not inference dollars."
+)
+REPLICATE_DENOMINATOR_NOTE = (
+    "This denominator differs from grid_summary/clean_success_ci, which keep "
+    "aborted-on-refusal runs in the denominator."
 )
 PATTERN_HEADING = "## Per-pattern recall and false-positive rate"
 KAPPA_HEADING = "## Cohen's kappa"
@@ -109,6 +128,7 @@ def _sampling_summary(records: list[dict]) -> list[str]:
 def build_batch_stamp(
     batch_dir: Path, records: list[dict], summary: dict, *,
     repo_root: Path = REPO_ROOT, git_stamp: tuple[str, bool] | None = None,
+    wave: bool = False,
 ) -> dict:
     batch_dir = Path(batch_dir)
     git_sha, dirty = git_stamp or _git_stamp(Path(repo_root))
@@ -142,6 +162,7 @@ def build_batch_stamp(
         "source": f"{batch_dir} (results SHA: {results_sha})",
         "reaudit": reaudit_note,
         "synthetic": synthetic,
+        "wave": wave,
     }
 
 
@@ -189,10 +210,21 @@ def _stamp_line(stamp: dict) -> str:
         f"sampling={render(stamp['sampling'])}",
         f"reaudit={render(stamp['reaudit'])}",
         f"synthetic={str(stamp['synthetic']).lower()}",
-        f"source={stamp['source']}",
     ]
-    prefix = "SYNTHETIC DATA — " if stamp["synthetic"] else ""
+    if "wave" in stamp:
+        parts.append(f"wave={str(stamp['wave']).lower()}")
+    parts.append(f"source={stamp['source']}")
+    watermark = _watermark(stamp)
+    prefix = f"{watermark} — " if watermark else ""
     return prefix + " | ".join(parts)
+
+
+def _watermark(stamp: dict) -> str | None:
+    if stamp.get("synthetic"):
+        return "SYNTHETIC DATA"
+    if stamp.get("wave") is False:
+        return "NOT WAVE DATA"
+    return None
 
 
 def _cell_text(value) -> str:
@@ -208,12 +240,18 @@ def _cell_text(value) -> str:
 def _display_cell(header: str, value) -> str:
     if value is None:
         return "—"
-    if header == "clean_success_ci95":
-        return f"[{float(value[0]):.3f}, {float(value[1]):.3f}]"
+    if header in ("clean_success_ci95", "cost_of_pass_ci95"):
+        bounds = [
+            "—" if bound is None else f"{float(bound):.3f}"
+            for bound in value
+        ]
+        return f"[{bounds[0]}, {bounds[1]}]"
     rate_headers = {
         "clean_success_rate", "best-of-n minus mean", "frontier_regret",
         "recall", "false-alarm rate", "observed agreement",
         "pass^1", "pass^3", "pass^5", "cost_of_pass",
+        "provider_refusal_rate", "refusal_abort_rate", "refusal_rate",
+        "cap_stop_rate", "clean_success_mean", "cost_of_pass_unbounded_share",
     }
     if header in rate_headers:
         try:
@@ -418,9 +456,10 @@ def _figure(stamp: dict):
 
     figure = Figure(figsize=(10, 5.625))
     FigureCanvasAgg(figure)
-    if stamp["synthetic"]:
+    watermark = _watermark(stamp)
+    if watermark:
         figure.text(
-            0.5, 0.52, "SYNTHETIC DATA", fontsize=30, color="#777777",
+            0.5, 0.52, watermark, fontsize=30, color="#777777",
             alpha=0.16, rotation=25, ha="center", va="center", zorder=100,
         )
     return figure
@@ -1369,6 +1408,7 @@ def _asset_entry(path: Path, output_root: Path, stamp: dict, source_files: list[
 def generate_batch_assets(
     batch_dir: Path, output_dir: Path, output_root: Path, *,
     git_stamp: tuple[str, bool] | None = None, repo_root: Path = REPO_ROOT,
+    wave: bool = False,
 ) -> list[dict]:
     batch_dir = Path(batch_dir)
     output_dir = Path(output_dir)
@@ -1380,6 +1420,7 @@ def generate_batch_assets(
     score_rows = _cell_score_rows(records, clean_rows)
     stamp = build_batch_stamp(
         batch_dir, records, summary, repo_root=repo_root, git_stamp=git_stamp,
+        wave=wave,
     )
     output_dir.mkdir(parents=True, exist_ok=False)
     source_files = [
@@ -1541,10 +1582,110 @@ def generate_validation_assets(
     ]
 
 
+def _pooled_replicate_stamp(
+    batch_dirs: list[Path], records_by_dir: list[list[dict]], *,
+    wave: bool, git_stamp: tuple[str, bool],
+) -> dict:
+    models = set()
+    sampling = set()
+    sources = []
+    synthetic_flags = []
+    for batch_dir, records in zip(batch_dirs, records_by_dir):
+        models.update(
+            str(record["job"]["model"])
+            for record in records
+            if record.get("job", {}).get("model") is not None
+        )
+        sampling.update(_sampling_summary(records))
+        synthetic_flags.append(any(
+            isinstance(record.get("sampling"), dict)
+            and record["sampling"].get("client") == "synthetic"
+            for record in records
+        ))
+        code_shas = sorted(_code_shas(records))
+        sha_text = ", ".join(code_shas) if code_shas else "not recorded"
+        sources.append(f"{batch_dir} (results SHA: {sha_text})")
+    return {
+        "git_sha": git_stamp[0],
+        "git_dirty": git_stamp[1],
+        "models": sorted(models),
+        "sampling": sorted(sampling),
+        "source": "; ".join(sources),
+        "reaudit": None,
+        "synthetic": bool(synthetic_flags) and all(synthetic_flags),
+        "wave": bool(batch_dirs) and all(wave for _ in batch_dirs),
+    }
+
+
+def generate_replicate_assets(
+    batch_dirs: list[Path], output_root: Path, *,
+    wave: bool = False, git_stamp: tuple[str, bool] | None = None,
+    repo_root: Path = REPO_ROOT,
+) -> list[dict]:
+    """Generate pooled replicate summaries, requiring only each results.jsonl."""
+    batch_dirs = [Path(path) for path in batch_dirs]
+    output_root = Path(output_root)
+    if git_stamp is None:
+        git_stamp = _git_stamp(Path(repo_root))
+    records_by_dir = [
+        _read_jsonl(batch_dir / "results.jsonl")
+        for batch_dir in batch_dirs
+    ]
+    records = [record for batch_records in records_by_dir for record in batch_records]
+    rows, excluded_variants = replicate_rows(records)
+    stamp = _pooled_replicate_stamp(
+        batch_dirs,
+        records_by_dir,
+        wave=wave,
+        git_stamp=git_stamp,
+    )
+    output_dir = output_root / "replicates"
+    output_dir.mkdir(parents=True, exist_ok=False)
+    json_path = output_dir / "replicate_summary.json"
+    csv_path = output_dir / "replicate_summary.csv"
+    md_path = output_dir / "replicate_summary.md"
+    json_path.write_text(
+        json.dumps(
+            {
+                "stamp": stamp,
+                "excluded_scripted_variants": excluded_variants,
+                "rows": rows,
+            },
+            indent=2,
+            allow_nan=False,
+        ) + "\n",
+        encoding="utf-8",
+    )
+    _write_csv(csv_path, list(REPLICATE_HEADERS), rows, stamp)
+    scripted_note = (
+        "* Scripted variants excluded: " + ", ".join(excluded_variants) + "."
+        if excluded_variants
+        else "* No scripted variants were present to exclude."
+    )
+    _write_markdown(
+        md_path,
+        "Replicate summary",
+        list(REPLICATE_HEADERS),
+        rows,
+        stamp,
+        extra_sections=[
+            REPLICATE_CAPTION,
+            REPLICATE_DENOMINATOR_NOTE,
+            scripted_note,
+        ],
+    )
+    source_files = [batch_dir / "results.jsonl" for batch_dir in batch_dirs]
+    return [
+        _asset_entry(path, output_root, stamp, source_files)
+        for path in (json_path, csv_path, md_path)
+    ]
+
+
 def generate_assets(
     batch_dirs: list[Path], validation_path: Path, output_root: Path, *,
     synthetic_validation: bool = False, repo_root: Path = REPO_ROOT,
-    git_stamp: tuple[str, bool] | None = None,
+    git_stamp: tuple[str, bool] | None = None, wave: bool = False,
+    replicate_dirs: list[Path] | None = None,
 ) -> list[dict]:
     output_root = Path(output_root)
     labels = [Path(batch_dir).name for batch_dir in batch_dirs]
@@ -1561,8 +1702,18 @@ def generate_assets(
                 output_root,
                 git_stamp=git_stamp,
                 repo_root=repo_root,
+                wave=wave,
             )
         )
+    assets.extend(
+        generate_replicate_assets(
+            batch_dirs if replicate_dirs is None else replicate_dirs,
+            output_root,
+            wave=wave,
+            git_stamp=git_stamp,
+            repo_root=repo_root,
+        )
+    )
     assets.extend(
         generate_validation_assets(
             validation_path,
@@ -1583,6 +1734,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     inputs = parser.add_mutually_exclusive_group()
     inputs.add_argument("--batch", type=Path, action="append", help="batch directory; repeat for more")
+    inputs.add_argument("--wave", type=Path, action="append", help="wave batch directory; repeat for more")
     inputs.add_argument("--synthetic", action="store_true", help="generate clearly marked synthetic inputs")
     parser.add_argument(
         "--validation", type=Path, default=None,
@@ -1595,9 +1747,10 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> None:
     parser = build_parser()
     args = parser.parse_args(argv)
-    if not args.synthetic and not args.batch:
-        parser.error("provide --batch at least once or use --synthetic")
-    labels = [batch_dir.name for batch_dir in (args.batch or [])]
+    if not args.synthetic and not args.batch and not args.wave:
+        parser.error("provide --batch or --wave at least once, or use --synthetic")
+    input_dirs = args.batch or args.wave or []
+    labels = [batch_dir.name for batch_dir in input_dirs]
     if len(labels) != len(set(labels)):
         parser.error("Batch directory names must be unique for output labels")
     if args.output.exists():
@@ -1612,15 +1765,26 @@ def main(argv: list[str] | None = None) -> None:
                 args.output / "_synthetic_input",
             )
             batch_dirs = [batch_dir, reaudit_dir]
+            replicate_dirs = [batch_dir]
             validation_path = args.validation or DEFAULT_VALIDATION
+            wave = False
+        elif args.wave:
+            batch_dirs = args.wave
+            replicate_dirs = batch_dirs
+            validation_path = args.validation or DEFAULT_VALIDATION
+            wave = True
         else:
             batch_dirs = args.batch
+            replicate_dirs = batch_dirs
             validation_path = args.validation or DEFAULT_VALIDATION
+            wave = False
         assets = generate_assets(
             batch_dirs,
             validation_path,
             args.output,
             git_stamp=git_stamp,
+            wave=wave,
+            replicate_dirs=replicate_dirs,
         )
     except (OSError, ValueError, KeyError, json.JSONDecodeError) as exc:
         parser.error(str(exc))
