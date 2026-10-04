@@ -237,6 +237,10 @@ Both results are in `runs/`, and the notebook is readable as markdown at
   data-analysis outputs rather than recall wherever possible, the notebook
   records prior knowledge claimed, and the control run exists to quantify it -
   but a model that already knows about Trp33 cannot unknow it.
+- **Scores on the GLP-1R curriculum are a pipeline check, not a capability
+  measurement.** Its hypothesis is well known and its capstone is scored against a
+  published phase 3 result (ATTAIN-1, NEJM 2025), so a model may answer it from
+  prior knowledge rather than from the data.
 - **n=1 per arm.** Treat deltas under about 0.1 between runs as noise.
 - **Three data soft spots** - transcribed half-lives, Open Targets release
   dependence, and simulated dose-response points over real potencies - are listed
