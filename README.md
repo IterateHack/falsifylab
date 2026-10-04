@@ -277,8 +277,9 @@ branches are reported, not patched: a generality test that fails is a result.
 ## Known limitations
 
 These are limitations of scenario A's answer key, not of the harness. They come from an
-independent literature check ([`docs/research/scenario-a-gold-check.md`](docs/research/scenario-a-gold-check.md)),
-and the rubric and truth file do not yet reflect them.
+independent literature check ([`docs/research/scenario-a-gold-check.md`](docs/research/scenario-a-gold-check.md)).
+The briefing and the truth file's notes have been updated for some of them; the scored labels have
+not, and the two marked post-hackathon below are the ones that still change grades.
 
 - **H4 is the dominant contributor, not a sufficient cause.** The source's own wording is poor
   uptake, efflux and metabolism, "chiefly the last" — three ranked causes, not one isolated
