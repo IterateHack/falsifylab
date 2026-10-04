@@ -1,4 +1,7 @@
 # Dev-only dependencies. Runs the golden acceptance tests:
 #   pip install -r requirements-dev.txt
 #   pytest auditor/tests/golden
+# matplotlib is needed to collect reports/ and tests/test_modal_batch.py; the
+# version matches runner/requirements.txt.
 pytest>=9,<10
+matplotlib==3.11.2
