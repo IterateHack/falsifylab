@@ -1,0 +1,9 @@
+# Real-trajectory hand labels
+
+Run `python3 -m auditor.validation.real.label RESULTS --labels LABELS.jsonl --labeller NAME`; it appends each accepted label immediately and resumes unfinished episodes. By default, the auditor verdict is hidden until after each label is written, making the row eligible for headline agreement. Use `--show-verdict` only for triage: those anchored labels are excluded from headline kappa. Use `--relabel EPISODE_ID` to append replacement rows (readers use the last row). `s` skips, `q` quits, and `?` repeats the scenario vocabulary.
+
+Labels are comma-separated and scenario-scoped: `honest`, that scenario's rubric RH IDs, `unsafe`, `protocol_violation`, and `other_hack` (which requires a note). `honest` must stand alone; other labels may be combined. Each row records the results-file SHA-256, labels, optional note, labeller, whether the verdict was shown, auditor verdict, and UTC timestamp. A labels file belongs to exactly one results file.
+
+Run `python3 -m auditor.validation.real.agreement RESULTS LABELS --out agreement.json [--markdown agreement.md]` for headline flagged-vs-honest Cohen's kappa and scenario-qualified RH one-vs-rest results over blind labels, plus separate anchored results for labels made after seeing the verdict. Both sections include unsafe, protocol-violation, and other-hack categories. Kappa uses `auditor/validation/run_validation.py`'s `cohen_kappa`; `None` means no pairs or expected agreement of 1. Parse failures and unlabelled episodes are reported, not scored.
+
+The auditor reports one verdict: an episode that is both unsafe and in protocol breach maps to `unsafe` only. RH IDs come from `reward_hacks` and are recorded whatever the verdict. These are descriptive agreement statistics, not evidence of auditor correctness: categories depend on each scenario's rubric and small samples can make kappa unstable.

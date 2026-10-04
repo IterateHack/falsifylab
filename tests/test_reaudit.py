@@ -125,6 +125,55 @@ def test_synthetic_identity_preserves_records_summaries_and_source(tmp_path):
     assert _snapshot(source) == source_snapshot
 
 
+def test_harness_error_passes_through_unchanged_without_audit_or_trajectory_lookup(
+    tmp_path, monkeypatch,
+):
+    record = {
+        "job": {
+            "episode_id": "00000000",
+            "variant": "broken",
+            "model": "none",
+            "seed": 0,
+            "repeat": 0,
+            "effective_seed": 0,
+            "scenario": "a",
+        },
+        "verdict": {"verdict": "HARNESS_ERROR"},
+        "harness_error": {"type": "RuntimeError", "message": "worker failed"},
+        "refusals": [],
+        "refusal_count": 0,
+        "aborted_on_refusals": False,
+        "metrics": None,
+        "trajectory": None,
+        "sampling": None,
+        "worker": {"on_modal": False},
+    }
+    source = tmp_path / "source"
+    source.mkdir()
+    results_path = source / "results.jsonl"
+    results_path.write_text(json.dumps(record) + "\n")
+    asset_loader = Mock(side_effect=AssertionError("harness errors need no audit assets"))
+    monkeypatch.setattr(reaudit_module, "_load_default_assets", asset_loader)
+    audit = Mock(side_effect=AssertionError("harness errors must not be audited"))
+    output = tmp_path / "reaudited"
+
+    metadata = reaudit_module.reaudit(results_path, output, audit_fn=audit)
+
+    rebuilt = json.loads((output / "results.jsonl").read_text())
+    assert rebuilt == record
+    assert metadata["episodes"] == 1
+    assert metadata["verdicts_changed"] == []
+    assert audit.call_count == 0
+    asset_loader.assert_not_called()
+    summary = json.loads((output / "summary.json").read_text())["broken"]
+    (cell,) = json.loads((output / "grid_summary.json").read_text())
+    assert summary["episodes"] == 1
+    assert summary["n_harness_error"] == 1
+    assert cell["n_runs"] == 1
+    assert cell["n_harness_error"] == 1
+    assert cell["verdict_counts"]["HARNESS_ERROR"] == 1
+
+
 @pytest.mark.parametrize("scenario", ["a", "b"])
 def test_real_bundle_dry_run_reaudits_with_default_auditor(
     tmp_path, monkeypatch, capsys, scenario,
@@ -157,6 +206,23 @@ def test_real_bundle_dry_run_reaudits_with_default_auditor(
     assert metadata["audit"] == "auditor.audit:audit"
     assert metadata["verdicts_changed"] == []
     assert "0 verdicts changed" in capsys.readouterr().out
+
+
+def test_reaudit_preserves_provider_refusal_exclusion(tmp_path):
+    source = tmp_path / "source"
+    job = batch.build_jobs(["baseline"], ["model"], [0], 1)[0]
+    result = {"job": asdict(job), "trajectory": {"scenario_id": "synthetic", "turns": []},
+              "provider_refusal": True, "model_call_log": [{"stop_reason": "refusal"}]}
+    audit = Mock(return_value=verdict("INSUFFICIENT_EVIDENCE", score=0))
+    batch.collect_results([result], source, RUBRIC, TRUTH, audit)
+    output = tmp_path / "reaudited"
+    reaudit_module.reaudit(source / "results.jsonl", output, audit_fn=audit, rubric=RUBRIC, truth=TRUTH)
+    for name in ("results.jsonl", "summary.json", "grid_summary.json"):
+        assert (source / name).read_bytes() == (output / name).read_bytes()
+    record = json.loads((output / "results.jsonl").read_text())
+    assert record["provider_refusal"] is True
+    assert record["outcome"] == "provider_refusal"
+    assert record["metrics"] is None
 
 
 def test_output_must_be_new_and_separate_from_results_directory(tmp_path):
