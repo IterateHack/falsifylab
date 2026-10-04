@@ -818,10 +818,11 @@ def test_collect_records_harness_errors_without_audit_or_episode_file(tmp_path, 
     ])
     output = tmp_path / "harness-errors"
 
-    summary = batch.collect_results(results, output, {}, TRUTH, audit)
+    summary = batch.collect_results(results, output, {}, TRUTH, audit, code_sha="abc123")
 
     assert audit.call_count == 2
     records = [json.loads(line) for line in (output / "results.jsonl").read_text().splitlines()]
+    assert all(record["code_sha"] == "abc123" for record in records)
     error_record = records[2]
     assert error_record["verdict"] == {"verdict": batch.HARNESS_ERROR_VERDICT}
     assert error_record["harness_error"] == harness_error
@@ -851,6 +852,47 @@ def test_collect_records_harness_errors_without_audit_or_episode_file(tmp_path, 
     assert (output / "reward_vs_audit.png").is_file()
     assert (output / "raw_vs_clean.png").is_file()
     assert "1 episode(s) HARNESS_ERROR" in capsys.readouterr().err
+
+
+def test_collect_results_accepts_real_scripted_records_with_null_sampling(tmp_path):
+    from auditor.audit import audit, load_rubric
+    from runner.factories import make_env, scenario_dir
+
+    bundle = scenario_dir("a")
+    rubric = load_rubric(bundle / "auditor" / "rubric.json")
+    truth = json.loads((bundle / "auditor" / "truth.json").read_text(encoding="utf-8"))
+    budget = make_env(seed=0, scenario="a").state.budget_remaining
+    jobs = batch.build_jobs([], [], [0], 1, scenario="a", agents=("random", "ucb"))
+    client_spec = {
+        "mode": "dry-run",
+        "temperature": DEFAULT_TEMPERATURE,
+        "max_tokens": 2048,
+        "usd_per_mtok_in": 3.0,
+        "usd_per_mtok_out": 15.0,
+        "spend_limit_usd": 20.0,
+        "budget": budget,
+    }
+    results = [
+        batch.remote_episode(
+            job,
+            "runner.factories:make_env",
+            "runner.factories:make_agent",
+            100,
+            client_spec=client_spec,
+        )
+        for job in jobs
+    ]
+    assert all("trajectory" in result and "harness_error" not in result for result in results)
+    assert all(result["sampling"] is None for result in results)
+
+    output = tmp_path / "scripted-records"
+    batch.collect_results(results, output, rubric, truth, audit)
+
+    records = [json.loads(line) for line in (output / "results.jsonl").read_text().splitlines()]
+    assert len(records) == 2
+    assert all(record["sampling"] is None for record in records)
+    spend = json.loads((output / "spend.json").read_text())
+    assert spend["estimated"] is False
 
 
 def test_worker_bundle_files_include_only_required_agent_data_for_a_and_b():
@@ -938,6 +980,8 @@ def test_default_cli_runs_real_bundle_dry_run_without_modal(tmp_path, monkeypatc
 
     modal_app = Mock(side_effect=AssertionError("Modal must not be touched for a dry run"))
     monkeypatch.setattr(modal, "App", modal_app)
+    provenance = Mock(return_value="abc123")
+    monkeypatch.setattr(batch, "code_sha", provenance)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("MODAL_TASK_ID", raising=False)
     output = tmp_path / "dry-run"
@@ -954,7 +998,9 @@ def test_default_cli_runs_real_bundle_dry_run_without_modal(tmp_path, monkeypatc
     modal_app.assert_not_called()
     records = [json.loads(line) for line in (output / "results.jsonl").read_text().splitlines()]
     assert len(records) == 2
+    assert provenance.call_count == 1
     for record in records:
+        assert record["code_sha"] == "abc123"
         assert record["sampling"]["temperature"] == DEFAULT_TEMPERATURE
         assert record["sampling"]["client"] == "dry-run"
         assert record["sampling"]["seed_applied_to_model"] is False
@@ -976,6 +1022,26 @@ def test_default_cli_runs_real_bundle_dry_run_without_modal(tmp_path, monkeypatc
     }
     assert spend["episodes"] == 2
     assert spend["estimated"] is True
+
+
+def test_cli_dry_run_warns_when_code_sha_is_unavailable(tmp_path, monkeypatch, capsys):
+    import modal
+
+    monkeypatch.setattr(
+        modal, "App", Mock(side_effect=AssertionError("Modal must not be touched for a dry run")),
+    )
+    provenance = Mock(return_value=None)
+    monkeypatch.setattr(batch, "code_sha", provenance)
+    output = tmp_path / "no-code-sha"
+
+    batch.main(["--agents", "random", "--seeds", "0", "--output", str(output)])
+
+    captured = capsys.readouterr()
+    assert "code_sha unavailable: not a git checkout or git not installed" in captured.err
+    provenance.assert_called_once_with()
+    records = [json.loads(line) for line in (output / "results.jsonl").read_text().splitlines()]
+    assert len(records) == 1
+    assert records[0]["code_sha"] is None
 
 
 def test_scripted_only_cli_dry_run_needs_no_llm_axes_or_client(tmp_path, monkeypatch):
