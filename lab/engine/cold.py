@@ -22,7 +22,8 @@ from .specs import load_curriculum
 SYSTEM = """\
 You are a scientist answering a research question from memory. You have no \
 data, no tools and no way to run anything. State what you believe is true from \
-what you already know.
+what you already know. Submit your answer with the `submit_answer` tool; it is \
+the only tool you have.
 """
 
 USER = """\
@@ -37,10 +38,38 @@ expect the experiment to support, in the required format:
 
 {answer_format}
 
-Reply with one JSON object and nothing else:
-{{"confidence": <number between 0 and 1: your confidence this is right>,
-  "answer": <the answer, in the required format>}}
+Submit with `submit_answer`, giving your confidence (0 to 1) that the answer \
+is right alongside the answer itself.
 """
+
+
+SUBMIT = {
+    "name": "submit_answer",
+    "description": "Submit the answer, in the required format, with your confidence.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+            "answer": {"type": "object", "additionalProperties": True},
+        },
+        "required": ["answer", "confidence"],
+        "additionalProperties": False,
+    },
+}
+
+
+def parse_submission(content: list[Any]) -> tuple[Any, float | None]:
+    """The structured submission if the model made one, else whatever JSON it
+    wrote in prose. The tool path is the fair one: the lab arms submit through
+    a tool too, so a stray bracket in free text should not cost the cold arm."""
+    for block in content:
+        if getattr(block, "type", None) == "tool_use" and block.name == "submit_answer":
+            args = block.input or {}
+            conf = args.get("confidence")
+            ok = isinstance(conf, (int, float)) and not isinstance(conf, bool) \
+                and 0 <= conf <= 1
+            return args.get("answer"), float(conf) if ok else None
+    return parse_reply(_blocks_to_text(content))
 
 
 def parse_reply(text: str) -> tuple[Any, float | None]:
@@ -85,9 +114,9 @@ def run_cold_curriculum(
             messages=[{"role": "user", "content": USER.format(
                 hypothesis=curriculum.hypothesis, order=spec.order, n=n,
                 title=spec.title, answer_format=spec.answer_format)}],
-            tools=[], max_tokens=model_config.max_tokens, effort=model_config.effort)
+            tools=[SUBMIT], max_tokens=model_config.max_tokens, effort=model_config.effort)
         reply = _blocks_to_text(response.content)
-        answer, conf = parse_reply(reply)
+        answer, conf = parse_submission(response.content)
         entry.answer, entry.confidence = answer, conf
         if answer is None:
             result = {"score": 0.0, "max": 1.0,

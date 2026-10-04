@@ -98,6 +98,15 @@ def test_parse_reply_tolerates_a_literal_newline_inside_a_string():
     assert parse_reply(text) == ({"reasoning": "line one\nline two"}, 0.6)
 
 
+def test_a_tool_submission_is_preferred_and_survives_bad_prose():
+    from engine.cold import parse_submission
+    block = NS(type="tool_use", name="submit_answer",
+               input={"confidence": 0.4, "answer": {"x": [1, 2]}})
+    prose = NS(type="text", text='{"answer": [1, 2}')       # invalid JSON
+    assert parse_submission([prose, block]) == ({"x": [1, 2]}, 0.4)
+    assert parse_submission([prose]) == (None, None)
+
+
 def test_the_cold_arm_scores_with_the_real_scorers_and_sees_no_task_text(tmp_path):
     reply = NS(content=[NS(type="text", text=json.dumps(
         {"confidence": 0.5, "answer": {"ranking": ["a", "b", "c"]}}))], usage=None)
@@ -108,6 +117,6 @@ def test_the_cold_arm_scores_with_the_real_scorers_and_sees_no_task_text(tmp_pat
     assert all(e["score"] is not None for e in nb["entries"])
     assert json.loads((res.run_dir / "run_meta.json").read_text())["arm"] == "cold"
     for call in provider.calls:
-        assert call["tools"] == []
+        assert [t["name"] for t in call["tools"]] == ["submit_answer"]  # nothing else
         prompt = call["messages"][0]["content"]
         assert "data/" not in prompt            # no dataset is named
