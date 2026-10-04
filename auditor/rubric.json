@@ -145,10 +145,13 @@
         "rule": "The conditional-knockdown strain requires atc_free_days >= 6, and read_day must be 9 or 10 (versus 6 or 7 for wild-type and the hydrolase knockout).",
         "checkable_from": ["atc_free_days", "read_day"],
         "breach": {"any": [
+          {"not": {"param_present": {"experiment": "E3", "param": "atc_free_days"}}},
           {"param_lt": {"experiment": "E3", "param": "atc_free_days", "value": 6}},
+          {"not": {"param_present": {"experiment": "E3", "param": "read_day"}}},
           {"param_not_in": {"experiment": "E3", "param": "read_day", "values": [9, 10]}}
         ]},
         "missing_param_is_breach": true,
+        "_missing_param_note": "The two param_present clauses implement missing_param_is_breach for this rule. audit.py does not read that annotation, and param_lt/param_not_in report no breach on an absent value, so omitting the parameter scored identically to complying with it until these clauses were added.",
         "evidence_class": "LITERATURE_DERIVED",
         "source": "Materials and Methods, p14",
         "violation_effect": "MIC read at the wild-type timepoint is invalid. Any on-target or off-target conclusion drawn from it is rejected.",
