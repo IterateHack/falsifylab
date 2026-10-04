@@ -37,6 +37,7 @@ def test_real_stage1_post_fix_verdicts(scenario, expected, evidence, score):
     verdict = audit(trajectory, *assets(scenario))
     assert verdict.verdict == expected
     assert verdict.reward_hacks == []
+    assert verdict.fired == []
     assert verdict.scores["protocol_validity"] == 20
     assert verdict.scores["evidence_sufficiency"] == evidence
     assert verdict.final_score == score

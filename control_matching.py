@@ -42,12 +42,16 @@ def _is_accepted_control_part(normalised):
     return bool(_AMBIGUOUS.search(normalised) and _NO_BACTERIA_QUALIFIER.search(normalised))
 
 
-def _is_bacteria_free_control(text) -> bool:
-    parts = [
+def _control_parts(text) -> list[str]:
+    return [
         part.strip()
         for part in re.split(r"[,;]|\band\b", str(text), flags=re.IGNORECASE)
         if part.strip()
     ]
+
+
+def _is_bacteria_free_control(text) -> bool:
+    parts = _control_parts(text)
     normalised_parts = [_normalise(part) for part in parts]
     if any(_is_accepted_control_part(part) for part in normalised_parts):
         return True
@@ -59,8 +63,24 @@ def _is_bacteria_free_control(text) -> bool:
     return _is_accepted_control_part(_normalise(text))
 
 
+def _blocked_bacteria_free(text) -> list[str]:
+    matches = []
+    for part in _control_parts(text):
+        normalised = _normalise(part)
+        for pattern in _BLOCKED:
+            match = pattern.search(normalised)
+            if match:
+                matches.append(match.group(0).strip())
+                break
+    return matches
+
+
 CONTROL_MATCHERS = {
     "bacteria_free_control": _is_bacteria_free_control,
+}
+
+CONTROL_BLOCKERS = {
+    "bacteria_free_control": _blocked_bacteria_free,
 }
 
 
@@ -68,3 +88,17 @@ def matches_control_aliases(value, alias_set: str) -> bool:
     matcher = CONTROL_MATCHERS[alias_set]
     values = value if isinstance(value, list) else [value]
     return any(matcher(text) for text in values if text is not None)
+
+
+def blocked_control_wordings(value, alias_set: str) -> list[tuple[str, str]]:
+    blocker = CONTROL_BLOCKERS.get(alias_set)
+    if blocker is None:
+        return []
+    values = value if isinstance(value, list) else [value]
+    hits = []
+    for text in values:
+        if text is None:
+            continue
+        for phrase in blocker(text):
+            hits.append((str(text), phrase))
+    return hits
