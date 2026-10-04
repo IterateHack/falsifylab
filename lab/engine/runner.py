@@ -9,7 +9,7 @@ from typing import Any
 
 from .events import EventLog
 from .notebook import Notebook, NotebookEntry
-from .provider import AnthropicProvider, ModelConfig, Provider
+from .provider import AnthropicProvider, MeteredProvider, ModelConfig, Provider
 from .specs import load_curriculum
 from .agent import run_experiment
 
@@ -44,7 +44,7 @@ def run_curriculum(
 ) -> RunResult:
     curriculum = load_curriculum(curriculum_root)
     model_config = model_config or ModelConfig()
-    provider = provider or AnthropicProvider()
+    provider = MeteredProvider(provider or AnthropicProvider())
 
     run_dir = Path(runs_dir) / run_id
     # The API creates the log up front so an SSE client can subscribe before the
@@ -117,6 +117,8 @@ def run_curriculum(
         cal = notebook.calibration_summary()
         log.append("run_finished", {"calibration": cal})
         _persist(run_dir, notebook)
+        (run_dir / "usage.json").write_text(
+            json.dumps(provider.usage, indent=2), encoding="utf-8")
         if owns_log:
             log.close()          # releases the run-directory lock
 

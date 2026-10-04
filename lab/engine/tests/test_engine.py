@@ -272,3 +272,18 @@ def test_a_second_writer_is_refused(tmp_path):
     reopened.close()
     assert not (tmp_path / "run" / "run.lock").exists()
     os.environ.pop("FL_UNUSED", None)
+
+
+def test_metered_provider_totals_tokens_per_model():
+    from types import SimpleNamespace as NS
+    from engine.provider import MeteredProvider, ScriptedProvider
+    resp = lambda i, o: NS(usage=NS(input_tokens=i, output_tokens=o,
+                                    cache_read_input_tokens=None))
+    inner = ScriptedProvider([resp(10, 5), resp(20, 7), NS()])
+    m = MeteredProvider(inner)
+    m.complete(model="a")
+    m.complete(model="a")
+    m.complete(model="b")          # a response with no usage is not counted
+    assert m.usage == {"a": {"calls": 2, "input_tokens": 30, "output_tokens": 12,
+                             "cache_read_input_tokens": 0,
+                             "cache_creation_input_tokens": 0}}
