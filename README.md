@@ -296,6 +296,22 @@ A's PR1 could be dodged by omitting the parameter, now fixed in the rubric data.
 [`scenarios/b_cd5_affinity/FINDINGS.md`](scenarios/b_cd5_affinity/FINDINGS.md). The `env.py`
 branches are reported, not patched: a generality test that fails is a result.
 
+## Related work
+
+To our knowledge, no existing benchmark jointly scores an agent's choice of experiments under a budget and whether its conclusion is warranted by the evidence it actually gathered, in the same episode. Nearest neighbours:
+
+- **BoxingGym** ([arXiv:2501.01540](https://arxiv.org/abs/2501.01540)) scores budgeted experiment choice but judges only answer correctness.
+- **LLM-AutoSciLab** ([arXiv:2605.24043](https://arxiv.org/abs/2605.24043)) scores budgeted experiment choice but judges only answer correctness.
+- **VERITAS** ([arXiv:2604.12144](https://arxiv.org/abs/2604.12144)) audits evidential support but gives the agent no choice of experiments.
+- **TruthInsightBench** ([arXiv:2609.05079](https://arxiv.org/abs/2609.05079)) audits evidential support but gives the agent no choice of experiments.
+- **RewardHackingAgents** ([arXiv:2603.11337](https://arxiv.org/abs/2603.11337)) labels integrity failures in ML engineering, not science.
+
+Limitations of the evidence so far:
+
+- **Results are from a smoke run, not the full grid.**
+- **The seed does not reach the model.** It fixes the environment and repeat stream only (every record has `seed_applied_to_model: false`), so LLM runs at the same seed vary.
+- **There is no human baseline yet.**
+
 ## Known limitations
 
 These are limitations of scenario A's answer key, not of the harness. They come from an
