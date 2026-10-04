@@ -727,6 +727,91 @@ def test_selection_cost_plot_uses_horizontal_bars_and_integer_budget(tmp_path, m
     assert {"bought (pale)", "w/ params (solid)"} <= set(figure_legend_labels)
 
 
+def test_zero_science_provider_refusal_is_annotated_without_bars(
+    tmp_path, monkeypatch,
+):
+    record = {
+        "job": {
+            "episode_id": "00000001",
+            "scenario": "a",
+            "variant": "baseline",
+            "model": "model-x",
+        },
+        "verdict": {"verdict": "HARNESS_ERROR"},
+        "metrics": None,
+        "provider_refusal": True,
+        "trajectory": {"turns": []},
+    }
+    clean_rows = slide_assets._clean_success_rows(
+        [record], batch.grid_summary([record]),
+    )
+    scenario_data = {
+        "a": {
+            "budget": 8,
+            "experiments": [{"id": "E6", "label": "E6"}],
+        },
+    }
+    selection_rows = slide_assets._experiment_selection_rows(
+        [record], scenario_data,
+    )
+    expected_label = "n=0 (1 provider refusal)"
+    assert slide_assets._no_science_label(clean_rows[0]) == expected_label
+    assert slide_assets._no_science_label(selection_rows[0]) == expected_label
+
+    errorbars = []
+    annotations = []
+    horizontal_bars = []
+    bars = []
+    text_labels = []
+    original_errorbar = Axes.errorbar
+    original_annotate = Axes.annotate
+    original_barh = Axes.barh
+    original_bar = Axes.bar
+    original_text = Axes.text
+
+    def capture_errorbar(self, *args, **kwargs):
+        errorbars.append(args)
+        return original_errorbar(self, *args, **kwargs)
+
+    def capture_annotate(self, text, *args, **kwargs):
+        annotations.append(text)
+        return original_annotate(self, text, *args, **kwargs)
+
+    def capture_barh(self, *args, **kwargs):
+        horizontal_bars.append(args)
+        return original_barh(self, *args, **kwargs)
+
+    def capture_bar(self, *args, **kwargs):
+        bars.append(args)
+        return original_bar(self, *args, **kwargs)
+
+    def capture_text(self, x, y, text, *args, **kwargs):
+        text_labels.append(text)
+        return original_text(self, x, y, text, *args, **kwargs)
+
+    monkeypatch.setattr(Axes, "errorbar", capture_errorbar)
+    monkeypatch.setattr(Axes, "annotate", capture_annotate)
+    monkeypatch.setattr(Axes, "barh", capture_barh)
+    monkeypatch.setattr(Axes, "bar", capture_bar)
+    monkeypatch.setattr(Axes, "text", capture_text)
+
+    slide_assets._plot_clean_success(
+        tmp_path / "clean_success.png", clean_rows, _stamp(),
+    )
+    slide_assets._plot_experiment_selection(
+        tmp_path / "experiment_selection.png",
+        selection_rows,
+        scenario_data,
+        _stamp(),
+    )
+
+    assert errorbars == []
+    assert annotations == [expected_label]
+    assert horizontal_bars == []
+    assert bars == []
+    assert text_labels.count(expected_label) == 2
+
+
 def test_decisive_experiment_extraction_is_recursive_ordered_and_conditional():
     rubric = {
         "dimensions": {
@@ -1059,6 +1144,36 @@ def test_stamp_reflects_models_sampling_and_missing_sampling(tmp_path):
     no_sampling = [{"job": {"model": "model-z", "variant": "baseline"}}]
     no_sampling_stamp = slide_assets.build_batch_stamp(batch_dir, no_sampling, {})
     assert no_sampling_stamp["sampling"] == []
+
+
+def test_sampling_stamp_renders_missing_temperature_as_omitted(tmp_path):
+    records = [
+        {
+            "job": {"model": "model-x", "variant": "baseline"},
+            "sampling": {
+                "temperature": None,
+                "client": "live",
+                "max_tokens": 2048,
+            },
+        },
+        {
+            "job": {"model": "model-y", "variant": "baseline"},
+            "sampling": {
+                "client": "live-missing",
+                "max_tokens": 2048,
+            },
+        },
+    ]
+    stamp = slide_assets.build_batch_stamp(
+        tmp_path, records, {}, git_stamp=("abc123", False),
+    )
+    assert stamp["sampling"] == [
+        "T=omitted client=live max_tokens=2048",
+        "T=omitted client=live-missing max_tokens=2048",
+    ]
+    stamp_line = slide_assets._stamp_line(stamp)
+    assert "T=omitted" in stamp_line
+    assert "T=None" not in stamp_line
 
 
 def test_batch_stamp_reads_results_code_sha_from_records(tmp_path):

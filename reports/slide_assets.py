@@ -45,6 +45,13 @@ SELECTION_LEGEND_CAPTION = (
 )
 CONDITIONAL_FOOTNOTE = "* scored only when the conclusion makes a target claim"
 BOUGHT_ALPHA = 0.3
+EXCLUDED_COUNT_LABELS = (
+    ("provider_refusal", "provider refusal"),
+    ("refusal_abort", "refusal abort"),
+    ("spend_cap_stop", "spend-cap stop"),
+    ("harness_error", "harness error"),
+    ("parse_failure", "parse failure"),
+)
 PASS_K_CAPTION = (
     "pass^k = C(c,k)/C(n,k) per cell: n = science runs, c with verdict VALID_SUCCESS; "
     "probability that k runs drawn without replacement all succeed "
@@ -120,8 +127,9 @@ def _sampling_summary(records: list[dict]) -> list[str]:
         sampling = record.get("sampling")
         if not isinstance(sampling, dict):
             continue
+        temperature = sampling.get("temperature")
         values.add((
-            str(sampling.get("temperature", "unknown")),
+            "omitted" if temperature is None else str(temperature),
             str(sampling.get("client", "unknown")),
             str(sampling.get("max_tokens", "unknown")),
         ))
@@ -538,6 +546,19 @@ def _variant_colors(variants: set[str]) -> dict[str, str]:
     }
 
 
+def _no_science_label(row: dict) -> str | None:
+    if row.get("n_scored", row.get("n_counted")) != 0:
+        return None
+    counts = row.get("_excluded_counts", row)
+    parts = []
+    for category, label in EXCLUDED_COUNT_LABELS:
+        count = counts.get(category, counts.get(f"n_{category}", 0))
+        if count:
+            pluralized_label = label if count == 1 else f"{label}s"
+            parts.append(f"{count} {pluralized_label}")
+    return f"n=0 ({', '.join(parts)})"
+
+
 def _dedupe_legend(axes) -> None:
     handles, labels = axes.get_legend_handles_labels()
     unique = {}
@@ -551,7 +572,7 @@ def _dedupe_legend(axes) -> None:
 def _plot_clean_success(path: Path, rows: list[dict], stamp: dict) -> None:
     figure = _figure(stamp)
     axes = figure.subplots()
-    figure.subplots_adjust(left=0.08, right=0.98, bottom=0.25, top=0.88)
+    figure.subplots_adjust(left=0.08, right=0.98, bottom=0.34, top=0.88)
     colors = _variant_colors({row["variant"] for row in rows})
     sorted_rows = sorted(
         rows, key=lambda row: (row["scenario"], row["model"], row["variant"]),
@@ -577,7 +598,7 @@ def _plot_clean_success(path: Path, rows: list[dict], stamp: dict) -> None:
     for scenario, center in scenario_centers.items():
         axes.text(
             center,
-            -0.2,
+            -0.24,
             f"Scenario {scenario}",
             transform=axes.get_xaxis_transform(),
             ha="center",
@@ -587,6 +608,19 @@ def _plot_clean_success(path: Path, rows: list[dict], stamp: dict) -> None:
     for row in sorted_rows:
         index = x_positions[(row["model"], row["scenario"], row["variant"])]
         if row["clean_success_rate"] is None:
+            label = _no_science_label(row)
+            if label:
+                axes.annotate(
+                    label,
+                    (index, 0),
+                    xytext=(0, 5),
+                    textcoords="offset points",
+                    ha="center",
+                    va="bottom",
+                    fontsize=7,
+                    color="#777777",
+                    rotation=90,
+                )
             continue
         low, high = row["clean_success_ci95"]
         color = colors[row["variant"]]
@@ -617,7 +651,7 @@ def _plot_clean_success(path: Path, rows: list[dict], stamp: dict) -> None:
     axes.grid(axis="y", alpha=0.25)
     _dedupe_legend(axes)
     figure.text(
-        0.5, 0.09, textwrap.fill(SCIENCE_DENOMINATOR_CAPTION, width=145),
+        0.5, 0.105, textwrap.fill(SCIENCE_DENOMINATOR_CAPTION, width=145),
         ha="center", va="center", fontsize=6,
     )
     _save_figure(figure, path, stamp)
@@ -650,7 +684,7 @@ def _offset_coincident_raw_points(rows: list[dict]) -> list[tuple[dict, float]]:
 def _plot_raw_vs_clean(path: Path, rows: list[dict], stamp: dict) -> None:
     figure = _figure(stamp)
     axes = figure.subplots()
-    figure.subplots_adjust(left=0.09, right=0.98, bottom=0.31, top=0.88)
+    figure.subplots_adjust(left=0.09, right=0.98, bottom=0.4, top=0.88)
     colors = _variant_colors({row["variant"] for row in rows})
     scenarios = sorted({row["scenario"] for row in rows})
     markers = ("o", "s", "^", "D", "v", "P", "X", "<", ">")
@@ -703,7 +737,7 @@ def _plot_raw_vs_clean(path: Path, rows: list[dict], stamp: dict) -> None:
     figure.legend(
         handles=variant_handles,
         loc="center",
-        bbox_to_anchor=(0.5, 0.22),
+        bbox_to_anchor=(0.5, 0.27),
         ncol=max(1, len(variant_handles)),
         title="Variant",
         fontsize=9,
@@ -711,7 +745,7 @@ def _plot_raw_vs_clean(path: Path, rows: list[dict], stamp: dict) -> None:
     figure.legend(
         handles=scenario_handles,
         loc="center",
-        bbox_to_anchor=(0.5, 0.14),
+        bbox_to_anchor=(0.5, 0.17),
         ncol=max(1, len(scenario_handles)),
         title="Scenario",
         fontsize=9,
@@ -746,7 +780,7 @@ def _plot_cost_of_pass(path: Path, rows: list[dict], stamp: dict) -> None:
 
     figure = _figure(stamp)
     axes = figure.subplots()
-    figure.subplots_adjust(left=0.1, right=0.98, bottom=0.42, top=0.88)
+    figure.subplots_adjust(left=0.1, right=0.98, bottom=0.45, top=0.88)
     for row in plotted_rows:
         rate = row["clean_success_rate"]
         low, high = row["clean_success_ci95"]
@@ -791,7 +825,7 @@ def _plot_cost_of_pass(path: Path, rows: list[dict], stamp: dict) -> None:
         figure.legend(
             handles=variant_handles,
             loc="center",
-            bbox_to_anchor=(0.5, 0.28),
+            bbox_to_anchor=(0.5, 0.34),
             ncol=max(1, len(variant_handles)),
             title="Variant",
             fontsize=9,
@@ -800,13 +834,13 @@ def _plot_cost_of_pass(path: Path, rows: list[dict], stamp: dict) -> None:
         figure.legend(
             handles=scenario_handles,
             loc="center",
-            bbox_to_anchor=(0.5, 0.19),
+            bbox_to_anchor=(0.5, 0.23),
             ncol=max(1, len(scenario_handles)),
             title="Scenario",
             fontsize=9,
         )
     figure.text(
-        0.5, 0.12,
+        0.5, 0.14,
         textwrap.fill(
             f"{COST_OF_PASS_CAPTION} {SCIENCE_DENOMINATOR_CAPTION}",
             width=145,
@@ -819,7 +853,7 @@ def _plot_cost_of_pass(path: Path, rows: list[dict], stamp: dict) -> None:
     )
     if zero_rate_cells:
         figure.text(
-            0.5, 0.08,
+            0.5, 0.085,
             f"{zero_rate_cells} cell(s) with clean success 0 omitted "
             "(cost_of_pass undefined)",
             ha="center", va="center", fontsize=8,
@@ -1027,6 +1061,12 @@ def _experiment_selection_rows(
             "variant": variant,
             "n_runs": len(cell_records),
             "n_counted": len(scored),
+            "_excluded_counts": {
+                category: sum(
+                    classify(record) == category for record in cell_records
+                )
+                for category, _ in EXCLUDED_COUNT_LABELS
+            },
             "mean_cost": (
                 fmean(float((record.get("metrics") or {})["cost"]) for record in scored)
                 if scored else None
@@ -1107,9 +1147,24 @@ def _plot_experiment_selection(
         budget = scenario_data[scenario]["budget"]
         cost_axes, bought_axes = axes_grid[row_index]
         positions = list(range(len(series_keys)))
+        no_science_notes = []
         for index, key in enumerate(series_keys):
             row = rows_by_series.get(key)
             if row is None:
+                continue
+            no_science_label = _no_science_label(row)
+            if no_science_label:
+                cost_axes.text(
+                    0.02,
+                    index,
+                    no_science_label,
+                    transform=cost_axes.get_yaxis_transform(),
+                    ha="left",
+                    va="center",
+                    fontsize=7,
+                    color="#777777",
+                )
+                no_science_notes.append(no_science_label)
                 continue
             model, variant = key
             scripted = variant in SCRIPTED_VARIANTS
@@ -1154,6 +1209,9 @@ def _plot_experiment_selection(
             row = rows_by_series.get((model, variant))
             if row is None:
                 continue
+            no_science_label = _no_science_label(row)
+            if no_science_label:
+                continue
             scripted = variant in SCRIPTED_VARIANTS
             centers = [
                 position + (series_index - (len(series_keys) - 1) / 2) * series_width
@@ -1180,6 +1238,17 @@ def _plot_experiment_selection(
                 edgecolor="#111111",
                 linewidth=1.2,
                 hatch=hatch,
+            )
+        if no_science_notes:
+            bought_axes.text(
+                0.5,
+                0.05,
+                "\n".join(no_science_notes),
+                transform=bought_axes.transAxes,
+                ha="center",
+                va="bottom",
+                fontsize=7,
+                color="#777777",
             )
         bought_axes.set_title(f"Scenario {scenario} · decisive bought", fontsize=12)
         bought_axes.set_ylabel("Fraction of episodes", fontsize=9)
