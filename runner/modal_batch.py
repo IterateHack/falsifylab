@@ -67,6 +67,24 @@ CONCLUSION_METRICS = (
     "raw_score_mean",
 )
 
+GRID_CONCLUSION_FIELDS = CONCLUSION_METRICS + (
+    "n_clean_success",
+    "clean_success_ci95",
+    "frontier_regret",
+    "verdict_counts",
+)
+
+
+def scripted_label(not_meaningful: Iterable[str]) -> dict:
+    return {
+        "conclusion_metrics_meaningful": False,
+        "not_meaningful": list(not_meaningful),
+        "note": "scripted baseline: beliefs, dominant cause and confidence are random; "
+        "compare experiment selection only (mean_cost). protocol_violation_rate is not "
+        "meaningful: protocol constraints also check the conclusion's hypotheses and citations",
+    }
+
+
 # A refused purchase is not a Turn (nothing ran, nothing was charged). The
 # reason is handed back to the agent as a zero-cost observation under this id so
 # the model can choose again; it never enters the recorded trajectory.
@@ -284,13 +302,7 @@ def aggregate(records: list[dict]) -> dict:
             "completed_only": metric_means(completed) if completed else None,
         }
         if variant in SCRIPTED_VARIANTS:
-            summary[variant].update({
-                "conclusion_metrics_meaningful": False,
-                "not_meaningful": list(CONCLUSION_METRICS),
-                "note": "scripted baseline: beliefs, dominant cause and confidence are random; "
-                "compare experiment selection only (mean_cost). protocol_violation_rate is not "
-                "meaningful: protocol constraints also check the conclusion's hypotheses and citations",
-            })
+            summary[variant].update(scripted_label(CONCLUSION_METRICS))
     return summary
 
 
@@ -339,7 +351,7 @@ def grid_summary(records: list[dict]) -> list[dict]:
         for row in rows:
             verdict_name = row["verdict"]["verdict"]
             verdict_counts[verdict_name if verdict_name in verdict_counts else "OTHER"] += 1
-        summary.append({
+        row = {
             "scenario": scenario,
             "variant": variant,
             "n_runs": n_runs,
@@ -358,7 +370,10 @@ def grid_summary(records: list[dict]) -> list[dict]:
                 if n_scored else None
             ),
             "verdict_counts": verdict_counts,
-        })
+        }
+        if variant in SCRIPTED_VARIANTS:
+            row.update(scripted_label(GRID_CONCLUSION_FIELDS))
+        summary.append(row)
     return sorted(
         summary,
         key=lambda row: (

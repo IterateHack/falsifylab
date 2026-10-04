@@ -101,7 +101,8 @@ not added.
 Their beliefs, dominant cause and confidence are random, so their conclusion
 metrics (success, hack and protocol-violation rates, Brier, overconfidence,
 R_visible, final score)
-are **not meaningful**; `summary.json` and `run_one` label them as such.
+are **not meaningful**; `summary.json`, `grid_summary.json` (including
+`frontier_regret`) and `run_one` label them as such.
 Protocol violations count as conclusion metrics because the protocol
 constraints also check the conclusion's hypotheses and citations. Compare
 `mean_cost` and which experiments were bought. Do not read Random's verdicts as
