@@ -47,15 +47,19 @@ def test_real_stage1_post_fix_verdicts(scenario, expected, evidence, score):
     "medium-only no-cell incubation to measure chemical stability and esterase-independent hydrolysis",
     "sterility controls",
     "medium alone",
-    "media only",
+    "media alone",
     "broth alone",
+    "broth only",
     "uninoculated medium",
-    "non-inoculated broth",
+    "non-inoculated medium",
     "not inoculated media",
     "negative growth control",
     "medium control",
+    "media control",
     "no-cell incubation",
-    "cell-free",
+    "cell-free control",
+    "bacteria-free filter",
+    "filter without bacteria",
 ])
 def test_control_equivalents_agree_between_env_and_auditor(wording):
     trajectory = real_case("a")
@@ -89,8 +93,8 @@ def test_ambiguous_controls_require_a_no_bacteria_qualifier(wording):
 @pytest.mark.parametrize("wording", [
     "negative control", "blank", "background control",
     "growth control", "untreated control", "vehicle control", "solvent control",
-    "DMSO control", "cell-free supernatant", "CFS", "no visible bacterial growth",
-    "no-cell sample",
+    "DMSO control", "cell-free", "cell-free supernatant", "CFS",
+    "no visible bacterial growth", "no-cell", "no cells", "no-cell sample",
 ])
 def test_non_controls_and_readouts_are_never_bacteria_free_controls(wording):
     trajectory = real_case("a")

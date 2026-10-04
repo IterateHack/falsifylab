@@ -20,11 +20,10 @@ _ACCEPTED = tuple(re.compile(pattern) for pattern in (
     r"\bnegative growth controls?\b",
     r"\b(?:media|medium) controls?\b",
     r"\bno cells?\b(?: \w+){0,4} (?:incubations?|controls?)\b",
-    r"\b(?:bacteria free|without bacteria|no bacteria)\b(?: \w+){0,4} "
+    r"\b(?:bacteria free|cell free|without bacteria|no bacteria)\b(?: \w+){0,4} "
     r"(?:filters?|incubations?|controls?|medium|media|broth)\b",
     r"\b(?:filters?|incubations?|controls?|medium|media|broth)\b(?: \w+){0,4} "
-    r"(?:bacteria free|without bacteria|no bacteria)\b",
-    r"\bcell free\b(?! supernatant\b)",
+    r"(?:bacteria free|cell free|without bacteria|no bacteria)\b",
 ))
 
 _AMBIGUOUS = re.compile(r"\b(?:negative|background) controls?\b|\bblanks?\b")
