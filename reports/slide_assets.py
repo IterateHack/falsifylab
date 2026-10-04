@@ -10,11 +10,11 @@ import subprocess
 from statistics import fmean
 import textwrap
 
+from runner.factories import scenario_dir
 from runner.modal_batch import (
-    GRID_CONCLUSION_FIELDS,
+    HARNESS_ERROR_VERDICT,
     SCRIPTED_VARIANTS,
-    scripted_label,
-    split_parse_failure_records,
+    split_science_records,
     wilson_interval,
 )
 
@@ -24,6 +24,10 @@ SCRIPTED_FOOTNOTE = (
     "Scripted baselines (random, ucb) excluded: frontier_regret is not meaningful "
     "for them (conclusion metrics random)."
 )
+SELECTION_CAPTION = (
+    "bought = ran the experiment; parameter requirements of the evidence rules not checked"
+)
+CONDITIONAL_FOOTNOTE = "* scored only when the conclusion makes a target claim"
 PATTERN_HEADING = "## Per-pattern recall and false-positive rate"
 KAPPA_HEADING = "## Cohen's kappa"
 PATTERN_HEADER = (
@@ -198,6 +202,11 @@ def _display_cell(header: str, value) -> str:
         except (TypeError, ValueError):
             return _cell_text(value)
         return f"{number:.3f}"
+    if header in {"mean_cost", "budget"} or header.startswith("bought "):
+        try:
+            return f"{float(value):.3f}"
+        except (TypeError, ValueError):
+            return _cell_text(value)
     return _cell_text(value)
 
 
@@ -259,8 +268,16 @@ def _batch_groups(records: list[dict], keys: tuple[str, ...]) -> dict[tuple, lis
     return groups
 
 
+def _split_counted_records(records: list[dict]) -> tuple[list[dict], list[dict], list[dict]]:
+    non_harness_rows = [
+        record for record in records
+        if record["verdict"]["verdict"] != HARNESS_ERROR_VERDICT
+    ]
+    return split_science_records(non_harness_rows)
+
+
 def _scored_success_values(records: list[dict]) -> tuple[int, int, float | None, list | None]:
-    scored, _ = split_parse_failure_records(records)
+    scored, _, _ = _split_counted_records(records)
     n_clean_success = sum(
         (record.get("metrics") or {}).get("clean_success") is True for record in scored
     )
@@ -301,22 +318,31 @@ def _clean_success_rows(records: list[dict], grid_rows: list[dict]) -> list[dict
     for (model, scenario, variant), cell_records in sorted(
         _batch_groups(records, ("model", "scenario", "variant")).items()
     ):
-        scored, excluded = split_parse_failure_records(cell_records)
-        n_clean_success, n_scored, rate, ci95 = _scored_success_values(cell_records)
-        label = scripted_label(GRID_CONCLUSION_FIELDS) if variant in SCRIPTED_VARIANTS else {}
+        if variant in SCRIPTED_VARIANTS:
+            continue
+        scored, excluded, provider_refusals = _split_counted_records(cell_records)
+        n_clean_success = sum(
+            (record.get("metrics") or {}).get("clean_success") is True
+            for record in scored
+        )
+        n_scored = len(scored)
+        rate = n_clean_success / n_scored if n_scored else None
+        ci95 = list(wilson_interval(n_clean_success, n_scored)) if n_scored else None
         result.append({
             "model": model,
             "scenario": scenario,
             "variant": variant,
             "n_runs": len(cell_records),
+            "n_harness_error": sum(
+                record["verdict"]["verdict"] == HARNESS_ERROR_VERDICT
+                for record in cell_records
+            ),
             "n_parse_failure": len(excluded),
+            "n_provider_refusal": len(provider_refusals),
             "n_scored": n_scored,
             "n_clean_success": n_clean_success,
             "clean_success_rate": rate,
             "clean_success_ci95": ci95,
-            "conclusion_metrics_meaningful": variant not in SCRIPTED_VARIANTS,
-            "not_meaningful": label.get("not_meaningful"),
-            "note": label.get("note"),
         })
     return result
 
@@ -325,7 +351,7 @@ def _cell_score_rows(records: list[dict], clean_rows: list[dict]) -> list[dict]:
     groups = _batch_groups(records, ("model", "scenario", "variant"))
     result = []
     for row in clean_rows:
-        scored, _ = split_parse_failure_records(
+        scored, _, _ = _split_counted_records(
             groups[(row["model"], row["scenario"], row["variant"])],
         )
         result.append({
@@ -336,13 +362,6 @@ def _cell_score_rows(records: list[dict], clean_rows: list[dict]) -> list[dict]:
             ),
         })
     return result
-
-
-def _variant_label(variant: str) -> str:
-    return (
-        f"{variant} (scripted; conclusion metrics not meaningful)"
-        if variant in SCRIPTED_VARIANTS else variant
-    )
 
 
 def _figure(stamp: dict):
@@ -463,8 +482,7 @@ def _plot_clean_success(path: Path, rows: list[dict], stamp: dict) -> None:
         if row["clean_success_rate"] is None:
             continue
         low, high = row["clean_success_ci95"]
-        scripted = row["variant"] in SCRIPTED_VARIANTS
-        color = "#888888" if scripted else colors[row["variant"]]
+        color = colors[row["variant"]]
         axes.errorbar(
             index,
             row["clean_success_rate"],
@@ -472,10 +490,10 @@ def _plot_clean_success(path: Path, rows: list[dict], stamp: dict) -> None:
             fmt="o",
             color=color,
             ecolor=color,
-            markerfacecolor="none" if scripted else color,
+            markerfacecolor=color,
             markeredgecolor=color,
             capsize=3,
-            label=_variant_label(row["variant"]),
+            label=row["variant"],
         )
     axes.set_title("Clean success rate with 95% Wilson intervals", fontsize=14)
     axes.set_ylabel("Clean success rate", fontsize=10)
@@ -494,7 +512,7 @@ def _plot_clean_success(path: Path, rows: list[dict], stamp: dict) -> None:
     _save_figure(figure, path, stamp)
 
 
-def _jittered_raw_points(rows: list[dict]) -> list[tuple[dict, float]]:
+def _offset_coincident_raw_points(rows: list[dict]) -> list[tuple[dict, float]]:
     grouped = defaultdict(list)
     for row in sorted(
         rows, key=lambda item: (item["scenario"], item["model"], item["variant"]),
@@ -521,35 +539,30 @@ def _jittered_raw_points(rows: list[dict]) -> list[tuple[dict, float]]:
 def _plot_raw_vs_clean(path: Path, rows: list[dict], stamp: dict) -> None:
     figure = _figure(stamp)
     axes = figure.subplots()
-    figure.subplots_adjust(left=0.09, right=0.98, bottom=0.22, top=0.88)
+    figure.subplots_adjust(left=0.09, right=0.98, bottom=0.31, top=0.88)
     colors = _variant_colors({row["variant"] for row in rows})
-    annotation_offsets = (6, 18, -12, 30, -24)
-    for index, (row, x) in enumerate(_jittered_raw_points(rows)):
+    scenarios = sorted({row["scenario"] for row in rows})
+    markers = ("o", "s", "^", "D", "v", "P", "X", "<", ">")
+    scenario_markers = {
+        scenario: markers[index % len(markers)]
+        for index, scenario in enumerate(scenarios)
+    }
+    for row, x in _offset_coincident_raw_points(rows):
         rate = row["clean_success_rate"]
         score = row["raw_score_mean"]
         low, high = row["clean_success_ci95"]
-        scripted = row["variant"] in SCRIPTED_VARIANTS
-        color = "#888888" if scripted else colors[row["variant"]]
+        color = colors[row["variant"]]
         axes.errorbar(
             x,
             score,
             xerr=[[rate - low], [high - rate]],
-            fmt="o",
+            fmt=scenario_markers[row["scenario"]],
             color=color,
             ecolor=color,
-            markerfacecolor="none" if scripted else color,
+            markerfacecolor=color,
             markeredgecolor=color,
             capsize=3,
-            label=_variant_label(row["variant"]),
-        )
-        axes.annotate(
-            f"{row['scenario']}/{row['model']}",
-            (x, score),
-            xytext=(-4 if x > 0.82 else 4, annotation_offsets[index % len(annotation_offsets)]),
-            textcoords="offset points",
-            fontsize=8,
-            ha="right" if x > 0.82 else "left",
-            annotation_clip=False,
+            label="_nolegend_",
         )
     axes.set_title("Raw audited score vs clean success", fontsize=14)
     axes.set_xlabel("Clean success rate (horizontal 95% Wilson CI)", fontsize=10)
@@ -561,7 +574,287 @@ def _plot_raw_vs_clean(path: Path, rows: list[dict], stamp: dict) -> None:
 
     axes.xaxis.set_major_formatter(FormatStrFormatter("%.3f"))
     axes.grid(alpha=0.25)
-    _dedupe_legend(axes)
+    from matplotlib.lines import Line2D
+
+    variant_handles = [
+        Line2D(
+            [], [], color=colors[variant], marker="o", linestyle="None", label=variant,
+        )
+        for variant in sorted(colors)
+    ]
+    scenario_handles = [
+        Line2D(
+            [], [], color="#444444", marker=scenario_markers[scenario],
+            linestyle="None", label=scenario,
+        )
+        for scenario in scenarios
+    ]
+    figure.legend(
+        handles=variant_handles,
+        loc="center",
+        bbox_to_anchor=(0.5, 0.20),
+        ncol=max(1, len(variant_handles)),
+        title="Variant",
+        fontsize=9,
+    )
+    figure.legend(
+        handles=scenario_handles,
+        loc="center",
+        bbox_to_anchor=(0.5, 0.095),
+        ncol=max(1, len(scenario_handles)),
+        title="Scenario",
+        fontsize=9,
+    )
+    _save_figure(figure, path, stamp)
+
+
+def _decisive_experiments(rubric: dict) -> list[dict]:
+    experiments: dict[str, bool] = {}
+
+    def add_ran_value(value, conditional: bool) -> None:
+        if isinstance(value, str):
+            if value not in experiments:
+                experiments[value] = conditional
+            elif not conditional:
+                experiments[value] = False
+        elif isinstance(value, list):
+            for item in value:
+                add_ran_value(item, conditional)
+        elif isinstance(value, dict):
+            for nested in value.values():
+                add_ran_value(nested, conditional)
+
+    def walk_predicate(value, conditional: bool) -> None:
+        if isinstance(value, dict):
+            for key, nested in value.items():
+                if key == "ran":
+                    add_ran_value(nested, conditional)
+                else:
+                    walk_predicate(nested, conditional)
+        elif isinstance(value, list):
+            for nested in value:
+                walk_predicate(nested, conditional)
+
+    criteria = rubric["dimensions"]["evidence_sufficiency"]["criteria"]
+    for criterion in criteria:
+        walk_predicate(
+            criterion.get("predicate"),
+            "applies_only_if" in criterion,
+        )
+    return [
+        {
+            "id": experiment_id,
+            "conditional": conditional,
+            "label": experiment_id + ("*" if conditional else ""),
+        }
+        for experiment_id, conditional in experiments.items()
+    ]
+
+
+def _scenario_selection_data(scenario: str) -> dict:
+    bundle = scenario_dir(scenario)
+    briefing_path = bundle / "agent" / "briefing.json"
+    rubric_path = bundle / "auditor" / "rubric.json"
+    briefing = json.loads(briefing_path.read_text(encoding="utf-8"))
+    rubric = json.loads(rubric_path.read_text(encoding="utf-8"))
+    return {
+        "budget": briefing["budget"]["units"],
+        "experiments": _decisive_experiments(rubric),
+        "source_files": [briefing_path, rubric_path],
+    }
+
+
+def _counted_record_experiments(record: dict) -> set[str]:
+    trajectory = record.get("trajectory") or {}
+    bought = set()
+    for turn in trajectory.get("turns", []):
+        action = turn.get("action") or {}
+        if (
+            action.get("kind") == "run_experiment"
+            and action.get("experiment_id") is not None
+            and turn.get("observation") is not None
+        ):
+            bought.add(str(action["experiment_id"]))
+    return bought
+
+
+def _experiment_selection_rows(
+    records: list[dict], scenario_data: dict[str, dict],
+) -> list[dict]:
+    rows = []
+    for (model, scenario, variant), cell_records in sorted(
+        _batch_groups(records, ("model", "scenario", "variant")).items()
+    ):
+        scored, _, _ = _split_counted_records(cell_records)
+        experiments = scenario_data[scenario]["experiments"]
+        bought_by_record = [
+            _counted_record_experiments(record)
+            for record in scored
+        ]
+        row = {
+            "model": model,
+            "scenario": scenario,
+            "variant": variant,
+            "n_runs": len(cell_records),
+            "n_counted": len(scored),
+            "mean_cost": (
+                fmean(float((record.get("metrics") or {})["cost"]) for record in scored)
+                if scored else None
+            ),
+            "budget": scenario_data[scenario]["budget"],
+        }
+        for experiment in experiments:
+            label = experiment["label"]
+            row[f"bought {label}"] = (
+                sum(experiment["id"] in bought for bought in bought_by_record) / len(scored)
+                if scored else None
+            )
+        decisive_ids = {experiment["id"] for experiment in experiments}
+        row["bought all decisive"] = (
+            sum(decisive_ids <= bought for bought in bought_by_record) / len(scored)
+            if scored and decisive_ids else None
+        )
+        rows.append(row)
+    return rows
+
+
+def _selection_series_label(model: str, variant: str) -> str:
+    return f"{variant} (scripted)" if variant in SCRIPTED_VARIANTS else f"{variant}/{model}"
+
+
+def _plot_experiment_selection(
+    path: Path,
+    rows: list[dict],
+    scenario_data: dict[str, dict],
+    stamp: dict,
+) -> None:
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import Patch
+
+    scenarios = sorted(scenario_data)
+    figure = _figure(stamp)
+    axes_grid = figure.subplots(len(scenarios), 2, squeeze=False)
+    series_keys = sorted({
+        (row["model"], row["variant"])
+        for row in rows
+    }, key=lambda item: (item[1], item[0]))
+    colors = _variant_colors({row["variant"] for row in rows})
+    scripted_hatches = {"random": "///", "ucb": "\\\\"}
+    legend_handles = []
+    legend_labels = []
+    for model, variant in series_keys:
+        scripted = variant in SCRIPTED_VARIANTS
+        legend_handles.append(Patch(
+            facecolor="#888888" if scripted else colors[variant],
+            edgecolor="#444444",
+            hatch=scripted_hatches.get(variant, "") if scripted else "",
+        ))
+        legend_labels.append(_selection_series_label(model, variant))
+
+    for row_index, scenario in enumerate(scenarios):
+        scenario_rows = [
+            row for row in rows if row["scenario"] == scenario
+        ]
+        rows_by_series = {
+            (row["model"], row["variant"]): row
+            for row in scenario_rows
+        }
+        budget = scenario_data[scenario]["budget"]
+        cost_axes, bought_axes = axes_grid[row_index]
+        positions = list(range(len(series_keys)))
+        for index, key in enumerate(series_keys):
+            row = rows_by_series.get(key)
+            if row is None:
+                continue
+            model, variant = key
+            scripted = variant in SCRIPTED_VARIANTS
+            cost_axes.bar(
+                index,
+                row["mean_cost"] or 0,
+                color="#888888" if scripted else colors[variant],
+                edgecolor="#444444",
+                hatch=scripted_hatches.get(variant, "") if scripted else "",
+            )
+        cost_axes.axhline(budget, color="#333333", linestyle="--", linewidth=1)
+        cost_axes.set_title(f"Scenario {scenario} · mean cost per episode", fontsize=12)
+        cost_axes.set_ylabel("Mean cost (budget units)", fontsize=9)
+        cost_axes.set_xticks(
+            positions,
+            [_selection_series_label(model, variant) for model, variant in series_keys],
+            rotation=32,
+            ha="right",
+            fontsize=9,
+        )
+        cost_axes.tick_params(axis="y", labelsize=9)
+        cost_axes.set_ylim(bottom=0)
+        cost_axes.grid(axis="y", alpha=0.2)
+
+        experiment_labels = [
+            experiment["label"]
+            for experiment in scenario_data[scenario]["experiments"]
+        ] + ["all"]
+        bought_headers = [
+            *(f"bought {label}" for label in experiment_labels[:-1]),
+            "bought all decisive",
+        ]
+        category_positions = list(range(len(experiment_labels)))
+        width = 0.8 / max(1, len(series_keys))
+        for series_index, (model, variant) in enumerate(series_keys):
+            row = rows_by_series.get((model, variant))
+            if row is None:
+                continue
+            scripted = variant in SCRIPTED_VARIANTS
+            values = [
+                row.get(header)
+                for header in bought_headers
+            ]
+            bought_axes.bar(
+                [
+                    position + (series_index - (len(series_keys) - 1) / 2) * width
+                    for position in category_positions
+                ],
+                [value or 0 for value in values],
+                width=width,
+                color="#888888" if scripted else colors[variant],
+                edgecolor="#444444",
+                hatch=scripted_hatches.get(variant, "") if scripted else "",
+            )
+        bought_axes.set_title(f"Scenario {scenario} · decisive experiments bought", fontsize=12)
+        bought_axes.set_ylabel("Fraction of counted episodes", fontsize=9)
+        bought_axes.set_xticks(category_positions, experiment_labels, fontsize=9)
+        bought_axes.tick_params(axis="y", labelsize=9)
+        bought_axes.set_ylim(0, 1)
+        bought_axes.grid(axis="y", alpha=0.2)
+
+    figure.suptitle(
+        "Experiment selection (comparable across LLM and scripted agents)",
+        fontsize=13,
+        y=0.98,
+    )
+    figure.subplots_adjust(
+        left=0.08, right=0.98, bottom=0.33, top=0.84, hspace=0.48, wspace=0.28,
+    )
+    legend_handles.append(Line2D(
+        [], [], color="#333333", linestyle="--", label="Budget",
+    ))
+    legend_labels.append("Budget")
+    figure.legend(
+        handles=legend_handles,
+        labels=legend_labels,
+        loc="center",
+        bbox_to_anchor=(0.5, 0.21),
+        ncol=4,
+        title="Model / variant",
+        fontsize=9,
+    )
+    figure.text(
+        0.5, 0.115, SELECTION_CAPTION,
+        ha="center", va="center", fontsize=9,
+    )
+    figure.text(
+        0.5, 0.075, CONDITIONAL_FOOTNOTE,
+        ha="center", va="center", fontsize=9,
+    )
     _save_figure(figure, path, stamp)
 
 
@@ -797,50 +1090,70 @@ def generate_batch_assets(
         source_files.append(batch_dir / "reaudit.json")
 
     ci_headers = [
-        "model", "scenario", "variant", "n_runs", "n_parse_failure", "n_scored",
-        "n_clean_success", "clean_success_rate", "clean_success_ci95",
-        "conclusion_metrics_meaningful", "not_meaningful", "note",
+        "model", "scenario", "variant", "n_runs", "n_harness_error",
+        "n_parse_failure", "n_provider_refusal", "n_scored", "n_clean_success",
+        "clean_success_rate", "clean_success_ci95",
     ]
     ci_csv = output_dir / "clean_success_ci.csv"
     ci_md = output_dir / "clean_success_ci.md"
     ci_png = output_dir / "clean_success_ci.png"
     _write_csv(ci_csv, ci_headers, clean_rows, stamp)
-    ci_md_headers = [
-        "model", "scenario", "variant", "n_runs", "n_parse_failure", "n_scored",
-        "n_clean_success", "clean_success_rate", "clean_success_ci95",
-        "conclusion metrics meaningful",
-    ]
-    ci_md_rows = [
-        {
-            **{
-                header: row[header]
-                for header in ci_md_headers
-                if header in row
-            },
-            "conclusion metrics meaningful": (
-                "yes" if row["conclusion_metrics_meaningful"] else "no †"
-            ),
-        }
-        for row in clean_rows
-    ]
-    scripted_note = scripted_label(GRID_CONCLUSION_FIELDS)
-    scripted_details = scripted_note["note"].removeprefix("scripted baseline: ")
-    ci_footnote = (
-        f"† scripted baseline: {scripted_details}. Not meaningful: "
-        f"{', '.join(scripted_note['not_meaningful'])}"
-    )
     _write_markdown(
         ci_md,
         "Clean success rate with Wilson intervals",
-        ci_md_headers,
-        ci_md_rows,
+        ci_headers,
+        clean_rows,
         stamp,
-        footnote=ci_footnote,
     )
     _plot_clean_success(ci_png, clean_rows, stamp)
 
     raw_png = output_dir / "raw_vs_clean.png"
     _plot_raw_vs_clean(raw_png, score_rows, stamp)
+
+    scenarios = sorted({
+        record.get("job", {}).get("scenario", "a")
+        for record in records
+    })
+    selection_data = {
+        scenario: _scenario_selection_data(scenario)
+        for scenario in scenarios
+    }
+    selection_rows = _experiment_selection_rows(records, selection_data)
+    experiment_labels = list(dict.fromkeys(
+        experiment["label"]
+        for scenario in scenarios
+        for experiment in selection_data[scenario]["experiments"]
+    ))
+    selection_headers = [
+        "model", "scenario", "variant", "n_runs", "n_counted",
+        "mean_cost", "budget",
+        *(f"bought {label}" for label in experiment_labels),
+        "bought all decisive",
+    ]
+    selection_csv = output_dir / "experiment_selection.csv"
+    selection_md = output_dir / "experiment_selection.md"
+    selection_png = output_dir / "experiment_selection.png"
+    _write_csv(selection_csv, selection_headers, selection_rows, stamp)
+    _write_markdown(
+        selection_md,
+        "Experiment selection",
+        selection_headers,
+        selection_rows,
+        stamp,
+        extra_sections=[
+            SELECTION_CAPTION,
+            CONDITIONAL_FOOTNOTE,
+        ],
+    )
+    _plot_experiment_selection(selection_png, selection_rows, selection_data, stamp)
+    selection_source_files = list(dict.fromkeys([
+        *source_files,
+        *(
+            path
+            for scenario in scenarios
+            for path in selection_data[scenario]["source_files"]
+        ),
+    ]))
 
     frontier_rows = _frontier_rows(grid_rows)
     frontier_headers = [
@@ -869,6 +1182,9 @@ def generate_batch_assets(
     return [
         _asset_entry(path, output_root, stamp, source_files)
         for path in (ci_png, ci_csv, ci_md, raw_png, frontier_md, frontier_csv, frontier_png)
+    ] + [
+        _asset_entry(path, output_root, stamp, selection_source_files)
+        for path in (selection_png, selection_md, selection_csv)
     ]
 
 
@@ -957,8 +1273,6 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> None:
     parser = build_parser()
     args = parser.parse_args(argv)
-    if args.synthetic and args.validation is not None:
-        parser.error("--synthetic cannot be combined with --validation")
     if not args.synthetic and not args.batch:
         parser.error("provide --batch at least once or use --synthetic")
     labels = [batch_dir.name for batch_dir in (args.batch or [])]
@@ -972,10 +1286,11 @@ def main(argv: list[str] | None = None) -> None:
         if args.synthetic:
             from reports.synthetic import create_synthetic_inputs
 
-            batch_dir, reaudit_dir, validation_path = create_synthetic_inputs(
+            batch_dir, reaudit_dir = create_synthetic_inputs(
                 args.output / "_synthetic_input",
             )
             batch_dirs = [batch_dir, reaudit_dir]
+            validation_path = args.validation or DEFAULT_VALIDATION
         else:
             batch_dirs = args.batch
             validation_path = args.validation or DEFAULT_VALIDATION
@@ -983,7 +1298,6 @@ def main(argv: list[str] | None = None) -> None:
             batch_dirs,
             validation_path,
             args.output,
-            synthetic_validation=args.synthetic,
             git_stamp=git_stamp,
         )
     except (OSError, ValueError, KeyError, json.JSONDecodeError) as exc:
