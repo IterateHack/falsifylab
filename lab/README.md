@@ -27,18 +27,9 @@ non-peptide agonism is feasible.**
 | 5 | Small-molecule feasibility | Choose an assay model, predict whether a non-peptide agonist works | Rubric, with a penalty for the rodent trap | 2, 4 |
 | 6 | Capstone | An evidence-weighted verdict on H1 | Rubric against the ATTAIN-1 phase 3 result | 1-5 |
 
-The curriculum is a config folder, not code, so the engine is
-hypothesis-agnostic. That claim is tested rather than asserted: `curricula/wrn/`
-is a second hypothesis - **WRN helicase as a synthetic-lethal target in MSI-high
-cancers** - built on 21,108 real DepMap CRISPR measurements, with its own
-scorers and lesson cards and **no change to anything under `engine/` or
-`sandbox/`**.
-
-```bash
-./.venv/bin/python -m curricula.wrn.fetch
-./.venv/bin/python -m engine.cli validate --curriculum curricula/wrn
-./.venv/bin/python -m engine.cli run --curriculum curricula/wrn --run-id wrn_run
-```
+The curriculum is a config folder, not code: the engine reads specs, scorers,
+ground truth and lesson cards from `curricula/<id>/`, so a new hypothesis is a
+new folder.
 
 ## Quick start
 
@@ -46,7 +37,7 @@ scorers and lesson cards and **no change to anything under `engine/` or
 python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
 ./.venv/bin/python -m curricula.glp1r.fetch      # build datasets from primary sources
 ./.venv/bin/python -m engine.cli validate        # check specs, data, scorers, lessons
-./.venv/bin/python -m pytest -q                  # 52 tests
+./.venv/bin/python -m pytest -q                  # 70 tests
 
 export ANTHROPIC_API_KEY=...
 ./.venv/bin/python -m engine.cli run --run-id my_run
@@ -197,7 +188,6 @@ evals/        the audit eval suite: scripted agents with known right verdicts
 sandbox/      Executor contract; local and Modal backends
 curricula/    one folder per hypothesis: specs, scorers, ground truth, lessons, audit specs, fetch
               glp1r/ the six-experiment GLP-1R curriculum (H1)
-              wrn/   a second hypothesis, to prove the engine is agnostic (H2)
 api/          FastAPI (replay + SSE) and the Modal deployment
 web/          Vite + React pixel lab and notebook overlay
 art/          generates every spritesheet with Pillow
@@ -219,14 +209,6 @@ Running the curriculum against Claude Sonnet 5 (Opus 5 for the capstone):
   parsing the mmCIF and never submitted, scoring zero. That is an artefact of the
   harness, not a finding about the science, so budgets now reserve their last two
   calls for submission and every tool result reports the remaining budget.
-- Twice, a low score turned out to be **our** bug rather than the agent's. On the
-  WRN curriculum it scored 0.62 for discarding a five-cell-line tissue as
-  underpowered - which was correct, and which our ground truth had ranked second
-  - and for writing "tissue is a surrogate variable" where the rubric only looked
-  for the word "proxy". Both are fixed, and the same answer now scores 0.99. A
-  rubric that penalises a right answer for its vocabulary is worse than no rubric,
-  which is why every scorer has a test asserting the trap costs points and the
-  correct answer does not.
 
 Both results are in `runs/`, and the notebook is readable as markdown at
 `runs/<id>/notebook.md`.
