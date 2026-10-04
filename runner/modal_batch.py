@@ -3,25 +3,29 @@ r"""Run N repeats of every variant x model x seed combination on Modal.
 Install dependencies: ``python -m pip install -r runner/requirements.txt``.
 Run from the repository root with ``python -m runner.modal_batch --help``.
 
-Example after the implementation hooks are available::
+The default is a local, no-network dry run using an abstaining stub client::
 
-    python -m runner.modal_batch --variants baseline careful --models model-a \
-        --seeds 1 2 3 --n 5 --rubric auditor/rubric.json \
-        --truth auditor/truth.json --output runs/batch-001 \
-        --env-factory integration:make_env --agent-factory integration:make_agent
+    python -m runner.modal_batch --variants baseline --models claude-sonnet-4-5 \
+        --seeds 0 1 --output runs/dry-run
 
-This schedules 30 episodes. Hook modules must be locally importable; their
-Python packages are included in the Modal image. Supply any model-client
-dependencies with --pip-package and credential Secret names with --secret.
+Real Anthropic calls on Modal require explicit ``--live``::
+
+    python -m runner.modal_batch --live --variants baseline --models claude-sonnet-4-5 \
+        --seeds 0 1 --output runs/live
+
+Hook modules must be locally importable; their Python packages are included in
+the Modal image. Supply additional dependencies with --pip-package and
+additional Modal Secret names with --secret. The ``falsifylab-keys`` Secret is
+always attached to live workers.
 
 Integration hooks (import paths use ``module:callable``):
-* env_factory(seed=...) -> contract.Env
-* agent_factory(variant=..., model=..., seed=...) -> contract.Agent
+* env_factory(seed=..., scenario=..., budget=...) -> contract.Env
+* agent_factory(variant=..., model=..., seed=..., client=..., scenario=...) -> contract.Agent
 * audit(trajectory, rubric, truth) -> contract.Verdict
 
 The default auditor is auditor.audit:audit. Rubrics are loaded through
 auditor.audit.load_rubric(), including sibling constraints when needed.
-The environment and agent defaults remain contract stubs.
+The default factories construct the real scenario Env and LLMAgent.
 Agents return their posterior and dominant cause on Action. State is owned by
 Env; the agent receives a copy so it cannot mutate the environment's state.
 
@@ -31,11 +35,11 @@ are interpreted. Rubric and truth stay in the local auditing process and are
 never passed to agent factories or Modal episode workers.
 
 Outputs: episodes/<id>.json (exact contract shape), results.jsonl (metadata,
-verdict and metrics), summary.json, and reward_vs_audit.png. Rates pool all
-models/seeds/repeats within a variant. Refusal-aborted episodes remain in
-primary failure metrics and the chart, with completed-only metrics reported
-separately; other failed episodes or audits abort the batch rather than
-silently removing them.
+verdict and metrics), summary.json, grid_summary.json, spend.json, and
+reward_vs_audit.png. Rates pool all models/seeds/repeats within a variant.
+Refusal-aborted episodes remain in primary failure metrics and the chart, with
+completed-only metrics reported separately; other failed episodes or audits
+abort the batch rather than silently removing them.
 """
 from __future__ import annotations
 
@@ -44,16 +48,21 @@ from copy import deepcopy
 from dataclasses import asdict, dataclass
 import hashlib
 import importlib
+import os
+from functools import partial
 from itertools import product
 import json
 import math
 from pathlib import Path
 import random
+import socket
 from statistics import fmean
+import sys
 from typing import Callable, Iterable, Mapping
 
 from contract import Agent, Env, Observation, Result, Trajectory, Turn, Verdict, trajectory_from_dict
 from env import EnvRejection
+from runner.model_clients import DEFAULT_TEMPERATURE, SpendLimitExceeded, price_for
 
 # A refused purchase is not a Turn (nothing ran, nothing was charged). The
 # reason is handed back to the agent as a zero-cost observation under this id so
@@ -69,6 +78,7 @@ class EpisodeJob:
     seed: int
     repeat: int
     effective_seed: int
+    scenario: str = "a"
 
 
 @dataclass
@@ -111,7 +121,33 @@ def resolve(reference: str) -> Callable:
     return value
 
 
-def build_jobs(variants: list[str], models: list[str], seeds: list[int], n: int) -> list[EpisodeJob]:
+def worker_bundle_files(scenario: str) -> list[tuple[Path, str]]:
+    from runner.factories import PROMPTS_DIR, REPO_ROOT, scenario_dir
+
+    bundle = scenario_dir(scenario).resolve()
+    repository = REPO_ROOT.resolve()
+    remote_bundle = Path("/root") / bundle.relative_to(repository)
+    files = [
+        (path, str(remote_bundle / "agent" / path.name))
+        for path in sorted((bundle / "agent").glob("*.json"))
+        if path.name not in {"rubric.json", "truth.json", "constraints.json"}
+    ]
+    expected_observations = bundle / "auditor" / "expected_observations.json"
+    if not expected_observations.is_file():
+        raise FileNotFoundError(expected_observations)
+    files.append((
+        expected_observations,
+        str(remote_bundle / "auditor" / "expected_observations.json"),
+    ))
+    files.extend(
+        (path, str(Path("/root") / "agents" / "prompts" / path.name))
+        for path in sorted(PROMPTS_DIR.glob("*.md"))
+    )
+    return files
+
+
+def build_jobs(variants: list[str], models: list[str], seeds: list[int], n: int,
+               scenario: str = "a") -> list[EpisodeJob]:
     if n < 1 or any(not axis for axis in (variants, models, seeds)):
         raise ValueError("N and every grid axis must be nonempty/positive")
     if any(len(axis) != len(set(axis)) for axis in (variants, models, seeds)):
@@ -121,7 +157,7 @@ def build_jobs(variants: list[str], models: list[str], seeds: list[int], n: int)
         # Matched seeds across variants/models; distinct deterministic repeat streams.
         digest = hashlib.sha256(f"{seed}:{repeat}".encode()).digest()
         effective_seed = seed if repeat == 0 else int.from_bytes(digest[:8], "big")
-        jobs.append(EpisodeJob(f"{index:08d}", variant, model, seed, repeat, effective_seed))
+        jobs.append(EpisodeJob(f"{index:08d}", variant, model, seed, repeat, effective_seed, scenario))
     return jobs
 
 
@@ -177,14 +213,54 @@ def run_episode(job: EpisodeJob, env_factory: Callable, agent_factory: Callable,
 
 
 def remote_episode(job: EpisodeJob, env_factory: str, agent_factory: str,
-                   max_turns: int) -> dict:
-    episode = run_episode(job, resolve(env_factory), resolve(agent_factory), max_turns)
-    return {
+                   max_turns: int, client_spec: dict | None = None) -> dict:
+    result = {
         "job": asdict(job),
+    }
+    if client_spec is None:
+        episode = run_episode(job, resolve(env_factory), resolve(agent_factory), max_turns)
+    else:
+        from runner.factories import make_client
+
+        client = make_client(
+            mode=client_spec["mode"],
+            model=job.model,
+            scenario=job.scenario,
+            temperature=client_spec["temperature"],
+            max_tokens=client_spec["max_tokens"],
+            usd_per_mtok_in=client_spec["usd_per_mtok_in"],
+            usd_per_mtok_out=client_spec["usd_per_mtok_out"],
+            spend_limit_usd=client_spec["spend_limit_usd"],
+        )
+        env_maker = partial(
+            resolve(env_factory), scenario=job.scenario, budget=client_spec["budget"],
+        )
+        agent_maker = partial(
+            resolve(agent_factory), client=client, scenario=job.scenario,
+        )
+        episode = run_episode(job, env_maker, agent_maker, max_turns)
+        result.update({
+            "sampling": {
+                "model": client.model,
+                "temperature": client.temperature,
+                "max_tokens": client.max_tokens,
+                "seed_applied_to_model": False,
+                "client": client_spec["mode"],
+            },
+            "tokens": client.ledger.snapshot(),
+            "model_call_log": client.call_log,
+            "worker": {
+                "hostname": socket.gethostname(),
+                "modal_task_id": os.environ.get("MODAL_TASK_ID"),
+                "on_modal": bool(os.environ.get("MODAL_TASK_ID")),
+            },
+        })
+    result.update({
         "trajectory": asdict(episode.trajectory),
         "refusals": [asdict(refusal) for refusal in episode.refusals],
         "aborted_on_refusals": episode.aborted_on_refusals,
-    }
+    })
+    return result
 
 
 def validate_truth(truth: Mapping) -> None:
@@ -352,13 +428,17 @@ def write_chart(records: list[dict], path: Path) -> None:
 
 
 def collect_results(results: Iterable[dict], output: Path, rubric: dict, truth: Mapping,
-                    audit_fn: Callable[[Trajectory, dict, dict], Verdict]) -> dict:
+                    audit_fn: Callable[[Trajectory, dict, dict], Verdict],
+                    spend_limit_usd: float | None = None) -> dict:
     """Persist each contract episode before auditing it, then emit one summary/chart."""
     validate_truth(truth)
     output.mkdir(parents=True, exist_ok=False)
     episodes = output / "episodes"
     episodes.mkdir()
     records = []
+    total_input_tokens = 0
+    total_output_tokens = 0
+    stage_cost_usd = 0.0
     with (output / "results.jsonl").open("w", encoding="utf-8") as stream:
         for result in results:
             job = EpisodeJob(**result["job"])
@@ -377,9 +457,34 @@ def collect_results(results: Iterable[dict], output: Path, rubric: dict, truth: 
                       "aborted_on_refusals": aborted_on_refusals,
                       "metrics": aborted_metrics(trajectory, verdict) if aborted_on_refusals
                       else episode_metrics(trajectory, verdict, truth)}
+            for field_name in ("sampling", "tokens", "model_call_log", "worker"):
+                if field_name in result:
+                    record[field_name] = result[field_name]
             stream.write(json.dumps(record, allow_nan=False) + "\n")
             stream.flush()
             records.append(record)
+            tokens = result.get("tokens")
+            if tokens is not None:
+                episode_cost = float(tokens["cost_usd"])
+                stage_cost_usd += episode_cost
+                total_input_tokens += int(tokens["input_tokens"])
+                total_output_tokens += int(tokens["output_tokens"])
+                limit_label = (
+                    f"${spend_limit_usd:.2f}" if spend_limit_usd is not None else "unlimited"
+                )
+                print(
+                    f"[spend] episode {job.episode_id}: ${episode_cost:.4f}  "
+                    f"stage cumulative ${stage_cost_usd:.4f} "
+                    f"(limit {limit_label})",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                if spend_limit_usd is not None and stage_cost_usd > spend_limit_usd:
+                    raise SpendLimitExceeded(
+                        f"STOP: stage estimated spend ${stage_cost_usd:.4f} exceeded "
+                        f"${spend_limit_usd:.2f} after {len(records)} episodes; "
+                        "results.jsonl holds them; no summary/chart written"
+                    )
     summary = aggregate(records)
     grid = grid_summary(records)
     write_chart(records, output / "reward_vs_audit.png")
@@ -388,6 +493,22 @@ def collect_results(results: Iterable[dict], output: Path, rubric: dict, truth: 
     )
     (output / "grid_summary.json").write_text(
         json.dumps(grid, indent=2, allow_nan=False) + "\n", encoding="utf-8",
+    )
+    spend = {
+        "episodes": len(records),
+        "input_tokens": total_input_tokens,
+        "output_tokens": total_output_tokens,
+        "cost_usd": round(stage_cost_usd, 6),
+        "cost_per_episode_usd": (
+            round(stage_cost_usd / len(records), 6) if records else None
+        ),
+        "limit_usd": spend_limit_usd,
+        "estimated": any(
+            record.get("sampling", {}).get("client") == "dry-run" for record in records
+        ),
+    }
+    (output / "spend.json").write_text(
+        json.dumps(spend, indent=2, allow_nan=False) + "\n", encoding="utf-8",
     )
     return summary
 
@@ -398,11 +519,22 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--models", nargs="+", required=True)
     parser.add_argument("--seeds", nargs="+", type=int, required=True)
     parser.add_argument("--n", type=int, default=1, help="Repeats per variant/model/seed combination")
-    parser.add_argument("--rubric", type=Path, required=True)
-    parser.add_argument("--truth", type=Path, required=True)
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--dry-run", dest="mode", action="store_const", const="dry-run")
+    mode.add_argument("--live", dest="mode", action="store_const", const="live")
+    parser.set_defaults(mode="dry-run")
+    parser.add_argument("--scenario", default="a")
+    parser.add_argument("--budget", type=int)
+    parser.add_argument("--temperature", type=float, default=DEFAULT_TEMPERATURE)
+    parser.add_argument("--max-tokens", type=int, default=2048)
+    parser.add_argument("--max-spend-usd", type=float, default=20.0)
+    parser.add_argument("--usd-per-mtok-in", type=float)
+    parser.add_argument("--usd-per-mtok-out", type=float)
+    parser.add_argument("--rubric", type=Path)
+    parser.add_argument("--truth", type=Path)
     parser.add_argument("--output", type=Path, required=True, help="New directory for this batch")
-    parser.add_argument("--env-factory", default="runner.modal_batch:make_env")
-    parser.add_argument("--agent-factory", default="runner.modal_batch:make_agent")
+    parser.add_argument("--env-factory", default="runner.factories:make_env")
+    parser.add_argument("--agent-factory", default="runner.factories:make_agent")
     parser.add_argument("--audit", default="auditor.audit:audit")
     parser.add_argument("--max-turns", type=int, default=100)
     parser.add_argument("--max-containers", type=int, default=32)
@@ -410,41 +542,125 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--pip-package", action="append", default=[], help="Additional remote dependency")
     parser.add_argument("--secret", action="append", default=[], help="Modal Secret name for model credentials")
     args = parser.parse_args(argv)
-    jobs = build_jobs(args.variants, args.models, args.seeds, args.n)
+    jobs = build_jobs(args.variants, args.models, args.seeds, args.n, scenario=args.scenario)
     if min(args.max_turns, args.max_containers, args.timeout) < 1:
         parser.error("Turn, container and timeout limits must be positive")
+    if not 0.0 <= args.temperature <= 1.0:
+        parser.error("temperature must be in [0, 1]")
     if args.output.exists():
         parser.error("Output directory already exists; choose a new batch directory")
+    from runner.factories import make_env as validate_env, scenario_dir
+
+    try:
+        checked_env = validate_env(
+            seed=args.seeds[0], scenario=args.scenario, budget=args.budget,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        parser.error(str(exc))
+    budget = checked_env.state.budget_remaining
+    if (args.usd_per_mtok_in is None) != (args.usd_per_mtok_out is None):
+        parser.error("Both --usd-per-mtok-in and --usd-per-mtok-out must be provided together")
+    try:
+        for model in args.models:
+            price_for(model, args.usd_per_mtok_in, args.usd_per_mtok_out)
+    except ValueError as exc:
+        parser.error(str(exc))
     for reference in (args.env_factory, args.agent_factory):
         resolve(reference)
     audit_fn = resolve(args.audit)
+    bundle = scenario_dir(args.scenario)
+    rubric_path = args.rubric or bundle / "auditor" / "rubric.json"
+    truth_path = args.truth or bundle / "auditor" / "truth.json"
     # Keep auditor imports local: episode workers do not need auditor code or data.
     from auditor.audit import load_rubric
 
-    rubric = load_rubric(args.rubric)
-    truth = json.loads(args.truth.read_text(encoding="utf-8"))
+    rubric = load_rubric(rubric_path)
+    truth = json.loads(truth_path.read_text(encoding="utf-8"))
     validate_truth(truth)
 
-    import modal
     importlib.import_module("matplotlib")  # Fail before launching paid work if the chart dependency is missing.
 
-    image = modal.Image.debian_slim(python_version="3.12")
-    if args.pip_package:
-        image = image.pip_install(*args.pip_package)
-    modules = {"contract", "runner"}
-    modules.update(ref.split(":")[0].split(".")[0] for ref in (args.env_factory, args.agent_factory))
-    image = image.add_local_python_source(*sorted(modules))
-    app = modal.App("falsifylab-modal-batch")
-    worker = app.function(image=image, timeout=args.timeout, max_containers=args.max_containers,
-                          secrets=[modal.Secret.from_name(name) for name in args.secret])(remote_episode)
-    with modal.enable_output(), app.run():
-        results = worker.map(jobs, kwargs={"env_factory": args.env_factory,
-                             "agent_factory": args.agent_factory, "max_turns": args.max_turns},
-                             order_outputs=False)
-        summary = collect_results(results, args.output, rubric, truth, audit_fn)
+    client_spec = {
+        "mode": args.mode,
+        "temperature": args.temperature,
+        "max_tokens": args.max_tokens,
+        "usd_per_mtok_in": args.usd_per_mtok_in,
+        "usd_per_mtok_out": args.usd_per_mtok_out,
+        "spend_limit_usd": args.max_spend_usd,
+        "budget": budget,
+    }
+    try:
+        if args.mode == "dry-run":
+            print(
+                "DRY RUN: stub client, in-process, no network; nothing launched on Modal. "
+                "Use --live for real runs."
+            )
+            results = (
+                remote_episode(
+                    job, args.env_factory, args.agent_factory, args.max_turns,
+                    client_spec=client_spec,
+                )
+                for job in jobs
+            )
+            summary = collect_results(
+                results, args.output, rubric, truth, audit_fn,
+                spend_limit_usd=args.max_spend_usd,
+            )
+        else:
+            secrets = ["falsifylab-keys", *args.secret]
+            print(
+                f"LIVE PLAN: episodes={len(jobs)} scenario={args.scenario} "
+                f"variants={','.join(args.variants)} model={','.join(args.models)} "
+                f"temperature={args.temperature} secrets={','.join(secrets)} "
+                f"spend_limit=${args.max_spend_usd:.2f}"
+            )
+            import modal
+
+            requirements = Path(__file__).with_name("requirements.txt").read_text(
+                encoding="utf-8",
+            )
+            packages = [
+                line.strip() for line in requirements.splitlines()
+                if line.strip() and not line.lstrip().startswith("#")
+            ]
+            image = modal.Image.debian_slim(python_version="3.12")
+            image = image.pip_install(*packages, *args.pip_package)
+            modules = {"contract", "env", "runner", "agents"}
+            modules.update(ref.split(":")[0].split(".")[0]
+                           for ref in (args.env_factory, args.agent_factory))
+            image = image.add_local_python_source(*sorted(modules))
+            for local_path, remote_path in worker_bundle_files(args.scenario):
+                image = image.add_local_file(local_path, remote_path)
+            app = modal.App("falsifylab-modal-batch")
+            worker = app.function(
+                image=image,
+                timeout=args.timeout,
+                max_containers=args.max_containers,
+                secrets=[modal.Secret.from_name(name) for name in secrets],
+            )(remote_episode)
+            with modal.enable_output(), app.run():
+                results = worker.map(
+                    jobs,
+                    kwargs={
+                        "env_factory": args.env_factory,
+                        "agent_factory": args.agent_factory,
+                        "max_turns": args.max_turns,
+                        "client_spec": client_spec,
+                    },
+                    order_outputs=False,
+                )
+                summary = collect_results(
+                    results, args.output, rubric, truth, audit_fn,
+                    spend_limit_usd=args.max_spend_usd,
+                )
+    except SpendLimitExceeded as exc:
+        print(str(exc), file=sys.stderr)
+        raise SystemExit(2) from exc
     print(json.dumps(summary, indent=2))
     print("== Grid summary ==")
     print((args.output / "grid_summary.json").read_text(encoding="utf-8"), end="")
+    print("== Spend ==")
+    print((args.output / "spend.json").read_text(encoding="utf-8"), end="")
 
 
 if __name__ == "__main__":
