@@ -9,7 +9,15 @@ from typing import Callable, Mapping
 
 from contract import Trajectory, Verdict, trajectory_from_dict
 from runner.factories import scenario_dir
-from runner.modal_batch import EpisodeJob, build_record, resolve, validate_truth, write_summaries
+from runner.modal_batch import (
+    HARNESS_ERROR_VERDICT,
+    EpisodeJob,
+    build_record,
+    resolve,
+    validate_truth,
+    write_summaries,
+)
+from runner.provenance import code_sha
 
 
 class MissingTrajectoryError(FileNotFoundError):
@@ -50,13 +58,19 @@ def reaudit(results_path: Path, output: Path, *,
     results_path = Path(results_path)
     output = Path(output)
     _validate_output(results_path, output)
+    current_code_sha = code_sha()
     records = _read_records(results_path)
     scenarios = [record["job"].get("scenario", "a") for record in records]
     if (rubric is not None or truth is not None) and len(set(scenarios)) != 1:
         raise ValueError("--rubric and --truth overrides require every record to share a scenario")
 
     assets = {}
-    for scenario in dict.fromkeys(scenarios):
+    auditable_scenarios = [
+        record["job"].get("scenario", "a")
+        for record in records
+        if record.get("verdict", {}).get("verdict") != HARNESS_ERROR_VERDICT
+    ]
+    for scenario in dict.fromkeys(auditable_scenarios):
         if rubric is None or truth is None:
             loaded_rubric, loaded_truth = _load_default_assets(scenario)
         else:
@@ -70,6 +84,12 @@ def reaudit(results_path: Path, output: Path, *,
     rebuilt_records = []
     changed = []
     for record in records:
+        if record.get("verdict", {}).get("verdict") == HARNESS_ERROR_VERDICT:
+            rebuilt = dict(record)
+            rebuilt["code_sha"] = current_code_sha
+            rebuilt["source_code_sha"] = record.get("code_sha")
+            rebuilt_records.append(rebuilt)
+            continue
         job_data = record["job"]
         episode_id = job_data["episode_id"]
         if not episode_id.isascii() or not episode_id.isdecimal():
@@ -99,6 +119,8 @@ def reaudit(results_path: Path, output: Path, *,
             aborted_on_refusals=record.get("aborted_on_refusals", False),
             extra=record,
         )
+        rebuilt["code_sha"] = current_code_sha
+        rebuilt["source_code_sha"] = record.get("code_sha")
         if rebuilt["verdict"] != record.get("verdict"):
             changed.append(episode_id)
         rebuilt_records.append(rebuilt)
@@ -119,6 +141,7 @@ def reaudit(results_path: Path, output: Path, *,
         "source": str(results_path),
         "episodes": len(rebuilt_records),
         "audit": audit_reference,
+        "code_sha": current_code_sha,
         "verdicts_changed": changed,
     }
     (output / "reaudit.json").write_text(

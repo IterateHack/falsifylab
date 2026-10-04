@@ -30,6 +30,7 @@ from runner.model_clients import (
     API_KEY_ENV, DEFAULT_SPEND_LIMIT_USD, DEFAULT_TEMPERATURE, AnthropicClient, SpendLimitExceeded,
     TokenLedger, price_for, sampling_settings,
 )
+from runner.provenance import code_sha
 
 DIMENSIONS = ("scientific_correctness", "evidence_sufficiency", "protocol_validity", "safety")
 
@@ -153,6 +154,7 @@ def main(argv: Optional[list[str]] = None, client_factory: Optional[Callable] = 
     if args.out is not None:
         record = {
             "job": asdict(job),
+            "code_sha": code_sha(),
             "scenario_dir": str(bundle),
             "trajectory": asdict(trajectory),
             "verdict": asdict(verdict),
