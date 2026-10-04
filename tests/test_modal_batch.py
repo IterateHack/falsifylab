@@ -190,6 +190,59 @@ def test_per_variant_aggregation_pools_models_and_seeds():
     assert summary["w"]["episodes"] == 2
 
 
+def test_grid_summary_counts_failures_parse_failures_aborts_and_sorts():
+    def row(variant, *, scenario=None, success=False, verdict_name="WRONG_CONCLUSION",
+            aborted=False):
+        job = {"variant": variant}
+        if scenario is not None:
+            job["scenario"] = scenario
+        return {
+            "job": job,
+            "verdict": {"verdict": verdict_name},
+            "metrics": {"valid_success": success},
+            "aborted_on_refusals": aborted,
+        }
+
+    records = [
+        row("all-fail"),
+        *[row("one-of-four", scenario="b", success=index == 0) for index in range(4)],
+        row("all-success", success=True),
+        row("all-success", success=True),
+        row("parse-excluded", success=True),
+        row("parse-excluded", verdict_name="PARSE_FAILURE"),
+        row("aborted", scenario="b", success=True),
+        row("aborted", scenario="b", aborted=True),
+        row("all-parse", scenario="z", verdict_name="PARSE_FAILURE"),
+    ]
+
+    summary = batch.grid_summary(records)
+    cells = {(record["scenario"], record["variant"]): record for record in summary}
+    assert cells[("a", "all-fail")]["frontier_regret"] == 0
+    assert cells[("b", "one-of-four")]["n_runs"] == 4
+    assert cells[("b", "one-of-four")]["n_success"] == 1
+    assert cells[("b", "one-of-four")]["success_rate"] == 0.25
+    assert cells[("b", "one-of-four")]["frontier_regret"] == 0.75
+    assert cells[("a", "all-success")]["frontier_regret"] == 0
+    assert cells[("a", "parse-excluded")]["n_runs"] == 2
+    assert cells[("a", "parse-excluded")]["n_parse_failure"] == 1
+    assert cells[("a", "parse-excluded")]["success_rate"] == 1.0
+    assert cells[("b", "aborted")]["n_runs"] == 2
+    assert cells[("b", "aborted")]["n_success"] == 1
+    assert cells[("b", "aborted")]["success_rate"] == 0.5
+    assert cells[("b", "aborted")]["frontier_regret"] == 0.5
+    assert cells[("z", "all-parse")]["success_rate"] is None
+    assert cells[("z", "all-parse")]["frontier_regret"] is None
+    assert all(record["success_metric"] == "valid_success" for record in summary)
+    assert [(record["scenario"], record["variant"]) for record in summary] == [
+        ("b", "one-of-four"),
+        ("b", "aborted"),
+        ("a", "all-fail"),
+        ("a", "all-success"),
+        ("a", "parse-excluded"),
+        ("z", "all-parse"),
+    ]
+
+
 def test_collect_logs_audits_and_emits_one_chart(tmp_path, monkeypatch):
     from matplotlib.axes import Axes
 
@@ -216,6 +269,9 @@ def test_collect_logs_audits_and_emits_one_chart(tmp_path, monkeypatch):
         assert trajectory_from_dict(doc) == episode()
     assert len((output / "results.jsonl").read_text().splitlines()) == 4
     assert json.loads((output / "summary.json").read_text()) == summary
+    grid = json.loads((output / "grid_summary.json").read_text())
+    assert len(grid) == 2
+    assert all(row["scenario"] == "a" for row in grid)
     assert (output / "reward_vs_audit.png").read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
     assert len(points) == 4
     assert len(list(output.glob("*.png"))) == 1
@@ -230,6 +286,7 @@ def test_audit_failure_preserves_episode_without_publishing_summary(tmp_path):
                               Mock(side_effect=RuntimeError("audit failed")))
     assert (output / "episodes" / f"{job.episode_id}.json").exists()
     assert not (output / "summary.json").exists()
+    assert not (output / "grid_summary.json").exists()
     assert not (output / "reward_vs_audit.png").exists()
 
 
@@ -337,7 +394,9 @@ def test_agent_cannot_mutate_env_state_or_logged_actions():
 
 
 @pytest.mark.parametrize("embedded_constraints", [False, True])
-def test_cli_dispatches_parallel_map_and_real_audit_locally(tmp_path, monkeypatch, embedded_constraints):
+def test_cli_dispatches_parallel_map_and_real_audit_locally(
+    tmp_path, monkeypatch, capsys, embedded_constraints,
+):
     import modal
     import auditor.audit as auditor
 
@@ -392,6 +451,10 @@ def test_cli_dispatches_parallel_map_and_real_audit_locally(tmp_path, monkeypatc
     monkeypatch.setattr(modal, "enable_output", nullcontext)
     batch.main(["--variants", "v", "w", "--models", "m", "--seeds", "7", "8", "--n", "2",
                 "--truth", str(truth_path), "--rubric", str(rubric_path), "--output", str(output)])
+    captured = capsys.readouterr().out
+    grid_start = captured.index("== Grid summary ==")
+    assert grid_start > captured.rfind('"mean_final_score"')
+    assert '"scenario": "a"' in captured[grid_start:]
     worker.map.assert_called_once()
     assert audit.call_count == 8
     assert audit.call_args.args[2] == TRUTH

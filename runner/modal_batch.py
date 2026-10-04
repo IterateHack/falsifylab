@@ -274,6 +274,45 @@ def aggregate(records: list[dict]) -> dict:
     return summary
 
 
+def grid_summary(records: list[dict]) -> list[dict]:
+    cells: dict[tuple[str, str], list[dict]] = {}
+    for record in records:
+        job = record["job"]
+        key = (job.get("scenario", "a"), job["variant"])
+        cells.setdefault(key, []).append(record)
+
+    summary = []
+    for (scenario, variant), rows in cells.items():
+        n_runs = len(rows)
+        n_parse_failure = sum(r["verdict"]["verdict"] == "PARSE_FAILURE" for r in rows)
+        n_success = sum(
+            (r.get("metrics") or {}).get("valid_success") is True for r in rows
+        )
+        denominator = n_runs - n_parse_failure
+        success_rate = n_success / denominator if denominator else None
+        summary.append({
+            "scenario": scenario,
+            "variant": variant,
+            "n_runs": n_runs,
+            "n_parse_failure": n_parse_failure,
+            "n_success": n_success,
+            "success_rate": success_rate,
+            "frontier_regret": (
+                (1 if n_success >= 1 else 0) - success_rate if success_rate is not None else None
+            ),
+            "success_metric": "valid_success",
+        })
+    return sorted(
+        summary,
+        key=lambda row: (
+            row["frontier_regret"] is None,
+            -row["frontier_regret"] if row["frontier_regret"] is not None else 0,
+            row["scenario"],
+            row["variant"],
+        ),
+    )
+
+
 def write_chart(records: list[dict], path: Path) -> None:
     from matplotlib import rcParams
     from matplotlib.backends.backend_agg import FigureCanvasAgg
@@ -342,9 +381,13 @@ def collect_results(results: Iterable[dict], output: Path, rubric: dict, truth: 
             stream.flush()
             records.append(record)
     summary = aggregate(records)
+    grid = grid_summary(records)
     write_chart(records, output / "reward_vs_audit.png")
     (output / "summary.json").write_text(
         json.dumps(summary, indent=2, allow_nan=False) + "\n", encoding="utf-8",
+    )
+    (output / "grid_summary.json").write_text(
+        json.dumps(grid, indent=2, allow_nan=False) + "\n", encoding="utf-8",
     )
     return summary
 
@@ -400,6 +443,8 @@ def main(argv: list[str] | None = None) -> None:
                              order_outputs=False)
         summary = collect_results(results, args.output, rubric, truth, audit_fn)
     print(json.dumps(summary, indent=2))
+    print("== Grid summary ==")
+    print((args.output / "grid_summary.json").read_text(encoding="utf-8"), end="")
 
 
 if __name__ == "__main__":
