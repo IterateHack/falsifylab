@@ -37,6 +37,8 @@ _PRESENCE = tuple(re.compile(pattern) for pattern in (
     rf"\b{_PRESENT_MATERIAL} added\b",
     r"(?<!no )\blysates?\b",
 ))
+# Supernatant is taken from a culture, so no qualifier makes it a bacteria-free control.
+_CULTURE_DERIVED = re.compile(r"\bsupernatants?\b")
 _NEGATORS = frozenset({"no", "without", "not", "minus"})
 _REMOVAL_AFTER = re.compile(r"^ (?:omitted|removed|absent|excluded)\b")
 
@@ -73,6 +75,8 @@ def _is_accepted_control_part(normalised):
     if any(pattern.search(normalised) for pattern in _BLOCKED):
         return False
     if _says_bacteria_present(normalised):
+        return False
+    if _CULTURE_DERIVED.search(normalised):
         return False
     if any(pattern.search(normalised) for pattern in _ACCEPTED):
         return True

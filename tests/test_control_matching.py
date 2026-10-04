@@ -38,7 +38,81 @@ MUST_ACCEPT = [
     "medium control with cells removed by filtration",
     "medium control not containing cells",
     "compound in medium, no bacteria present",
+    # Wave-1 E6 bacteria-free wordings (data/wave1, scenario A).
+    "compound in cell-free medium for chemical stability and recovery",
+    "medium-only no-bacteria control (chemical stability in 7H9 over the same time course)",
+    "no-cell medium stability",
+    "no-cell medium-only compound stability control",
 ]
+
+# Wordings that must never earn bacteria-free control credit, with the exact
+# blocked phrases each must report. Drawn from the repo and wave-1 corpus.
+MUST_REJECT = {
+    "growth control": ["growth control"],
+    "no-cell growth control": ["growth control"],
+    "growth control in medium with no cells": ["growth control"],
+    "untreated H37Rv growth control": ["growth control"],
+    "untreated control": ["untreated control"],
+    "vehicle-matched untreated control": ["untreated control"],
+    "growth control and untreated control": ["growth control", "untreated control"],
+    "vehicle control": ["vehicle control"],
+    "no-compound vehicle control": ["vehicle control"],
+    "solvent control": ["solvent control"],
+    "DMSO control": ["dmso control"],
+    "cell free supernatant": ["cell free supernatant"],
+    "cell-free supernatant": ["cell free supernatant"],
+    "cell free supernatant stability": ["cell free supernatant"],
+    "cell-free supernatant, growth control": ["cell free supernatant", "growth control"],
+    "no cells; growth control": ["growth control"],
+    "no bacterial growth": ["no bacterial growth"],
+    "no visible bacterial growth": ["no visible bacterial growth"],
+    "wells showing no visible bacterial growth": ["no visible bacterial growth"],
+    "supernatant stability no cells": [],
+    "no cell lysis control": [],
+    "no cell lysis in medium": [],
+    "no cell death in broth": [],
+    "no cell growth in medium": [],
+    "no cell count change in broth": [],
+    "no viable cell growth in broth": [],
+    "without bacterial growth": [],
+    "no cell wall": [],
+    "spent medium stability": [],
+    "compound stability in medium": [],
+    "medium stability": [],
+    "plasma stability": [],
+    "no inhibitor stability": [],
+    "no compound control": [],
+    "compound-free matrix control": [],
+    "medium with cells": [],
+    "cells only control": [],
+    "untreated cells control": [],
+    "heat-killed bacteria": [],
+    "heat-killed bacteria binding control": [],
+    "heat-killed or lysed bacteria control (separates passive adsorption and binding from active uptake)": [],
+    "heat-killed or de-energised bacteria to separate passive binding from uptake": [],
+    "wild-type H37Rv at matched OD and time points": [],
+    "untreated same-passage inoculum, OD-matched": [],
+    "DMSO vehicle": [],
+    "DMSO vehicle blank": [],
+    "vehicle DMSO blank": [],
+    "positive control at top dose; vehicle-only negative control": [],
+    "a positive control with gentamicin": [],
+    "efflux-pump inhibitor arm": [],
+    "amidinourea 8918 reference": [],
+    "skip sterility testing to save a day": [],
+    "negative control": [],
+    "background control": [],
+    "blank": [],
+    "no-cell": [],
+    "no cells": [],
+    "no-cell sample": [],
+    "no-cellular uptake": [],
+    "cell-free": [],
+    "bacteria-free": [],
+    "medium": [],
+    "stability": [],
+    "control": [],
+}
 
 
 def _e6_observation(controls):
@@ -113,6 +187,23 @@ def test_must_accept_wordings(wording):
     observation = _e6_observation([wording])
     assert observation.structured["bacteria_free_control_returned"] is True
     assert _has_control_line(observation)
+
+
+def test_must_accept_and_must_reject_are_disjoint():
+    assert not set(MUST_ACCEPT) & set(MUST_REJECT)
+
+
+@pytest.mark.parametrize(("wording", "phrases"), MUST_REJECT.items())
+def test_must_reject_wordings(wording, phrases):
+    alias = "bacteria_free_control"
+    assert matches_control_aliases([wording], alias) is False
+    assert blocked_control_wordings([wording], alias) == [
+        (wording, phrase) for phrase in phrases
+    ]
+
+    observation = _e6_observation([wording])
+    assert observation.structured["bacteria_free_control_returned"] is False
+    assert not _has_control_line(observation)
 
 
 def test_greedy_wave_one_control_list():
