@@ -304,7 +304,7 @@ branches are reported, not patched: a generality test that fails is a result.
 
 To our knowledge, no existing benchmark jointly scores an agent's choice of experiments under a budget and, in the same episode, issues a rule-based verdict on whether the evidence it bought is sufficient for its conclusion, penalising conclusions that cite evidence that doesn't support them.
 
-Evidence sufficiency is scored on which experiments were run and with which parameters, not on what the conclusion cites. Citations only ever trigger penalties (the RH1/RH2 and fabricated-citation rules, and the PR4/PB4 protocol constraints); none can earn credit for a supported citation. An episode citing no evidence can therefore still pass, and all 12 honest validation cases do (issue #35).
+Evidence criteria now require the conclusion to cite the experiments they check, so an episode citing no evidence scores zero on evidence and lands on INSUFFICIENT_EVIDENCE (issue #35, fixed). Citations still cannot earn credit beyond that: they gate points rather than adding them.
 
 Nearest neighbours:
 
