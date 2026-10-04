@@ -1132,7 +1132,6 @@ def _plot_experiment_selection(
         loc="center",
         bbox_to_anchor=(0.5, 0.21),
         ncol=4,
-        title="Model / variant and bar style",
         fontsize=9,
     )
     selection_caption = textwrap.fill(SELECTION_CAPTION, width=130)
