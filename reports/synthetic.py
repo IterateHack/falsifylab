@@ -69,7 +69,7 @@ def _raw_score(scenario: str, variant: str, model: str, seed: int, repeat: int) 
     return base + (seed * 3 + repeat * 5) % 8
 
 
-def _scenario_experiments(scenario: str) -> tuple[list[dict], int]:
+def _scenario_experiments(scenario: str) -> tuple[list[dict], int, dict]:
     bundle = scenario_dir(scenario)
     briefing = json.loads(
         (bundle / "agent" / "briefing.json").read_text(encoding="utf-8"),
@@ -93,7 +93,11 @@ def _scenario_experiments(scenario: str) -> tuple[list[dict], int]:
             if isinstance(experiment_id, str) and cost is not None:
                 catalog.setdefault(
                     experiment_id,
-                    {"id": experiment_id, "cost": int(cost)},
+                    {
+                        "id": experiment_id,
+                        "cost": int(cost),
+                        "parameter_schema": value.get("parameters", {}),
+                    },
                 )
             for nested in value.values():
                 walk(nested)
@@ -109,7 +113,135 @@ def _scenario_experiments(scenario: str) -> tuple[list[dict], int]:
     ]
     if not experiments:
         raise ValueError(f"Scenario {scenario} has no experiments within its budget")
-    return experiments, budget
+    rubric = json.loads(
+        (bundle / "auditor" / "rubric.json").read_text(encoding="utf-8"),
+    )
+    return experiments, budget, rubric
+
+
+def _parameter_constraints(rubric: dict, experiment_id: str) -> list[tuple[str, dict]]:
+    constraints = []
+
+    def walk(predicate) -> None:
+        if not isinstance(predicate, dict) or len(predicate) != 1:
+            return
+        operator, argument = next(iter(predicate.items()))
+        if operator in ("all", "any") and isinstance(argument, list):
+            for nested in argument:
+                walk(nested)
+        elif operator == "not":
+            walk(argument)
+        elif (
+            operator.startswith("param_")
+            and isinstance(argument, dict)
+            and argument.get("experiment") == experiment_id
+        ):
+            constraints.append((operator, argument))
+
+    for criterion in rubric["dimensions"]["evidence_sufficiency"]["criteria"]:
+        walk(criterion.get("predicate"))
+    return constraints
+
+
+def _schema_default(parameter_schema: dict) -> object:
+    if isinstance(parameter_schema.get("values"), list):
+        values = parameter_schema["values"]
+        if parameter_schema.get("type") == "multi_enum":
+            return values[:1]
+        return values[0] if values else None
+    if isinstance(parameter_schema.get("range"), list):
+        return parameter_schema["range"][0]
+    if parameter_schema.get("type") in {"multi_enum", "free_list"}:
+        return []
+    if parameter_schema.get("type") == "bool":
+        return False
+    return "synthetic"
+
+
+def _passing_parameter_value(
+    operator: str, argument: dict, parameter_schema: dict,
+) -> object:
+    if operator == "param_present":
+        return _schema_default(parameter_schema)
+    if operator == "param_eq":
+        return argument["equals"]
+    if operator == "param_in":
+        return argument["values"][0]
+    if operator == "param_not_in":
+        value = _schema_default(parameter_schema)
+        return value if value not in argument["values"] else "__synthetic_other__"
+    if operator == "param_lt":
+        return argument["value"] - 1
+    if operator == "param_ge":
+        return argument["value"]
+    if operator == "param_contains_all":
+        return list(argument["values"])
+    if operator == "param_text_contains_any":
+        aliases = argument["aliases"]
+        value = aliases[0] if isinstance(aliases, list) else aliases
+        if parameter_schema.get("type") in {"multi_enum", "free_list"}:
+            return [value]
+        return value
+    if operator == "param_text_contains_all_groups":
+        value = [group[0] for group in argument["groups"]]
+        if parameter_schema.get("type") in {"multi_enum", "free_list"}:
+            return value
+        return " ".join(value)
+    return _schema_default(parameter_schema)
+
+
+def _failing_parameter_value(operator: str, argument: dict, passing_value) -> object:
+    if operator == "param_present":
+        return None
+    if operator == "param_eq":
+        return (
+            passing_value + 1
+            if isinstance(passing_value, (int, float))
+            else f"{passing_value}_other"
+        )
+    if operator == "param_in":
+        return "__synthetic_other__"
+    if operator == "param_not_in":
+        return argument["values"][0]
+    if operator == "param_lt":
+        return argument["value"]
+    if operator == "param_ge":
+        return argument["value"] - 1
+    if operator == "param_contains_all":
+        return list(argument["values"][:-1])
+    if operator in {"param_text_contains_any", "param_text_contains_all_groups"}:
+        return ["__synthetic_nonmatching__"]
+    return passing_value
+
+
+def _synthetic_parameters(
+    experiment: dict,
+    rubric: dict,
+    *,
+    meet_rules: bool,
+) -> dict:
+    schema = experiment.get("parameter_schema", {})
+    parameters = {
+        name: _schema_default(spec)
+        for name, spec in schema.items()
+        if spec.get("required")
+    }
+    constraints = _parameter_constraints(rubric, experiment["id"])
+    for operator, argument in constraints:
+        name = argument["param"]
+        parameters[name] = _passing_parameter_value(
+            operator, argument, schema.get(name, {}),
+        )
+    if not meet_rules and constraints:
+        operator, argument = constraints[0]
+        name = argument["param"]
+        if operator == "param_present":
+            parameters.pop(name, None)
+        else:
+            parameters[name] = _failing_parameter_value(
+                operator, argument, parameters[name],
+            )
+    return parameters
 
 
 def _choose_experiments(
@@ -179,6 +311,7 @@ def _trajectory(
             beliefs=beliefs,
             dominant_cause=TRUTH["dominant_cause"],
             experiment_id=experiment["id"],
+            parameters=experiment.get("parameters", {}),
         )
         turns.append(Turn(index, action, observation))
     if aborted:
@@ -187,6 +320,7 @@ def _trajectory(
             beliefs=beliefs,
             dominant_cause=TRUTH["dominant_cause"],
             experiment_id=experiments[-1]["id"],
+            parameters=experiments[-1].get("parameters", {}),
         )
         turns.append(Turn(len(turns), refused_action, None))
     else:
@@ -257,7 +391,7 @@ def _build_results() -> tuple[list[dict], dict[str, dict]]:
                             "score": _raw_score(scenario, variant, model, seed, repeat),
                             "reaudit_change": reaudited_change,
                         }
-                        catalog, budget = scenario_experiments[scenario]
+                        catalog, budget, rubric = scenario_experiments[scenario]
                         experiments = _choose_experiments(
                             catalog,
                             budget,
@@ -266,6 +400,24 @@ def _build_results() -> tuple[list[dict], dict[str, dict]]:
                             seed=seed,
                             repeat=repeat,
                         )
+                        variant_index = ("baseline", "alternate", "random", "ucb").index(
+                            variant,
+                        )
+                        model_index = {"model-x": 0, "model-y": 1, "scripted": 2}[model]
+                        experiments = [
+                            {
+                                **experiment,
+                                "parameters": _synthetic_parameters(
+                                    experiment,
+                                    rubric,
+                                    meet_rules=(
+                                        seed + repeat + variant_index + model_index
+                                        + index
+                                    ) % 2 == 0,
+                                ),
+                            }
+                            for index, experiment in enumerate(experiments)
+                        ]
                         if variant in SCRIPTED_VARIANTS:
                             sampling = None
                         else:

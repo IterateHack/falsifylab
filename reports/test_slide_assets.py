@@ -86,6 +86,10 @@ def test_synthetic_cli_creates_all_stamped_assets_and_manifest(tmp_path, capsys)
             "mean_cost", "cost_of_pass", "pass^1", "pass^3", "pass^5",
             "n_valid_success",
         } <= set(headers)
+    assert (
+        "Because pass^k counts VALID_SUCCESS runs, it can differ from "
+        "clean_success_rate where a run aborted on refusals."
+    ) in slide_assets.PASS_K_CAPTION
     for entry in entries:
         asset = output / entry["path"]
         assert asset.is_file()
@@ -357,15 +361,24 @@ def test_selection_rows_count_scored_cost_and_charged_purchases():
     assert row["mean_cost"] == 4
     assert row["budget"] == 8
     assert row["bought E6"] == 2 / 3
+    assert row["bought E6 w/ params"] == 2 / 3
     assert row["bought E3*"] == 2 / 3
+    assert row["bought E3* w/ params"] == 2 / 3
     assert row["bought all decisive"] == 1 / 3
+    assert row["bought all decisive w/ params"] == 1 / 3
 
 
 def test_selection_cost_plot_uses_horizontal_bars_and_integer_budget(tmp_path, monkeypatch):
     plot_titles = []
     horizontal_bars = []
+    figure_texts = []
+    figure_legend_labels = []
     original_set_title = Axes.set_title
     original_barh = Axes.barh
+    from matplotlib.figure import Figure
+
+    original_figure_text = Figure.text
+    original_legend = Figure.legend
 
     def capture_title(self, title, *args, **kwargs):
         plot_titles.append(title)
@@ -375,8 +388,18 @@ def test_selection_cost_plot_uses_horizontal_bars_and_integer_budget(tmp_path, m
         horizontal_bars.append(args)
         return original_barh(self, *args, **kwargs)
 
+    def capture_figure_text(self, x, y, text, *args, **kwargs):
+        figure_texts.append(text)
+        return original_figure_text(self, x, y, text, *args, **kwargs)
+
+    def capture_legend(self, *args, **kwargs):
+        figure_legend_labels.extend(kwargs.get("labels", []))
+        return original_legend(self, *args, **kwargs)
+
     monkeypatch.setattr(Axes, "set_title", capture_title)
     monkeypatch.setattr(Axes, "barh", capture_barh)
+    monkeypatch.setattr(Figure, "text", capture_figure_text)
+    monkeypatch.setattr(Figure, "legend", capture_legend)
     rows = [{
         "model": "model-x",
         "scenario": "a",
@@ -398,6 +421,8 @@ def test_selection_cost_plot_uses_horizontal_bars_and_integer_budget(tmp_path, m
 
     assert len(horizontal_bars) == 1
     assert any("mean cost (budget 8)" in title for title in plot_titles)
+    assert slide_assets.SELECTION_CAPTION in figure_texts
+    assert {"bought", "w/ params"} <= set(figure_legend_labels)
 
 
 def test_decisive_experiment_extraction_is_recursive_ordered_and_conditional():
@@ -426,6 +451,191 @@ def test_decisive_experiment_extraction_is_recursive_ordered_and_conditional():
         {"id": "E3", "conditional": False, "label": "E3"},
         {"id": "E4", "conditional": True, "label": "E4*"},
     ]
+
+
+def test_evidence_rule_mapping_tracks_nested_experiment_arguments_and_guards_ops():
+    rubric = {
+        "dimensions": {
+            "evidence_sufficiency": {
+                "criteria": [
+                    {"id": "EV_RUN", "predicate": {"all": [{"ran": "E6"}]}},
+                    {
+                        "id": "EV_PARAMETER",
+                        "predicate": {
+                            "not": {
+                                "all": [{
+                                    "param_ge": {
+                                        "experiment": "E6",
+                                        "param": "donors",
+                                        "value": 2,
+                                    },
+                                }],
+                            },
+                        },
+                    },
+                ],
+            },
+        },
+    }
+    mapping = slide_assets._evidence_rule_mapping(rubric)
+    assert [criterion["id"] for criterion in mapping["E6"]] == [
+        "EV_RUN", "EV_PARAMETER",
+    ]
+
+    real_rules = {
+        scenario: {
+            experiment["id"]: set(experiment["rule_ids"])
+            for experiment in slide_assets._scenario_selection_data(scenario)["experiments"]
+        }
+        for scenario in ("a", "b")
+    }
+    assert real_rules["a"] == {"E6": {"EV1", "EV2"}, "E3": {"EV3"}}
+    assert real_rules["b"] == {
+        "B2": {"EVB1"},
+        "B5": {"EVB2"},
+        "B4": {"EVB3"},
+    }
+
+    guarded = {
+        "dimensions": {
+            "evidence_sufficiency": {
+                "criteria": [{
+                    "id": "EV_BLOCKED",
+                    "predicate": {
+                        "all": [
+                            {"ran": "E6"},
+                            {
+                                "conclude_field": {
+                                    "field": "confidence",
+                                    "equals": 0.5,
+                                },
+                            },
+                        ],
+                    },
+                }],
+            },
+        },
+    }
+    with pytest.raises(ValueError, match="EV_BLOCKED"):
+        slide_assets._evidence_rule_mapping(guarded)
+
+
+def test_selection_parameter_rules_use_real_scenario_a_rubric():
+    def find_parameter_predicate(predicate, operator, parameter):
+        if not isinstance(predicate, dict) or len(predicate) != 1:
+            return None
+        current_operator, argument = next(iter(predicate.items()))
+        if (
+            current_operator == operator
+            and isinstance(argument, dict)
+            and argument.get("param") == parameter
+        ):
+            return argument
+        if current_operator in ("all", "any"):
+            for nested in argument:
+                found = find_parameter_predicate(nested, operator, parameter)
+                if found is not None:
+                    return found
+        elif current_operator == "not":
+            return find_parameter_predicate(argument, operator, parameter)
+        return None
+
+    scenario_data = slide_assets._scenario_selection_data("a")
+    experiments = scenario_data["experiments"]
+    e6 = next(experiment for experiment in experiments if experiment["id"] == "E6")
+    criteria_by_id = {criterion["id"]: criterion for criterion in e6["criteria"]}
+    arms_rule = find_parameter_predicate(
+        criteria_by_id["EV1"]["predicate"], "param_contains_all", "arms",
+    )
+    controls_rule = find_parameter_predicate(
+        criteria_by_id["EV2"]["predicate"], "param_text_contains_any", "controls",
+    )
+    all_arms = list(arms_rule["values"])
+    assert len(all_arms) == 3
+    controls_arg = controls_rule["aliases"]
+    bacteria_free_control = (
+        controls_arg[0] if isinstance(controls_arg, list) else controls_arg
+    )
+
+    def turn(index, experiment_id, parameters, *, charged=True):
+        observation = (
+            {
+                "experiment_id": experiment_id,
+                "results": [{"value": "Synthetic result", "source": "synthetic"}],
+                "informativeness": "LOW",
+                "cost": 1,
+                "structured": {},
+            }
+            if charged else None
+        )
+        return {
+            "index": index,
+            "action": {
+                "kind": "run_experiment",
+                "experiment_id": experiment_id,
+                "parameters": parameters,
+            },
+            "observation": observation,
+        }
+
+    def record(index, arms, *, e6_charged=True):
+        return {
+            "job": {
+                "episode_id": f"{index:08d}",
+                "scenario": "a",
+                "variant": "baseline",
+                "model": "model-x",
+            },
+            "verdict": {"verdict": "WRONG_CONCLUSION"},
+            "metrics": {
+                "clean_success": False,
+                "cost": 2,
+                "final_score": 40,
+            },
+            "trajectory": {
+                "scenario_id": "a",
+                "turns": [
+                    turn(
+                        0,
+                        "E6",
+                        {"arms": list(arms), "controls": [bacteria_free_control]},
+                        charged=e6_charged,
+                    ),
+                    turn(1, "E3", {}),
+                ],
+            },
+        }
+
+    records = [
+        record(0, all_arms),
+        record(1, all_arms[:-1]),
+        record(2, all_arms, e6_charged=False),
+    ]
+    bought = slide_assets._counted_record_experiments(records[0])
+    assert {"E6", "E3"} <= bought
+    assert {"E6", "E3"} <= slide_assets._parameter_bought_experiments(
+        records[0], bought, experiments,
+    )
+
+    missing_arm_bought = slide_assets._counted_record_experiments(records[1])
+    assert "E6" in missing_arm_bought
+    assert "E6" not in slide_assets._parameter_bought_experiments(
+        records[1], missing_arm_bought, experiments,
+    )
+
+    refused_bought = slide_assets._counted_record_experiments(records[2])
+    assert "E6" not in refused_bought
+    assert "E6" not in slide_assets._parameter_bought_experiments(
+        records[2], refused_bought, experiments,
+    )
+
+    row = slide_assets._experiment_selection_rows(
+        records, {"a": {"budget": 8, "experiments": experiments}},
+    )[0]
+    assert row["bought E6"] == 2 / 3
+    assert row["bought E6 w/ params"] == 1 / 3
+    assert row["bought all decisive"] == 2 / 3
+    assert row["bought all decisive w/ params"] == 1 / 3
 
 
 def test_real_decisive_experiments_are_in_each_scenario_catalog():
@@ -547,6 +757,25 @@ def test_stamp_reflects_models_sampling_and_missing_sampling(tmp_path):
     assert no_sampling_stamp["sampling"] == []
 
 
+def test_batch_stamp_reads_results_code_sha_from_records(tmp_path):
+    stamp = slide_assets.build_batch_stamp(
+        tmp_path,
+        [{"code_sha": "source-commit-sha"}],
+        {},
+        git_stamp=("report-commit-sha", False),
+    )
+    assert "results SHA: source-commit-sha" in stamp["source"]
+
+
+def test_readme_documents_selection_evaluator_and_pass_k_caption():
+    readme = Path(slide_assets.__file__).with_name("README.md").read_text(
+        encoding="utf-8",
+    )
+    assert slide_assets.PASS_K_CAPTION in readme
+    assert slide_assets.SELECTION_CAPTION in readme
+    assert "private `_Ctx` and `eval_pred`" in readme
+
+
 def test_figure_stamp_wraps_inside_figure_bounds():
     stamp = _stamp()
     stamp["source"] = "synthetic/" + "a-long-source-directory/" * 25 + "results.jsonl"
@@ -650,10 +879,25 @@ def test_synthetic_success_and_raw_score_metrics_have_semantic_spread(tmp_path):
     grid_rows = json.loads((batch_dir / "grid_summary.json").read_text(encoding="utf-8"))
     clean_rows = slide_assets._clean_success_rows(records, grid_rows)
     score_rows = slide_assets._cell_score_rows(records, clean_rows)
+    scenario_data = {
+        scenario: slide_assets._scenario_selection_data(scenario)
+        for scenario in ("a", "b")
+    }
+    selection_rows = slide_assets._experiment_selection_rows(records, scenario_data)
     assert all(
         row["pass^1"] == row["n_valid_success"] / row["n_scored"]
         for row in clean_rows
     )
+    strict_parameter_purchases = []
+    for row in selection_rows:
+        for experiment in scenario_data[row["scenario"]]["experiments"]:
+            label = experiment["label"]
+            bought = row[f"bought {label}"]
+            with_params = row[f"bought {label} w/ params"]
+            assert with_params <= bought
+            strict_parameter_purchases.append(0 < with_params < bought)
+        assert row["bought all decisive w/ params"] <= row["bought all decisive"]
+    assert any(strict_parameter_purchases)
 
     rates = [row["clean_success_rate"] for row in clean_rows]
     assert min(rates) <= 0.35
@@ -812,14 +1056,18 @@ def test_scripted_rows_are_filtered_from_success_assets_and_in_selection(tmp_pat
         ),
     ))
     assert {row["variant"] for row in selection_rows} >= {"random", "ucb"}
+    assert "bought E6 w/ params" in selection_rows[0]
+    assert "bought all decisive w/ params" in selection_rows[0]
     selection_markdown = (
         output_root / "synthetic_batch" / "experiment_selection.md"
     ).read_text(encoding="utf-8")
     assert slide_assets.SELECTION_CAPTION in selection_markdown
     assert slide_assets.CONDITIONAL_FOOTNOTE in selection_markdown
     assert "bought E3*" in selection_markdown
+    assert "E6 w/ params = EV1 + EV2" in selection_markdown
     assert "random (scripted)" in figure_legend_labels
     assert "ucb (scripted)" in figure_legend_labels
+    assert {"bought", "w/ params"} <= set(figure_legend_labels)
     assert all("not meaningful" not in str(label) for label in figure_legend_labels)
 
 

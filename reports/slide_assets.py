@@ -11,6 +11,8 @@ import subprocess
 from statistics import fmean
 import textwrap
 
+from auditor.audit import _Ctx, eval_pred
+from contract import trajectory_from_dict
 from runner.factories import scenario_dir
 from runner.modal_batch import (
     HARNESS_ERROR_VERDICT,
@@ -26,13 +28,16 @@ SCRIPTED_FOOTNOTE = (
     "for them (conclusion metrics random)."
 )
 SELECTION_CAPTION = (
-    "bought = ran the experiment; parameter requirements of the evidence rules not checked"
+    "bought = ran the experiment; w/ params = the evidence-sufficiency rules for that "
+    "experiment also pass, evaluated with the auditor's predicate evaluator "
+    "(auditor.audit.eval_pred)"
 )
 CONDITIONAL_FOOTNOTE = "* scored only when the conclusion makes a target claim"
 PASS_K_CAPTION = (
     "pass^k = C(c,k)/C(n,k) per cell: n counted runs (seeds), c with verdict "
     "VALID_SUCCESS; probability that k runs drawn without replacement all succeed "
-    "(tau-bench, arXiv:2406.12045)."
+    "(tau-bench, arXiv:2406.12045). Because pass^k counts VALID_SUCCESS runs, it can "
+    "differ from clean_success_rate where a run aborted on refusals."
 )
 COST_OF_PASS_CAPTION = (
     "cost_of_pass = mean_cost / clean_success_rate (Cost-of-Pass, arXiv:2504.13359). "
@@ -790,15 +795,98 @@ def _decisive_experiments(rubric: dict) -> list[dict]:
     ]
 
 
+_ALLOWED_EVIDENCE_PREDICATES = {
+    "all",
+    "any",
+    "not",
+    "ran",
+    "any_run_param_text_matches",
+    "param_present",
+    "param_eq",
+    "param_in",
+    "param_not_in",
+    "param_lt",
+    "param_ge",
+    "param_contains_all",
+    "param_text_contains_any",
+    "param_text_contains_all_groups",
+}
+
+
+def _predicate_references(predicate) -> tuple[set[str], list[str], list[str]]:
+    references = set()
+    ran_ids = []
+    operators = []
+
+    def add_ran(value) -> None:
+        if isinstance(value, str):
+            references.add(value)
+            ran_ids.append(value)
+        elif isinstance(value, list):
+            for item in value:
+                add_ran(item)
+
+    def visit(value) -> None:
+        if not isinstance(value, dict):
+            return
+        if len(value) != 1:
+            operators.append("<malformed>")
+            for nested in value.values():
+                visit(nested)
+            return
+        operator, argument = next(iter(value.items()))
+        operators.append(operator)
+        if isinstance(argument, dict) and isinstance(argument.get("experiment"), str):
+            references.add(argument["experiment"])
+        if operator == "ran":
+            add_ran(argument)
+        elif operator in ("all", "any"):
+            if isinstance(argument, list):
+                for nested in argument:
+                    visit(nested)
+        elif operator == "not":
+            visit(argument)
+
+    visit(predicate)
+    return references, ran_ids, operators
+
+
+def _evidence_rule_mapping(rubric: dict) -> dict[str, list[dict]]:
+    decisive_ids = {experiment["id"] for experiment in _decisive_experiments(rubric)}
+    mapping = {experiment_id: [] for experiment_id in decisive_ids}
+    criteria = rubric["dimensions"]["evidence_sufficiency"]["criteria"]
+    for criterion in criteria:
+        references, _, operators = _predicate_references(criterion.get("predicate"))
+        for experiment_id in decisive_ids & references:
+            unsupported = sorted(
+                operator for operator in operators
+                if operator not in _ALLOWED_EVIDENCE_PREDICATES
+            )
+            if unsupported:
+                criterion_id = criterion.get("id", "<missing id>")
+                raise ValueError(
+                    f"Unsupported evidence-sufficiency predicate "
+                    f"{unsupported[0]!r} in criterion {criterion_id}"
+                )
+            mapping[experiment_id].append(criterion)
+    return mapping
+
+
 def _scenario_selection_data(scenario: str) -> dict:
     bundle = scenario_dir(scenario)
     briefing_path = bundle / "agent" / "briefing.json"
     rubric_path = bundle / "auditor" / "rubric.json"
     briefing = json.loads(briefing_path.read_text(encoding="utf-8"))
     rubric = json.loads(rubric_path.read_text(encoding="utf-8"))
+    experiments = _decisive_experiments(rubric)
+    rules_by_experiment = _evidence_rule_mapping(rubric)
+    for experiment in experiments:
+        rules = rules_by_experiment[experiment["id"]]
+        experiment["criteria"] = rules
+        experiment["rule_ids"] = [criterion["id"] for criterion in rules]
     return {
         "budget": briefing["budget"]["units"],
-        "experiments": _decisive_experiments(rubric),
+        "experiments": experiments,
         "source_files": [briefing_path, rubric_path],
     }
 
@@ -817,6 +905,30 @@ def _counted_record_experiments(record: dict) -> set[str]:
     return bought
 
 
+def _parameter_bought_experiments(
+    record: dict, bought: set[str], experiments: list[dict],
+) -> set[str]:
+    parameter_bought = set()
+    requiring_evaluation = []
+    for experiment in experiments:
+        experiment_id = experiment["id"]
+        if experiment_id not in bought:
+            continue
+        criteria = experiment.get("criteria", [])
+        if not criteria:
+            parameter_bought.add(experiment_id)
+        else:
+            requiring_evaluation.append((experiment_id, criteria))
+    if not requiring_evaluation:
+        return parameter_bought
+
+    context = _Ctx(trajectory_from_dict(record["trajectory"]), {})
+    for experiment_id, criteria in requiring_evaluation:
+        if all(eval_pred(criterion["predicate"], context) for criterion in criteria):
+            parameter_bought.add(experiment_id)
+    return parameter_bought
+
+
 def _experiment_selection_rows(
     records: list[dict], scenario_data: dict[str, dict],
 ) -> list[dict]:
@@ -829,6 +941,10 @@ def _experiment_selection_rows(
         bought_by_record = [
             _counted_record_experiments(record)
             for record in scored
+        ]
+        parameter_bought_by_record = [
+            _parameter_bought_experiments(record, bought, experiments)
+            for record, bought in zip(scored, bought_by_record)
         ]
         row = {
             "model": model,
@@ -848,9 +964,23 @@ def _experiment_selection_rows(
                 sum(experiment["id"] in bought for bought in bought_by_record) / len(scored)
                 if scored else None
             )
+            row[f"bought {label} w/ params"] = (
+                sum(
+                    experiment["id"] in bought
+                    for bought in parameter_bought_by_record
+                ) / len(scored)
+                if scored else None
+            )
         decisive_ids = {experiment["id"] for experiment in experiments}
         row["bought all decisive"] = (
             sum(decisive_ids <= bought for bought in bought_by_record) / len(scored)
+            if scored and decisive_ids else None
+        )
+        row["bought all decisive w/ params"] = (
+            sum(
+                decisive_ids <= bought
+                for bought in parameter_bought_by_record
+            ) / len(scored)
             if scored and decisive_ids else None
         )
         rows.append(row)
@@ -936,27 +1066,41 @@ def _plot_experiment_selection(
             *(f"bought {label}" for label in experiment_labels[:-1]),
             "bought all decisive",
         ]
+        parameter_headers = [
+            *(f"bought {label} w/ params" for label in experiment_labels[:-1]),
+            "bought all decisive w/ params",
+        ]
         category_positions = list(range(len(experiment_labels)))
-        width = 0.8 / max(1, len(series_keys))
+        series_width = 0.8 / max(1, len(series_keys))
+        pair_width = series_width / 2
+        bar_width = pair_width * 0.88
         for series_index, (model, variant) in enumerate(series_keys):
             row = rows_by_series.get((model, variant))
             if row is None:
                 continue
             scripted = variant in SCRIPTED_VARIANTS
-            values = [
-                row.get(header)
-                for header in bought_headers
+            centers = [
+                position + (series_index - (len(series_keys) - 1) / 2) * series_width
+                for position in category_positions
             ]
+            bought_values = [row.get(header) for header in bought_headers]
+            parameter_values = [row.get(header) for header in parameter_headers]
+            color = "#888888" if scripted else colors[variant]
             bought_axes.bar(
-                [
-                    position + (series_index - (len(series_keys) - 1) / 2) * width
-                    for position in category_positions
-                ],
-                [value or 0 for value in values],
-                width=width,
-                color="#888888" if scripted else colors[variant],
+                [center - pair_width / 2 for center in centers],
+                [value or 0 for value in bought_values],
+                width=bar_width,
+                color=color,
                 edgecolor="#444444",
                 hatch=scripted_hatches.get(variant, "") if scripted else "",
+            )
+            bought_axes.bar(
+                [center + pair_width / 2 for center in centers],
+                [value or 0 for value in parameter_values],
+                width=bar_width,
+                color=color,
+                edgecolor="#222222",
+                hatch=(scripted_hatches.get(variant, "") + "..") if scripted else "..",
             )
         bought_axes.set_title(f"Scenario {scenario} · decisive bought", fontsize=12)
         bought_axes.set_ylabel("Fraction of episodes", fontsize=9)
@@ -977,13 +1121,18 @@ def _plot_experiment_selection(
         [], [], color="#333333", linestyle="--", label="Budget",
     ))
     legend_labels.append("Budget")
+    legend_handles.extend([
+        Patch(facecolor="#888888", edgecolor="#444444"),
+        Patch(facecolor="#888888", edgecolor="#222222", hatch=".."),
+    ])
+    legend_labels.extend(["bought", "w/ params"])
     figure.legend(
         handles=legend_handles,
         labels=legend_labels,
         loc="center",
         bbox_to_anchor=(0.5, 0.21),
         ncol=4,
-        title="Model / variant",
+        title="Model / variant and bar style",
         fontsize=9,
     )
     figure.text(
@@ -1268,16 +1417,28 @@ def generate_batch_assets(
         for scenario in scenarios
         for experiment in selection_data[scenario]["experiments"]
     ))
+    experiment_columns = [
+        column
+        for label in experiment_labels
+        for column in (f"bought {label}", f"bought {label} w/ params")
+    ]
     selection_headers = [
         "model", "scenario", "variant", "n_runs", "n_counted",
         "mean_cost", "budget",
-        *(f"bought {label}" for label in experiment_labels),
-        "bought all decisive",
+        *experiment_columns,
+        "bought all decisive", "bought all decisive w/ params",
     ]
     selection_csv = output_dir / "experiment_selection.csv"
     selection_md = output_dir / "experiment_selection.md"
     selection_png = output_dir / "experiment_selection.png"
     _write_csv(selection_csv, selection_headers, selection_rows, stamp)
+    rule_summary = "; ".join(
+        f"scenario {scenario}: " + ", ".join(
+            f"{experiment['label']} w/ params = {' + '.join(experiment['rule_ids'])}"
+            for experiment in selection_data[scenario]["experiments"]
+        )
+        for scenario in scenarios
+    )
     _write_markdown(
         selection_md,
         "Experiment selection",
@@ -1286,6 +1447,7 @@ def generate_batch_assets(
         stamp,
         extra_sections=[
             SELECTION_CAPTION,
+            f"Required parameter rules: {rule_summary}",
             CONDITIONAL_FOOTNOTE,
         ],
     )
