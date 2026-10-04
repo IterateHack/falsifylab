@@ -1612,7 +1612,7 @@ def _pooled_replicate_stamp(
         "sampling": sorted(sampling),
         "source": "; ".join(sources),
         "reaudit": None,
-        "synthetic": bool(synthetic_flags) and all(synthetic_flags),
+        "synthetic": any(synthetic_flags),
         "wave": bool(batch_dirs) and all(wave for _ in batch_dirs),
     }
 

@@ -135,7 +135,7 @@ def test_singleton_and_no_science_have_null_intervals_and_means():
     assert singleton["mean_cost"] == 2.0
     assert singleton["clean_success_ci95"] is None
     assert singleton["cost_of_pass_ci95"] is None
-    assert singleton["cost_of_pass_unbounded_share"] == 0.0
+    assert singleton["cost_of_pass_unbounded_share"] is None
 
     no_science = _row([_record(verdict=PARSE_FAILURE_VERDICT)])
     assert no_science["n"] == 0

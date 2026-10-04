@@ -127,10 +127,10 @@ def _science_summary(
             out=sampled_cost_of_pass,
             where=sampled_clean_means > 0,
         )
-        cost_of_pass_unbounded_share = float(
-            np.isinf(sampled_cost_of_pass).mean(),
-        )
         if n >= 2:
+            cost_of_pass_unbounded_share = float(
+                np.isinf(sampled_cost_of_pass).mean(),
+            )
             clean_success_ci95 = _percentile_bounds(sampled_clean_means)
             cost_of_pass_ci95 = _percentile_bounds(sampled_cost_of_pass)
 
