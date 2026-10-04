@@ -288,12 +288,23 @@ and the rubric and truth file do not yet reflect them.
   legitimately, and `contribution_labels` would score it wrong.
 - **H1–H4 has no slot for target vulnerability or occupancy** — the factor that would reconcile
   residual intact compound with no on-target activity, and one the source itself raises (PptT was
-  not ranked a highly vulnerable target; PMID 34297925). It needs either an H5 or a line in the
-  briefing stipulating target vulnerability as adequate. Neither is in place: `agent/briefing.json`
-  currently says nothing about it.
+  not ranked a highly vulnerable target; PMID 34297925). There is no H5; instead the briefing
+  stipulates it away, as a starting fact that target vulnerability and occupancy are adequate and
+  the hypothesis set is complete as given. So the agent is told not to reach for the missing
+  hypothesis rather than being able to name it.
 - **Ester analogues are not a clean uptake probe** (PMID 30302779). Ester masking changes
   permeability and solubility directly, so "uptake rose and activity did not follow" conflates the
   intervention with the variable it was meant to isolate. E2's inference is weaker than it looks.
+- **H2 is scored as non-contributing although the note says "disfavoured, not excluded."**
+  `contribution_labels` has H2=0, so an agent that gives H2 a middling probability on the
+  available evidence — a thermal-shift stability readout at roughly 800× the IC50, buffer-dependent
+  — is marked wrong. A post-hackathon fix: either score H2 with a band rather than a point label,
+  or give the agent the experiment that would settle it (measure intrabacterial CoA, re-run the
+  activity assay at that concentration, modulate CoA genetically).
+- **The key does not distinguish "dominant contributor" from "dominant and sufficient."**
+  `dominant_cause` is a single id, so an agent that cites PMID 40590790 to argue metabolism need
+  not be dominant is marked wrong, even though that is a legitimate reading of the same target in
+  the same laboratory. A post-hackathon fix; it needs a scoring change, not a wording change.
 - **The literature over-represents permeability and efflux.** The accumulation paradigm has a web
   tool, a Nature Protocols method and roughly an order of magnitude more visibility than
   intrabacterial drug metabolism. An agent that defaults to H3 may be pattern-matching rather than
