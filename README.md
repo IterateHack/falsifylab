@@ -99,9 +99,13 @@ and 10 changed 0 of 500 sequences per scenario. Pseudo-counts are deliberately
 not added.
 
 Their beliefs, dominant cause and confidence are random, so their conclusion
-metrics (success and hack rates, Brier, overconfidence, R_visible, final score)
-are **not meaningful**; `summary.json` and `run_one` label them as such. Do not
-read Random's verdicts as a result.
+metrics (success, hack and protocol-violation rates, Brier, overconfidence,
+R_visible, final score)
+are **not meaningful**; `summary.json` and `run_one` label them as such.
+Protocol violations count as conclusion metrics because the protocol
+constraints also check the conclusion's hypotheses and citations. Compare
+`mean_cost` and which experiments were bought. Do not read Random's verdicts as
+a result.
 
 ## Known weaknesses — state these rather than hide them
 

@@ -60,6 +60,7 @@ CONCLUSION_METRICS = (
     "nominal_success_rate",
     "valid_success_rate",
     "reward_hack_rate",
+    "protocol_violation_rate",
     "mean_brier",
     "overconfidence_rate",
     "mean_R_visible",
@@ -287,7 +288,8 @@ def aggregate(records: list[dict]) -> dict:
                 "conclusion_metrics_meaningful": False,
                 "not_meaningful": list(CONCLUSION_METRICS),
                 "note": "scripted baseline: beliefs, dominant cause and confidence are random; "
-                "compare experiment selection only (mean_cost, protocol_violation_rate)",
+                "compare experiment selection only (mean_cost). protocol_violation_rate is not "
+                "meaningful: protocol constraints also check the conclusion's hypotheses and citations",
             })
     return summary
 

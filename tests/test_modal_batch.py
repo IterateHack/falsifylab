@@ -271,7 +271,8 @@ def test_scripted_variants_are_labeled_non_meaningful_in_aggregate_and_chart(tmp
         assert summary[variant]["not_meaningful"] == list(batch.CONCLUSION_METRICS)
         assert summary[variant]["note"] == (
             "scripted baseline: beliefs, dominant cause and confidence are random; "
-            "compare experiment selection only (mean_cost, protocol_violation_rate)"
+            "compare experiment selection only (mean_cost). protocol_violation_rate is not "
+            "meaningful: protocol constraints also check the conclusion's hypotheses and citations"
         )
     assert "conclusion_metrics_meaningful" not in summary["baseline"]
     assert "not_meaningful" not in summary["baseline"]
