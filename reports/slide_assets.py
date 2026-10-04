@@ -65,6 +65,7 @@ SCIENCE_DENOMINATOR_CAPTION = (
     "Science runs only: provider refusals, refusal-aborted, spend-cap-stopped, "
     "harness-error and PARSE_FAILURE runs are excluded and counted separately."
 )
+WILSON_CI_CAPTION = "Wilson 95% CIs shown only when n ≥ 2 science runs."
 GRID_DENOMINATOR_NOTE = (
     "runner's grid_summary.json counts refusal-aborted runs in n_scored, so its "
     "clean_success_rate differs from this table's (and with it clean_success_ci95, "
@@ -422,7 +423,10 @@ def _clean_success_rows(records: list[dict], grid_rows: list[dict]) -> list[dict
         )
         n_scored = len(scored)
         rate = n_clean_success / n_scored if n_scored else None
-        ci95 = list(wilson_interval(n_clean_success, n_scored)) if n_scored else None
+        ci95 = (
+            list(wilson_interval(n_clean_success, n_scored))
+            if n_scored >= 2 else None
+        )
         n_valid_success = sum(
             record["verdict"]["verdict"] == "VALID_SUCCESS"
             for record in scored
@@ -622,20 +626,23 @@ def _plot_clean_success(path: Path, rows: list[dict], stamp: dict) -> None:
                     rotation=90,
                 )
             continue
-        low, high = row["clean_success_ci95"]
         color = colors[row["variant"]]
-        axes.errorbar(
-            index,
-            row["clean_success_rate"],
-            yerr=[[row["clean_success_rate"] - low], [high - row["clean_success_rate"]]],
-            fmt="o",
-            color=color,
-            ecolor=color,
-            markerfacecolor=color,
-            markeredgecolor=color,
-            capsize=3,
-            label=row["variant"],
-        )
+        errorbar_kwargs = {
+            "fmt": "o",
+            "color": color,
+            "ecolor": color,
+            "markerfacecolor": color,
+            "markeredgecolor": color,
+            "capsize": 3,
+            "label": row["variant"],
+        }
+        if row["clean_success_ci95"] is not None:
+            low, high = row["clean_success_ci95"]
+            errorbar_kwargs["yerr"] = [
+                [row["clean_success_rate"] - low],
+                [high - row["clean_success_rate"]],
+            ]
+        axes.errorbar(index, row["clean_success_rate"], **errorbar_kwargs)
     axes.set_title("Clean success rate with 95% Wilson intervals", fontsize=14)
     axes.set_ylabel("Clean success rate", fontsize=10)
     axes.set_ylim(-0.05, 1.05)
@@ -651,7 +658,10 @@ def _plot_clean_success(path: Path, rows: list[dict], stamp: dict) -> None:
     axes.grid(axis="y", alpha=0.25)
     _dedupe_legend(axes)
     figure.text(
-        0.5, 0.105, textwrap.fill(SCIENCE_DENOMINATOR_CAPTION, width=145),
+        0.5, 0.105,
+        textwrap.fill(
+            f"{SCIENCE_DENOMINATOR_CAPTION} {WILSON_CI_CAPTION}", width=145,
+        ),
         ha="center", va="center", fontsize=6,
     )
     _save_figure(figure, path, stamp)
@@ -669,8 +679,12 @@ def _offset_coincident_raw_points(rows: list[dict]) -> list[tuple[dict, float]]:
     points = []
     for (rate, score), duplicates in grouped.items():
         ci = duplicates[0]["clean_success_ci95"]
-        lower_spread = min(0.025, max(0.0, (rate - ci[0]) * 0.75))
-        upper_spread = min(0.025, max(0.0, (ci[1] - rate) * 0.75))
+        if ci is None:
+            lower_spread = min(0.025, rate)
+            upper_spread = min(0.025, 1 - rate)
+        else:
+            lower_spread = min(0.025, max(0.0, (rate - ci[0]) * 0.75))
+            upper_spread = min(0.025, max(0.0, (ci[1] - rate) * 0.75))
         for index, row in enumerate(duplicates):
             offset = (
                 0.0 if len(duplicates) == 1
@@ -695,20 +709,20 @@ def _plot_raw_vs_clean(path: Path, rows: list[dict], stamp: dict) -> None:
     for row, x in _offset_coincident_raw_points(rows):
         rate = row["clean_success_rate"]
         score = row["raw_score_mean"]
-        low, high = row["clean_success_ci95"]
         color = colors[row["variant"]]
-        axes.errorbar(
-            x,
-            score,
-            xerr=[[rate - low], [high - rate]],
-            fmt=scenario_markers[row["scenario"]],
-            color=color,
-            ecolor=color,
-            markerfacecolor=color,
-            markeredgecolor=color,
-            capsize=3,
-            label="_nolegend_",
-        )
+        errorbar_kwargs = {
+            "fmt": scenario_markers[row["scenario"]],
+            "color": color,
+            "ecolor": color,
+            "markerfacecolor": color,
+            "markeredgecolor": color,
+            "capsize": 3,
+            "label": "_nolegend_",
+        }
+        if row["clean_success_ci95"] is not None:
+            low, high = row["clean_success_ci95"]
+            errorbar_kwargs["xerr"] = [[rate - low], [high - rate]]
+        axes.errorbar(x, score, **errorbar_kwargs)
     axes.set_title("Raw audited score vs clean success", fontsize=14)
     axes.set_xlabel("Clean success rate (horizontal 95% Wilson CI)", fontsize=10)
     axes.set_ylabel("Raw audited score mean", fontsize=10)
@@ -751,7 +765,10 @@ def _plot_raw_vs_clean(path: Path, rows: list[dict], stamp: dict) -> None:
         fontsize=9,
     )
     figure.text(
-        0.5, 0.08, textwrap.fill(SCIENCE_DENOMINATOR_CAPTION, width=145),
+        0.5, 0.08,
+        textwrap.fill(
+            f"{SCIENCE_DENOMINATOR_CAPTION} {WILSON_CI_CAPTION}", width=145,
+        ),
         ha="center", va="center", fontsize=6,
     )
     _save_figure(figure, path, stamp)
@@ -783,20 +800,20 @@ def _plot_cost_of_pass(path: Path, rows: list[dict], stamp: dict) -> None:
     figure.subplots_adjust(left=0.1, right=0.98, bottom=0.45, top=0.88)
     for row in plotted_rows:
         rate = row["clean_success_rate"]
-        low, high = row["clean_success_ci95"]
         color = colors[row["variant"]]
-        axes.errorbar(
-            rate,
-            row["cost_of_pass"],
-            xerr=[[rate - low], [high - rate]],
-            fmt=scenario_markers[row["scenario"]],
-            color=color,
-            ecolor=color,
-            markerfacecolor=color,
-            markeredgecolor=color,
-            capsize=3,
-            label="_nolegend_",
-        )
+        errorbar_kwargs = {
+            "fmt": scenario_markers[row["scenario"]],
+            "color": color,
+            "ecolor": color,
+            "markerfacecolor": color,
+            "markeredgecolor": color,
+            "capsize": 3,
+            "label": "_nolegend_",
+        }
+        if row["clean_success_ci95"] is not None:
+            low, high = row["clean_success_ci95"]
+            errorbar_kwargs["xerr"] = [[rate - low], [high - rate]]
+        axes.errorbar(rate, row["cost_of_pass"], **errorbar_kwargs)
     axes.set_title("Cost of pass vs clean success", fontsize=14)
     axes.set_xlabel("Clean success rate (horizontal 95% Wilson CI)", fontsize=10)
     axes.set_ylabel("Cost of pass (budget units)", fontsize=10)
@@ -844,7 +861,8 @@ def _plot_cost_of_pass(path: Path, rows: list[dict], stamp: dict) -> None:
     figure.text(
         0.5, 0.14,
         textwrap.fill(
-            f"{COST_OF_PASS_CAPTION} {SCIENCE_DENOMINATOR_CAPTION}",
+            f"{COST_OF_PASS_CAPTION} {SCIENCE_DENOMINATOR_CAPTION} "
+            f"{WILSON_CI_CAPTION}",
             width=145,
         ),
         ha="center", va="center", fontsize=6,
@@ -1583,6 +1601,7 @@ def generate_batch_assets(
         stamp,
         extra_sections=[
             SCIENCE_DENOMINATOR_CAPTION,
+            WILSON_CI_CAPTION,
             GRID_DENOMINATOR_NOTE,
             PASS_K_CAPTION,
             COST_OF_PASS_CAPTION,

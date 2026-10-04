@@ -9,6 +9,7 @@ from unittest.mock import Mock
 
 import pytest
 from matplotlib.axes import Axes
+from matplotlib.figure import Figure
 
 from reports import slide_assets
 from reports.synthetic import create_synthetic_inputs
@@ -115,6 +116,10 @@ def test_synthetic_cli_creates_all_stamped_assets_and_manifest(tmp_path, capsys)
                 assert float(row["pass^1"]) == int(row["n_valid_success"]) / n
             else:
                 assert row["pass^1"] == ""
+        ci_markdown = (output / label / "clean_success_ci.md").read_text(
+            encoding="utf-8",
+        )
+        assert slide_assets.WILSON_CI_CAPTION in ci_markdown
     assert "n = science runs" in slide_assets.PASS_K_CAPTION
     assert "pass^1 therefore equals clean_success_rate" in slide_assets.PASS_K_CAPTION
     assert "aborted on refusals" not in slide_assets.PASS_K_CAPTION
@@ -369,6 +374,85 @@ def test_clean_success_rows_match_grid_and_reject_tampering(tmp_path):
     scripted_target["n_clean_success"] += 1
     with pytest.raises(ValueError, match="scenario=a, variant=random"):
         slide_assets._clean_success_rows(records, changed_scripted)
+
+
+def test_wilson_intervals_are_suppressed_below_two_science_runs(tmp_path, monkeypatch):
+    record = {
+        "job": {
+            "episode_id": "00000001",
+            "scenario": "a",
+            "variant": "baseline",
+            "model": "model-x",
+        },
+        "verdict": {"verdict": "VALID_SUCCESS"},
+        "metrics": {
+            "clean_success": True,
+            "cost": 4.0,
+            "final_score": 80.0,
+        },
+    }
+    single_grid = batch.grid_summary([record])
+    assert single_grid[0]["clean_success_ci95"] == list(batch.wilson_interval(1, 1))
+    single_rows = slide_assets._clean_success_rows([record], single_grid)
+    single = single_rows[0]
+    assert single["n_scored"] == 1
+    assert single["clean_success_ci95"] is None
+
+    tampered_grid = [dict(single_grid[0])]
+    tampered_grid[0]["clean_success_ci95"] = [0.0, 1.0]
+    with pytest.raises(ValueError, match="clean_success_ci95"):
+        slide_assets._clean_success_rows([record], tampered_grid)
+
+    second_record = deepcopy(record)
+    second_record["job"]["episode_id"] = "00000002"
+    two_records = [record, second_record]
+    two_grid = batch.grid_summary(two_records)
+    two_rows = slide_assets._clean_success_rows(two_records, two_grid)
+    assert two_rows[0]["n_scored"] == 2
+    assert two_rows[0]["clean_success_ci95"] == two_grid[0]["clean_success_ci95"]
+
+    calls = []
+    figure_texts = []
+    original_errorbar = Axes.errorbar
+    original_figure_text = Figure.text
+
+    def capture_errorbar(self, *args, **kwargs):
+        calls.append((args, dict(kwargs)))
+        return original_errorbar(self, *args, **kwargs)
+
+    def capture_figure_text(self, x, y, text, *args, **kwargs):
+        figure_texts.append(text)
+        return original_figure_text(self, x, y, text, *args, **kwargs)
+
+    monkeypatch.setattr(Axes, "errorbar", capture_errorbar)
+    monkeypatch.setattr(Figure, "text", capture_figure_text)
+    for label, rows, records in (
+        ("single", single_rows, [record]),
+        ("two", two_rows, two_records),
+    ):
+        score_rows = slide_assets._cell_score_rows(records, rows)
+        for name, plot in (
+            ("clean", slide_assets._plot_clean_success),
+            ("raw", slide_assets._plot_raw_vs_clean),
+            ("cost", slide_assets._plot_cost_of_pass),
+        ):
+            previous_text_count = len(figure_texts)
+            plot_rows = score_rows if name == "raw" else rows
+            plot_path = tmp_path / f"{label}-{name}.png"
+            plot(plot_path, plot_rows, _stamp())
+            assert slide_assets.WILSON_CI_CAPTION in " ".join(
+                str(text) for text in figure_texts[previous_text_count:]
+            )
+
+    single_calls, two_calls = calls[:3], calls[3:]
+    assert len(single_calls) == len(two_calls) == 3
+    assert all(
+        "xerr" not in kwargs and "yerr" not in kwargs
+        for _, kwargs in single_calls
+    )
+    assert "yerr" in two_calls[0][1]
+    assert "xerr" in two_calls[1][1]
+    assert "xerr" in two_calls[2][1]
 
 
 def test_pass_k_combinatorics_follow_counted_run_trials():
