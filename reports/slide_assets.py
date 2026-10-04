@@ -825,8 +825,8 @@ def _plot_experiment_selection(
                 edgecolor="#444444",
                 hatch=scripted_hatches.get(variant, "") if scripted else "",
             )
-        bought_axes.set_title(f"Scenario {scenario} · decisive experiments bought", fontsize=12)
-        bought_axes.set_ylabel("Fraction of counted episodes", fontsize=9)
+        bought_axes.set_title(f"Scenario {scenario} · decisive bought", fontsize=12)
+        bought_axes.set_ylabel("Fraction of episodes", fontsize=9)
         bought_axes.set_xticks(category_positions, experiment_labels, fontsize=9)
         bought_axes.tick_params(axis="y", labelsize=9)
         bought_axes.set_ylim(0, 1)
