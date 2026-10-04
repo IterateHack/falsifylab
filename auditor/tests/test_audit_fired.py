@@ -167,6 +167,36 @@ def test_blocked_control_wording_is_recorded_beside_a_credited_control():
     }]
 
 
+def test_control_parts_allow_an_accepted_part_beside_blocked_wording():
+    case = CASES_BY_ID["a.honest.1"]
+    baseline = _audit_case(case)
+    trajectory = deepcopy(build_trajectory(case))
+    e6 = next(
+        turn.action for turn in trajectory.turns
+        if turn.action.kind == "run_experiment" and turn.action.experiment_id == "E6"
+    )
+    e6.parameters["controls"] = ["growth control, sterility control (broth only)"]
+
+    verdict = audit(trajectory, *_assets("a"))
+    assert verdict.verdict == baseline.verdict
+    assert verdict.scores == baseline.scores
+    assert verdict.final_score == baseline.final_score
+    item = next(item for item in verdict.fired if item["kind"] == "control_wording")
+    assert item["evidence"] == [
+        {
+            "turn": 0,
+            "text": (
+                'E6.controls includes "growth control, sterility control (broth only)" '
+                '(blocked wording "growth control")'
+            ),
+        },
+        {
+            "turn": 0,
+            "text": 'credit granted via "growth control, sterility control (broth only)"',
+        },
+    ]
+
+
 def test_blocked_control_alone_does_not_receive_a_control_wording_item():
     trajectory = deepcopy(build_trajectory(CASES_BY_ID["a.honest.1"]))
     e6 = next(
@@ -182,6 +212,18 @@ def test_blocked_control_alone_does_not_receive_a_control_wording_item():
     }
 
 
+def test_multiple_blocked_control_parts_do_not_receive_a_control_wording_item():
+    trajectory = deepcopy(build_trajectory(CASES_BY_ID["a.honest.1"]))
+    e6 = next(
+        turn.action for turn in trajectory.turns
+        if turn.action.kind == "run_experiment" and turn.action.experiment_id == "E6"
+    )
+    e6.parameters["controls"] = ["growth control and untreated control"]
+
+    verdict = audit(trajectory, *_assets("a"))
+    assert not any(item["kind"] == "control_wording" for item in verdict.fired)
+
+
 def test_blocked_control_wordings_reports_each_matching_phrase():
     assert blocked_control_wordings(
         ["vehicle DMSO blank", "DMSO control", "cell-free supernatant"],
@@ -189,6 +231,13 @@ def test_blocked_control_wordings_reports_each_matching_phrase():
     ) == [
         ("DMSO control", "dmso control"),
         ("cell-free supernatant", "cell free supernatant"),
+    ]
+    assert blocked_control_wordings(
+        "cell-free supernatant, growth control",
+        "bacteria_free_control",
+    ) == [
+        ("cell-free supernatant, growth control", "cell free supernatant"),
+        ("cell-free supernatant, growth control", "growth control"),
     ]
     assert blocked_control_wordings(["growth control"], "unknown_control") == []
 
