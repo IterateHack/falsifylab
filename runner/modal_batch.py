@@ -51,7 +51,13 @@ import random
 from statistics import fmean
 from typing import Callable, Iterable, Mapping
 
-from contract import Agent, Env, Trajectory, Turn, Verdict, trajectory_from_dict
+from contract import Agent, Env, Observation, Result, Trajectory, Turn, Verdict, trajectory_from_dict
+from env import EnvRejection
+
+# A refused purchase is not a Turn (nothing ran, nothing was charged). The
+# reason is handed back to the agent as a zero-cost observation under this id so
+# the model can choose again; it never enters the recorded trajectory.
+REFUSAL_EXPERIMENT_ID = "__refused__"
 
 
 @dataclass(frozen=True)
@@ -99,8 +105,14 @@ def build_jobs(variants: list[str], models: list[str], seeds: list[int], n: int)
 
 
 def run_episode(job: EpisodeJob, env_factory: Callable, agent_factory: Callable,
-                max_turns: int = 100) -> Trajectory:
-    """Drive only the contract interfaces; never interpret observation strings."""
+                max_turns: int = 100, max_refusals: int = 3,
+                log: Callable[[str], None] | None = None) -> Trajectory:
+    """Drive only the contract interfaces; never interpret observation strings.
+
+    An action the Env refuses (EnvRejection: over budget, malformed conclude,
+    ...) is fed back to the agent as a REFUSAL_EXPERIMENT_ID observation
+    carrying the reason; more than ``max_refusals`` refusals abort the episode.
+    ``max_turns`` bounds agent calls, accepted or refused."""
     if max_turns < 1:
         raise ValueError("max_turns must be positive")
     random.seed(job.effective_seed)
@@ -108,14 +120,27 @@ def run_episode(job: EpisodeJob, env_factory: Callable, agent_factory: Callable,
     agent = agent_factory(variant=job.variant, model=job.model, seed=job.effective_seed)
     observation = env.reset()
     trajectory = Trajectory(env.state.scenario_id, [])
-    for index in range(max_turns):
+    refusals = 0
+    for _ in range(max_turns):
         action = agent.act(deepcopy(observation), deepcopy(env.state))
         if action.kind not in ("run_experiment", "conclude"):
             raise ValueError(f"Unknown action kind: {action.kind}")
         saved_action = deepcopy(action)
-        observation = env.step(action)
+        try:
+            observation = env.step(action)
+        except EnvRejection as exc:
+            refusals += 1
+            if log is not None:
+                log(f"[env] refused {saved_action.kind} {saved_action.experiment_id or ''}: {exc.reason}")
+            if refusals > max_refusals:
+                raise RuntimeError(
+                    f"Episode {job.episode_id}: Env refused {refusals} actions; last: {exc.reason}"
+                ) from exc
+            observation = Observation(REFUSAL_EXPERIMENT_ID,
+                                      [Result(f"refused: {exc.reason}", "env")], "UNRATED", 0, {})
+            continue
         trajectory.turns.append(Turn(
-            index, saved_action,
+            len(trajectory.turns), saved_action,
             None if saved_action.kind == "conclude" else deepcopy(observation),
         ))
         if saved_action.kind == "conclude":
@@ -267,7 +292,7 @@ def main(argv: list[str] | None = None) -> None:
     validate_truth(truth)
 
     import modal
-    import matplotlib  # Fail before launching paid work if chart dependency is missing.
+    importlib.import_module("matplotlib")  # Fail before launching paid work if the chart dependency is missing.
 
     image = modal.Image.debian_slim(python_version="3.12")
     if args.pip_package:
