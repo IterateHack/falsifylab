@@ -1,0 +1,169 @@
+{
+  "consensus_pec50": {
+    "CHEMBL3359272": 5.41,
+    "CHEMBL4084119": 8.88,
+    "CHEMBL410972": 9.075,
+    "CHEMBL414357": 8.635,
+    "CHEMBL4518483": 7.63,
+    "CHEMBL5175378": 6.35,
+    "CHEMBL5175695": 7.7,
+    "CHEMBL5182066": 6.95,
+    "CHEMBL5182388": 6.35,
+    "CHEMBL5183336": 8.035,
+    "CHEMBL5189596": 7.65,
+    "CHEMBL5191519": 7.335,
+    "CHEMBL5314341": 8.455,
+    "CHEMBL585195": 9.36
+  },
+  "curves": {
+    "CHEMBL3359272": {
+      "curve_truncated": true,
+      "emax_pct": 100.0,
+      "hill_slope": 1.0,
+      "max_concentration_nM": 100.0,
+      "true_pec50": 5.41
+    },
+    "CHEMBL4084119": {
+      "curve_truncated": false,
+      "emax_pct": 100.0,
+      "hill_slope": 1.0,
+      "max_concentration_nM": 10000.0,
+      "true_pec50": 8.88
+    },
+    "CHEMBL410972": {
+      "curve_truncated": false,
+      "emax_pct": 72.0,
+      "hill_slope": 1.2,
+      "max_concentration_nM": 10000.0,
+      "true_pec50": 9.075
+    },
+    "CHEMBL414357": {
+      "curve_truncated": true,
+      "emax_pct": 55.0,
+      "hill_slope": 0.8,
+      "max_concentration_nM": 100.0,
+      "true_pec50": 8.635
+    },
+    "CHEMBL4518483": {
+      "curve_truncated": false,
+      "emax_pct": 88.0,
+      "hill_slope": 1.0,
+      "max_concentration_nM": 10000.0,
+      "true_pec50": 7.63
+    },
+    "CHEMBL5175378": {
+      "curve_truncated": false,
+      "emax_pct": 100.0,
+      "hill_slope": 1.0,
+      "max_concentration_nM": 10000.0,
+      "true_pec50": 6.35
+    },
+    "CHEMBL5175695": {
+      "curve_truncated": true,
+      "emax_pct": 100.0,
+      "hill_slope": 1.0,
+      "max_concentration_nM": 100.0,
+      "true_pec50": 7.7
+    },
+    "CHEMBL5182066": {
+      "curve_truncated": false,
+      "emax_pct": 72.0,
+      "hill_slope": 1.2,
+      "max_concentration_nM": 10000.0,
+      "true_pec50": 6.95
+    },
+    "CHEMBL5182388": {
+      "curve_truncated": false,
+      "emax_pct": 55.0,
+      "hill_slope": 0.8,
+      "max_concentration_nM": 10000.0,
+      "true_pec50": 6.35
+    },
+    "CHEMBL5183336": {
+      "curve_truncated": true,
+      "emax_pct": 88.0,
+      "hill_slope": 1.0,
+      "max_concentration_nM": 100.0,
+      "true_pec50": 8.035
+    },
+    "CHEMBL5189596": {
+      "curve_truncated": false,
+      "emax_pct": 100.0,
+      "hill_slope": 1.0,
+      "max_concentration_nM": 10000.0,
+      "true_pec50": 7.65
+    },
+    "CHEMBL5191519": {
+      "curve_truncated": false,
+      "emax_pct": 100.0,
+      "hill_slope": 1.0,
+      "max_concentration_nM": 10000.0,
+      "true_pec50": 7.335
+    },
+    "CHEMBL5314341": {
+      "curve_truncated": true,
+      "emax_pct": 72.0,
+      "hill_slope": 1.2,
+      "max_concentration_nM": 100.0,
+      "true_pec50": 8.455
+    },
+    "CHEMBL585195": {
+      "curve_truncated": false,
+      "emax_pct": 55.0,
+      "hill_slope": 0.8,
+      "max_concentration_nM": 10000.0,
+      "true_pec50": 9.36
+    }
+  },
+  "min_records_per_molecule": 4,
+  "molecule_names": {
+    "CHEMBL3359272": "",
+    "CHEMBL4084119": "LIRAGLUTIDE",
+    "CHEMBL410972": "",
+    "CHEMBL414357": "EXENATIDE",
+    "CHEMBL4518483": "DANUGLIPRON",
+    "CHEMBL5175378": "",
+    "CHEMBL5175695": "",
+    "CHEMBL5182066": "",
+    "CHEMBL5182388": "",
+    "CHEMBL5183336": "",
+    "CHEMBL5189596": "",
+    "CHEMBL5191519": "",
+    "CHEMBL5314341": "GLUCAGON",
+    "CHEMBL585195": ""
+  },
+  "n_records_used": {
+    "CHEMBL3359272": 8,
+    "CHEMBL4084119": 10,
+    "CHEMBL410972": 16,
+    "CHEMBL414357": 10,
+    "CHEMBL4518483": 19,
+    "CHEMBL5175378": 4,
+    "CHEMBL5175695": 4,
+    "CHEMBL5182066": 4,
+    "CHEMBL5182388": 4,
+    "CHEMBL5183336": 6,
+    "CHEMBL5189596": 4,
+    "CHEMBL5191519": 4,
+    "CHEMBL5314341": 8,
+    "CHEMBL585195": 5
+  },
+  "protocol": "Consensus pEC50 = median of pchembl_value over ChEMBL records with assay_type=F, standard_relation='=', standard_units='nM', pchembl_value present. Median (not mean) on the log scale.",
+  "ranking_most_to_least_potent": [
+    "CHEMBL585195",
+    "CHEMBL410972",
+    "CHEMBL4084119",
+    "CHEMBL414357",
+    "CHEMBL5314341",
+    "CHEMBL5183336",
+    "CHEMBL5175695",
+    "CHEMBL5189596",
+    "CHEMBL4518483",
+    "CHEMBL5191519",
+    "CHEMBL5182066",
+    "CHEMBL5182388",
+    "CHEMBL5175378",
+    "CHEMBL3359272"
+  ],
+  "source": "ChEMBL REST, target CHEMBL1784, standard_type EC50"
+}

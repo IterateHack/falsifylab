@@ -1,0 +1,136 @@
+{
+  "ecd_positions_differing_in_both_rodents": [
+    3,
+    4,
+    6,
+    7,
+    17,
+    33,
+    49,
+    53,
+    55,
+    56,
+    59,
+    68,
+    76,
+    96,
+    112,
+    135
+  ],
+  "key_fact": "Human GLP-1R residue 33 is Trp; mouse and rat carry Ser at the same position. LY3502970 (orforglipron) depends on this residue, so the compound is essentially inactive at unmodified rodent GLP-1R.",
+  "penalties": [
+    {
+      "any_of": [
+        "mouse model",
+        "use mice",
+        "in mice",
+        "rat model",
+        "use rats",
+        "in rats",
+        "mouse glp-1r",
+        "rat glp-1r",
+        "wild-type mouse",
+        "db/db",
+        "ob/ob",
+        "diet-induced obese mouse"
+      ],
+      "id": "rodent_default",
+      "unless_any_of": [
+        "humanized",
+        "humanised",
+        "knock-in",
+        "knockin",
+        "not appropriate",
+        "would fail",
+        "inactive",
+        "cannot be used",
+        "unsuitable",
+        "avoid"
+      ],
+      "weight": 3.0,
+      "why": "defaulting to an unmodified rodent model is the trap: the compound does not activate rodent GLP-1R"
+    }
+  ],
+  "residue_33_by_species": {
+    "human": "W",
+    "macaque": "W",
+    "mouse": "S",
+    "rat": "S"
+  },
+  "rubric": [
+    {
+      "any_of": [
+        "human glp-1r",
+        "human receptor",
+        "humanized",
+        "human glp1r",
+        "transfected human",
+        "recombinant human"
+      ],
+      "id": "species",
+      "points": "selects a human or humanised receptor system",
+      "weight": 3.0
+    },
+    {
+      "any_of": [
+        "trp33",
+        "w33",
+        "tryptophan 33",
+        "residue 33",
+        "position 33"
+      ],
+      "id": "residue",
+      "points": "names the Trp33 / Ser33 species difference",
+      "weight": 2.5
+    },
+    {
+      "any_of": [
+        "allosteric",
+        "not the orthosteric",
+        "different site",
+        "distinct site",
+        "outside the orthosteric",
+        "non-orthosteric",
+        "extracellular domain",
+        "ecd"
+      ],
+      "id": "not_orthosteric",
+      "points": "recognises that the non-peptide does not occupy the peptide orthosteric pocket (the lesson from experiment 2)",
+      "weight": 2.0
+    },
+    {
+      "any_of": [
+        "partial agonist",
+        "partial agonism",
+        "biased",
+        "bias",
+        "beta-arrestin",
+        "b-arrestin",
+        "arrestin",
+        "g protein-biased",
+        "g-protein bias"
+      ],
+      "id": "partial_bias",
+      "points": "notes partial agonism / G-protein bias rather than assuming full agonism",
+      "weight": 1.5
+    },
+    {
+      "any_of": [
+        "camp",
+        "cyclic amp",
+        "crispr",
+        "knock-in",
+        "knockin"
+      ],
+      "id": "readout",
+      "points": "names a concrete functional readout or a humanised in vivo model",
+      "weight": 1.0
+    }
+  ],
+  "sources": {
+    "human": "P43220",
+    "macaque": "F7E3K6",
+    "mouse": "O35659",
+    "rat": "P32301"
+  }
+}

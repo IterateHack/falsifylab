@@ -1,0 +1,31 @@
+# Method from lessons/exp4.md (ChEMBL; Gaulton et al. 2017).
+experiment: exp4_potency
+paper: "doi:10.1093/nar/gkw1074"
+success_threshold: 0.6
+process_threshold: 0.6
+required:
+  fitted_pec50: {type: dict, min_len: 10}
+  ranking: {type: list, min_len: 10}
+  method: {type: str, min_len: 20}
+item_fields:
+  - {field: fitted_pec50, kind: pairs, top_k: 14, min_fraction: 0.5, tol: 0.011}
+checkpoints:
+  - id: filters_records_first
+    desc: Filtered ChEMBL records (relation, assay type or pChEMBL) before aggregating
+    strings_any_of: ["standard_relation", "pchembl_value", "assay_type"]
+  - id: aggregates_on_log_scale
+    desc: Aggregated per molecule with a median or on the log scale
+    calls_any_of: ["median", "nanmedian", "log10"]
+  - id: fits_four_parameter_curve
+    desc: Fitted the dose-response curve with free parameters (not interpolated)
+    calls_any_of: ["curve_fit", "least_squares", "leastsq", "minimize"]
+  - id: drops_qc_flagged_points
+    desc: Dropped QC-flagged points from the raw curves
+    strings_any_of: ["qc_flag"]
+  - id: reports_plateau
+    desc: Reported the fitted top (partial agonism) or flagged unplateaued curves
+    answer_any_of: ["top", "emax", "plateau", "partial"]
+replay:
+  null_data:
+    - {op: shuffle_column, file: data/exp4_dose_response.csv, column: molecule_chembl_id, seed: 3}
+    - {op: shuffle_column, file: data/exp4_chembl_activities.csv, column: molecule_chembl_id, seed: 3}

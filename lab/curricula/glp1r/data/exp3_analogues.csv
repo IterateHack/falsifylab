@@ -1,0 +1,10 @@
+analogue,backbone,residue_at_dpp4_cleavage_site,acylation_or_fusion,approx_half_life_h,half_life_provenance,notes
+GLP-1(7-37),native human GLP-1,Ala8,none,0.03,"literature/label, pending sign-off",native incretin; cleaved by DPP-4 between His7 and Ala8
+Exenatide,exendin-4 (Gila monster),Gly2 (exendin numbering),none,2.4,"literature/label, pending sign-off",Gly at the DPP-4 P1' position confers resistance; cleared renally
+Lixisenatide,exendin-4 + six C-terminal Lys,Gly2 (exendin numbering),none,3.0,"literature/label, pending sign-off",exendin backbone with a poly-Lys C-terminal extension
+Liraglutide,"human GLP-1, Lys34Arg",Ala8,C16 palmitoyl via gamma-Glu at Lys26,13.0,"literature/label, pending sign-off",fatty-acid acylation drives reversible albumin binding
+Semaglutide,"human GLP-1, Lys34Arg",Aib8,C18 fatty diacid via gamma-Glu + 2x OEG at Lys26,165.0,"literature/label, pending sign-off",Aib8 blocks DPP-4; diacid raises albumin affinity
+Taspoglutide,"human GLP-1, Aib8 + Aib35",Aib8,none,165.0,"literature/label, pending sign-off","two Aib substitutions, no acylation; development discontinued"
+Dulaglutide,GLP-1 analogue fused to IgG4 Fc,Gly8,IgG4-Fc fusion,112.0,"literature/label, pending sign-off",fusion raises hydrodynamic radius above the renal threshold
+Albiglutide,GLP-1 dimer fused to human albumin,Gly8,albumin fusion,120.0,"literature/label, pending sign-off",genetic albumin fusion rather than non-covalent binding
+Tirzepatide,GIP-based dual GIP/GLP-1 agonist,Aib2 (GIP numbering),C20 fatty diacid via gamma-Glu + 2x OEG at Lys20,117.0,"literature/label, pending sign-off",dual agonist; same acylation strategy as semaglutide

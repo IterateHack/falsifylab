@@ -1,0 +1,213 @@
+{
+  "contact_residues": [
+    {
+      "resname": "VAL",
+      "resnum": 30
+    },
+    {
+      "resname": "SER",
+      "resnum": 31
+    },
+    {
+      "resname": "LEU",
+      "resnum": 32
+    },
+    {
+      "resname": "THR",
+      "resnum": 35
+    },
+    {
+      "resname": "TRP",
+      "resnum": 39
+    },
+    {
+      "resname": "GLU",
+      "resnum": 68
+    },
+    {
+      "resname": "TYR",
+      "resnum": 69
+    },
+    {
+      "resname": "TYR",
+      "resnum": 88
+    },
+    {
+      "resname": "LEU",
+      "resnum": 89
+    },
+    {
+      "resname": "PRO",
+      "resnum": 90
+    },
+    {
+      "resname": "TRP",
+      "resnum": 91
+    },
+    {
+      "resname": "ARG",
+      "resnum": 121
+    },
+    {
+      "resname": "LEU",
+      "resnum": 123
+    },
+    {
+      "resname": "GLU",
+      "resnum": 138
+    },
+    {
+      "resname": "LEU",
+      "resnum": 141
+    },
+    {
+      "resname": "LEU",
+      "resnum": 144
+    },
+    {
+      "resname": "TYR",
+      "resnum": 148
+    },
+    {
+      "resname": "TYR",
+      "resnum": 152
+    },
+    {
+      "resname": "ARG",
+      "resnum": 190
+    },
+    {
+      "resname": "LYS",
+      "resnum": 197
+    },
+    {
+      "resname": "LEU",
+      "resnum": 201
+    },
+    {
+      "resname": "TYR",
+      "resnum": 205
+    },
+    {
+      "resname": "GLN",
+      "resnum": 210
+    },
+    {
+      "resname": "TRP",
+      "resnum": 214
+    },
+    {
+      "resname": "PHE",
+      "resnum": 230
+    },
+    {
+      "resname": "GLN",
+      "resnum": 234
+    },
+    {
+      "resname": "VAL",
+      "resnum": 237
+    },
+    {
+      "resname": "THR",
+      "resnum": 298
+    },
+    {
+      "resname": "ARG",
+      "resnum": 299
+    },
+    {
+      "resname": "ASN",
+      "resnum": 300
+    },
+    {
+      "resname": "TRP",
+      "resnum": 306
+    },
+    {
+      "resname": "ILE",
+      "resnum": 309
+    },
+    {
+      "resname": "ARG",
+      "resnum": 310
+    },
+    {
+      "resname": "ILE",
+      "resnum": 313
+    },
+    {
+      "resname": "ASP",
+      "resnum": 372
+    },
+    {
+      "resname": "ARG",
+      "resnum": 380
+    },
+    {
+      "resname": "LEU",
+      "resnum": 384
+    },
+    {
+      "resname": "GLU",
+      "resnum": 387
+    },
+    {
+      "resname": "LEU",
+      "resnum": 388
+    },
+    {
+      "resname": "THR",
+      "resnum": 391
+    }
+  ],
+  "contact_resnums": [
+    30,
+    31,
+    32,
+    35,
+    39,
+    68,
+    69,
+    88,
+    89,
+    90,
+    91,
+    121,
+    123,
+    138,
+    141,
+    144,
+    148,
+    152,
+    190,
+    197,
+    201,
+    205,
+    210,
+    214,
+    230,
+    234,
+    237,
+    298,
+    299,
+    300,
+    306,
+    309,
+    310,
+    313,
+    372,
+    380,
+    384,
+    387,
+    388,
+    391
+  ],
+  "cutoff_angstrom": 4.0,
+  "definition": "GLP-1R residues with any heavy atom within 4.0 A of any semaglutide heavy atom in PDB 7KI0",
+  "n_contacts": 40,
+  "peptide_chain": "P",
+  "peptide_entity": "5",
+  "receptor_chain": "R",
+  "receptor_entity": "6"
+}
