@@ -162,6 +162,7 @@ def test_guard_words_are_not_accepted_without_a_full_qualifier_noun_pair(wording
     [
         "no cell lysis in medium",
         "no cell death in broth",
+        "no cell growth in medium",
         "no cell count change in broth",
         "no cell lysis control",
         "no cell toxicity control",
