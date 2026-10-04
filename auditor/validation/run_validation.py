@@ -34,6 +34,10 @@ def _bundle(scenario: str, _cache: dict = {}) -> tuple[dict, dict]:
 
 
 def fires(signal: dict, verdict) -> bool:
+    if "any" in signal:
+        return any(fires(sub, verdict) for sub in signal["any"])
+    if "flag" in signal:
+        return signal["flag"] in verdict.flags
     if "reward_hack" in signal:
         return signal["reward_hack"] in verdict.reward_hacks
     if "verdict" in signal:
