@@ -67,7 +67,7 @@ class AnthropicProvider:
                     max_tokens=max_tokens,
                     system=system,
                     messages=messages,
-                    tools=tools,
+                    **({"tools": tools} if tools else {}),
                     thinking={"type": "adaptive"},
                     output_config={"effort": effort},
                 ) as stream:
