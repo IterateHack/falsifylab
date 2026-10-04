@@ -149,6 +149,7 @@ def main(argv: Optional[list[str]] = None, client_factory: Optional[Callable] = 
             "scenario_dir": str(bundle),
             "trajectory": asdict(trajectory),
             "verdict": asdict(verdict),
+            "clean_success": verdict.verdict == "VALID_SUCCESS" and not episode_run.aborted_on_refusals,
             "sampling": None if args.agent != "llm" else {
                 "model": args.model,
                 "temperature": args.temperature,

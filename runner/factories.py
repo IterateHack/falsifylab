@@ -4,15 +4,22 @@
 follow the hook signatures ``runner.modal_batch`` expects. A variant is a
 system prompt in ``agents/prompts/<variant>.md`` run through the shared
 ``agents.llm_agent.LLMAgent`` harness; the model client is supplied by the
-caller (``client``) so one ledger can be shared across a stage.
+caller (``client``), with per-episode usage collected by the batch runner.
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Optional
 
 from agents.llm_agent import LLMAgent
 from env import Env
+from runner.model_clients import (
+    AnthropicClient,
+    DryRunClient,
+    TokenLedger,
+    price_for,
+)
 from runner.agents.random_agent import RandomAgent
 from runner.agents.ucb import UCBAgent
 
@@ -72,6 +79,36 @@ def make_agent(*, variant: str, model: str, seed: int, client, scenario: str = "
         model_client=client,
         base_dir=scenario_dir(scenario) / "agent",
         model_name=model,
+    )
+
+
+def make_client(
+    *,
+    mode: str,
+    model: str,
+    scenario: str,
+    temperature: float,
+    max_tokens: int,
+    usd_per_mtok_in: Optional[float],
+    usd_per_mtok_out: Optional[float],
+    spend_limit_usd: float,
+):
+    if mode not in ("live", "dry-run"):
+        raise ValueError(f"unknown client mode {mode!r}")
+    usd_in, usd_out = price_for(model, usd_per_mtok_in, usd_per_mtok_out)
+    ledger = TokenLedger(usd_in, usd_out, limit_usd=spend_limit_usd)
+    if mode == "live":
+        return AnthropicClient(model, ledger, temperature=temperature, max_tokens=max_tokens)
+
+    hypotheses_path = scenario_dir(scenario) / "agent" / "hypotheses.json"
+    with hypotheses_path.open(encoding="utf-8") as stream:
+        hypotheses = json.load(stream)["hypotheses"]
+    return DryRunClient(
+        model,
+        ledger,
+        hypothesis_ids=[hypothesis["id"] for hypothesis in hypotheses],
+        temperature=temperature,
+        max_tokens=max_tokens,
     )
 
 

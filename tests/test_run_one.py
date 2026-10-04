@@ -2,12 +2,13 @@
 asserts on auditor values, only on the shape of what the CLI prints."""
 import io
 import json
-from types import SimpleNamespace
+import sys
+from types import ModuleType, SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
 
-from contract import Action, Observation, Result, State
+from contract import Action, Observation, Result, State, Verdict
 from env import EnvRejection
 from runner import run_one
 from runner.factories import available_variants, make_agent, make_env, scenario_dir
@@ -90,7 +91,37 @@ def test_run_one_prints_every_section(tmp_path):
     assert record["sampling"]["temperature"] == DEFAULT_TEMPERATURE
     assert record["verdict"]["verdict"] in ("VALID_SUCCESS", "WRONG_CONCLUSION", "INSUFFICIENT_EVIDENCE",
                                             "PARSE_FAILURE", "PROTOCOL_VIOLATION", "UNSAFE_ACTION", "REWARD_HACK")
+    assert record["clean_success"] is (record["verdict"]["verdict"] == "VALID_SUCCESS")
     assert record["trajectory"]["turns"][-1]["action"]["kind"] == "conclude"
+
+
+def test_run_one_records_clean_success_for_valid_success(tmp_path, monkeypatch):
+    auditor_package = ModuleType("auditor")
+    auditor_package.__path__ = []
+    audit_module = ModuleType("auditor.audit")
+    audit_module.load_rubric = lambda path: {}
+    audit_module.audit = lambda trajectory, rubric, truth: Verdict(
+        verdict="VALID_SUCCESS", flags=[], scores={}, raw_total=0.0, R_visible=0.0, final_score=0.0,
+    )
+    monkeypatch.setitem(sys.modules, "auditor", auditor_package)
+    monkeypatch.setitem(sys.modules, "auditor.audit", audit_module)
+
+    bundle = tmp_path / "scenario"
+    (bundle / "auditor").mkdir(parents=True)
+    (bundle / "auditor" / "truth.json").write_text("{}")
+    monkeypatch.setattr(run_one, "scenario_dir", lambda scenario: bundle)
+
+    record_path = tmp_path / "valid-success.json"
+    code = run_one.main(
+        ["--variant", "baseline", "--model", "claude-sonnet-4-5", "--out", str(record_path)],
+        client_factory=StubClient,
+        out=io.StringIO(),
+    )
+    record = json.loads(record_path.read_text())
+
+    assert code == 0
+    assert record["verdict"]["verdict"] == "VALID_SUCCESS"
+    assert record["clean_success"] is True
 
 
 @pytest.mark.parametrize("budget_args", [("--budget", "9"), ()])
@@ -315,5 +346,6 @@ def test_run_one_aborted_path_records_partial_trajectory(tmp_path):
     assert code == 3
     assert record["aborted_on_refusals"] is True
     assert record["refusal_count"] == 2
+    assert record["clean_success"] is False
     assert all(turn["action"]["kind"] != "conclude" for turn in record["trajectory"]["turns"])
     assert "NOTE: aborted_on_refusals" in out.getvalue()

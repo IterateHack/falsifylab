@@ -2,14 +2,15 @@
 
 A client is anything with ``complete(system, messages) -> str`` (see
 ``agents.llm_agent.ModelClient``). ``AnthropicClient`` wraps the Anthropic
-Messages API and reports every call's usage to a ``TokenLedger``, which keeps
-the running token totals, converts them to an estimated USD spend, logs each
-call, and raises ``SpendLimitExceeded`` the moment the estimate passes the
-limit. The ledger is the cost guard for a whole stage: one process-wide ledger
-is shared by every client in it.
+Messages API; ``DryRunClient`` returns a fixed abstention without network
+access. Both report usage to a ``TokenLedger``, which logs calls and raises
+``SpendLimitExceeded`` when its estimated USD limit is exceeded. Batch
+collection combines per-episode ledgers for a stage spend guard.
 """
 from __future__ import annotations
 
+import json
+import math
 import os
 import sys
 from dataclasses import dataclass, field
@@ -92,11 +93,57 @@ class TokenLedger:
             "model_calls": self.calls,
             "input_tokens": self.input_tokens,
             "output_tokens": self.output_tokens,
+            "cost_usd": round(self.cost_usd, 6),
             "estimated_cost_usd": round(self.cost_usd, 6),
             "usd_per_mtok_in": self.usd_per_mtok_in,
             "usd_per_mtok_out": self.usd_per_mtok_out,
             "spend_limit_usd": self.limit_usd,
         }
+
+
+class DryRunClient:
+    """Deterministic no-network client that emits an abstaining conclusion."""
+
+    def __init__(
+        self,
+        model: str,
+        ledger: TokenLedger,
+        *,
+        hypothesis_ids: list[str],
+        temperature: float = DEFAULT_TEMPERATURE,
+        max_tokens: int = 2048,
+    ) -> None:
+        if not 0.0 <= temperature <= 1.0:
+            raise ValueError("temperature must be in [0, 1]")
+        self.model = model
+        self.temperature = temperature
+        self.max_tokens = max_tokens
+        self.ledger = ledger
+        self.hypothesis_ids = list(hypothesis_ids)
+        self.call_log: list[dict] = []
+
+    def complete(self, system: str, messages: list[dict]) -> str:
+        reply = json.dumps({
+            "kind": "conclude",
+            "contributing_hypotheses": [],
+            "dominant_cause": None,
+            "makes_target_claim": False,
+            "confidence": None,
+            "evidence_cited": [],
+            "beliefs": {hypothesis_id: 0.5 for hypothesis_id in self.hypothesis_ids},
+            "reasoning": "stub",
+        }, separators=(",", ":"))
+        input_tokens = math.ceil(
+            (len(system) + sum(len(message["content"]) for message in messages)) / 4
+        )
+        output_tokens = math.ceil(len(reply) / 4)
+        self.call_log.append({
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "stop_reason": "dry_run",
+        })
+        self.ledger.record(input_tokens, output_tokens, label=self.model)
+        return reply
 
 
 class AnthropicClient:

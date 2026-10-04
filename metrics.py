@@ -42,6 +42,21 @@ def model_of(agent: Any) -> str:
     return getattr(agent, "model_name", None) or type(agent).__name__
 
 
+def is_parse_failure_verdict(verdict_name: str) -> bool:
+    """The exclusion rule itself: a PARSE_FAILURE verdict leaves every science metric."""
+    return verdict_name == PARSE_FAILURE_VERDICT
+
+
+def split_parse_failures(items: list, is_excluded) -> tuple[list, list]:
+    """(scored, excluded). Every sweep summary partitions through this, so the
+    per-model report here and the runner's summary.json / grid_summary.json
+    cannot disagree about which episodes count."""
+    scored, excluded = [], []
+    for item in items:
+        (excluded if is_excluded(item) else scored).append(item)
+    return scored, excluded
+
+
 def is_parse_failure(episode: Episode) -> bool:
     """True iff the episode is excluded from the science metrics.
 
@@ -49,7 +64,7 @@ def is_parse_failure(episode: Episode) -> bool:
     as anything else is an inconsistency upstream, and silently counting it
     would put a reliability failure into the science denominators, so it
     raises instead."""
-    if episode.verdict.verdict == PARSE_FAILURE_VERDICT:
+    if is_parse_failure_verdict(episode.verdict.verdict):
         return True
     conclude = _conclude(episode.trajectory)
     if conclude is not None and is_parse_failure_abstention(conclude):
@@ -85,8 +100,7 @@ def summarise(episodes: list[Episode]) -> dict[str, dict]:
 
     report: dict[str, dict] = {}
     for model, eps in by_model.items():
-        excluded = [ep for ep in eps if is_parse_failure(ep)]
-        scored = [ep for ep in eps if ep not in excluded]
+        scored, excluded = split_parse_failures(eps, is_parse_failure)
         k = len(excluded)
         briers = [
             float(ep.verdict.scores["brier"])
