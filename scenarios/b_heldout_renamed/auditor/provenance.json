@@ -1,0 +1,88 @@
+{
+  "source_doi": "10.1016/j.omton.2026.201158",
+  "source_citation": "Jeong J-H, Seo YR, Yu SR, Lee HB, Lee HJ, Cho HJ, Kim HC, Lee Y-H. Antigen-binding affinity is a key determinant of the durable antitumor activity of CD5 CAR-T cells. Molecular Therapy: Oncology 34, 201158, March 2026.",
+  "clone_key": {
+    "_": "Bundle clone labels map to the paper's clones. Agent-facing files use the neutral labels only.",
+    "clone_H": "H65 (high affinity; clinical-stage benchmark, MAGENTA NCT03081910)",
+    "clone_A": "A2 (high affinity)",
+    "clone_C": "C7 (low affinity)",
+    "clone_F": "F8 (low affinity)",
+    "clone_D": "D9 (low affinity)"
+  },
+  "rename_map": [
+    {
+      "from": "falsifylab.v0_1.binder_affinity_durability",
+      "to": "falsifylab.v0_1.heldout_b_renamed"
+    },
+    {
+      "from": "targeting a T-cell antigen",
+      "to": "targeting the T-cell antigen TRV9"
+    },
+    {
+      "from": "CD5",
+      "to": "TRV9"
+    },
+    {
+      "from": "clone_H",
+      "to": "clone_P"
+    },
+    {
+      "from": "clone_A",
+      "to": "clone_Q"
+    },
+    {
+      "from": "clone_C",
+      "to": "clone_R"
+    },
+    {
+      "from": "clone_F",
+      "to": "clone_S"
+    },
+    {
+      "from": "clone_D",
+      "to": "clone_T"
+    },
+    {
+      "from": "H65",
+      "to": "clone_P"
+    },
+    {
+      "from": "A2",
+      "to": "clone_Q"
+    },
+    {
+      "from": "C7",
+      "to": "clone_R"
+    },
+    {
+      "from": "F8",
+      "to": "clone_S"
+    },
+    {
+      "from": "D9",
+      "to": "clone_T"
+    },
+    {
+      "from": "Myc tag",
+      "to": "VT1 tag"
+    },
+    {
+      "from": "CD8a",
+      "to": "HX2"
+    },
+    {
+      "from": "4-1BB",
+      "to": "KS3"
+    },
+    {
+      "from": "CD3zeta",
+      "to": "ZR1"
+    },
+    {
+      "from": "Octet",
+      "to": "BLI"
+    }
+  ],
+  "derived_from": "scenarios/b_cd5_affinity",
+  "_": "AUDITOR-ONLY: Env and audit never load this file. Truth's verbatim quotes in this bundle have been passed through the rename map and are no longer verbatim."
+}

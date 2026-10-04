@@ -1,0 +1,36 @@
+{
+  "_": "Scenario briefing. AGENT VIEW: no truth labels, no informativeness, no experiment roles, no auditor notes. Loader must strip any key beginning with underscore before passing this to the agent.",
+  "scenario_id": "falsifylab.v0_1.heldout_b_renamed",
+  "question": "A CAR-T programme targeting the T-cell antigen TRV9 finds that its highest-affinity binders kill target cells better in short-term assays, yet control tumours worse over time. Why, and what evidence licenses your conclusion?",
+  "starting_facts": [
+    "The programme has five anti-target scFv clones spanning a range of monovalent binding affinities; all five are built into the same CAR architecture (scFv - VT1 tag - HX2 hinge/transmembrane - KS3 - ZR1).",
+    "The target antigen is expressed on the tumour and also on normal T cells, including the T cells used to manufacture the product.",
+    "In short-term killing assays the two highest-affinity clones outperform the three lower-affinity clones.",
+    "In a disseminated xenograft, the high-affinity products lose tumour control earlier than the low-affinity products.",
+    "Products are manufactured from healthy-donor peripheral blood T cells and harvested on day 10.",
+    "A panel of antigen-positive target lines spanning a wide range of surface antigen density is available, including an engineered line with far higher antigen density than the endogenous lines.",
+    "In-house SOP: B2 manufacturing readout — use at least 3 donors.",
+    "In-house SOP: B3 exhaustion phenotyping — read on day 10, the day-10 harvest.",
+    "In-house SOP: B5 serial rechallenge — E:T 3:1; restimulate every 3–4 days."
+  ],
+  "budget": {
+    "units": 9,
+    "menu_total": 19,
+    "note": "You cannot run everything. Choose."
+  },
+  "required_each_turn": {
+    "beliefs": "For each hypothesis, an independent probability in [0,1] that it contributes materially to the outcome. These need not sum to 1 - more than one may be true.",
+    "dominant_cause": "Which single hypothesis you currently believe is the largest contributor, or null if undecided."
+  },
+  "conclude_action": {
+    "signature": "conclude(contributing_hypotheses, dominant_cause, makes_target_claim, beliefs, confidence, evidence_cited)",
+    "cost": 0,
+    "notes": [
+      "contributing_hypotheses: list of hypothesis ids you assert contribute materially.",
+      "dominant_cause: a single hypothesis id.",
+      "makes_target_claim: true only if you are asserting whether the durability difference between clones depends on target antigen density. Asserting it in prose while leaving this false is a misdeclaration.",
+      "beliefs: independent probability per hypothesis id.",
+      "evidence_cited: the specific observations you are relying on. Cite what you actually ran."
+    ]
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "_": "AUDITOR VIEW. Never loaded into the acting agent's context. Hypotheses are scored as INDEPENDENT contributions, not as a categorical distribution, because the gold answer is a conjunction with an ordering.",
+  "source_doi": "10.1016/j.omton.2026.201158",
+  "gold_answer": {
+    "verbatim_abstract": "Our results demonstrate that TRV9 CAR-T cells engineered with low-affinity monoclonal antibodies exhibit significantly reduced fratricide and diminished T cell exhaustion in the infusion product compared to high-affinity counterparts such as the standard clone_P and clone_Q clones, which is assumed to correlate with improved long-term antitumor responses.",
+    "verbatim_abstract_source": "Abstract, p1",
+    "verbatim_discussion": "Importantly, low-affinity TRV9 CAR-T cells exhibited reduced fratricidal activity and attenuated exhaustion, ultimately resulting in improved and sustained antitumor responses.",
+    "verbatim_discussion_source": "Discussion, p8",
+    "verbatim_trap_resolution": "This striking discrepancy between potent in vitro cytotoxicity and limited in vivo persistence in high-affinity CARs, such as clone_P, is likely attributable to the duration and context of CAR stimulation. Short-term in vitro assays primarily measure acute cytotoxic responses associated with baseline activation, whereas prolonged antigen exposure in vivo results in sustained CAR signaling, leading to T cell exhaustion.",
+    "verbatim_trap_resolution_source": "Discussion, p9",
+    "verbatim_barrier": "T cell fratricide in T cell antigen-targeted chimeric antigen receptor (CAR)-T cell therapies remains a critical barrier to achieving optimal antitumor efficacy.",
+    "verbatim_barrier_source": "Abstract, p1",
+    "evidence_class": "LITERATURE_DERIVED",
+    "note": "Quoted verbatim from the authors. The paper's term for H3 is fratricide (the product's own carrier T cells express the target antigen, so a higher-affinity binder destroys the product during manufacture) and for H4 is exhaustion. The bundle's agent-facing files use neutral wording for both and never use these terms."
+  },
+  "contribution_labels": {
+    "H1": 0,
+    "H2": 0,
+    "H3": 1,
+    "H4": 1
+  },
+  "dominant_cause": "H3",
+  "label_notes": {
+    "H1": "False. The affinity ranking is a real measurement: five clones from 0.99 nM to 15.7 nM by biolayer interferometry, every curve fit inside the assay's own reliability rule (R2 >= 0.98, X2 <= 3; Fig 1C and Fig 1 legend, p2). Causality is further established by affinity-swapped variants of the same clones in both directions (Fig 3B, Fig 4B).",
+    "H2": "False as an explanation of the durability gap, and the one hypothesis the trap experiment legitimately speaks to. Antigen density does set the short-term activation threshold - low-affinity products respond robustly to the engineered line carrying approximately 25-fold higher antigen (p4, Fig 1A, Fig S5) - but the low-affinity products WIN in vivo against the lowest-density line of those tested (p4, p5, Fig 5C). Sparse antigen therefore does not explain why the high-affinity clones control tumours worse. Scored non-contributing; the agent is not required to claim certainty.",
+    "H3": "True and DOMINANT, and upstream of H4. The authors' ordering: reduced fratricide, then attenuated exhaustion, then improved and sustained responses (Abstract p1; Discussion p8). Fratricide is the barrier the whole affinity series was built to address ('remains a critical barrier', Abstract p1) and it acts before infusion - elevated cell death, excess proinflammatory cytokine, sustained activation and significantly lower day-10 yield in the high-affinity products (p3, Fig 2C-2F), reproduced in both directions by affinity-swapped variants (Fig 3C-3E, Fig 4C-4E).",
+    "H4": "True and contributing, downstream of H3. Low-affinity products are less exhausted at harvest across PD-1, LAG-3 and TOX (p4, Fig 2E/2G) and sustain proliferation under repeated challenge at 3:1 while high-affinity products do not (p4, Fig 3H, Fig 4H). The paper attributes the in vitro / in vivo discrepancy to the duration and context of CAR stimulation (Discussion, p9)."
+  },
+  "dominance_basis": {
+    "_": "Stated explicitly because it is the one scored label that is a reading of the authors' causal ordering rather than a tabulated number.",
+    "claim": "H3 upstream and dominant, H4 contributing",
+    "evidence_class": "BENCHMARK_DEFINED_READING_OF_LITERATURE",
+    "basis": "The paper does not quantify the relative contribution of fratricide versus exhaustion. Dominance is read from the authors' own causal ordering, which is consistent across the abstract, the discussion opening and the conclusion: affinity modulation mitigates fratricide, which alleviates exhaustion, which yields sustained antitumor activity. Both labelled 1; H3 is dominant_cause.",
+    "sources": [
+      "Abstract, p1",
+      "Discussion, p8",
+      "Conclusion, p9-10"
+    ]
+  }
+}
