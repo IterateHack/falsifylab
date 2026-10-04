@@ -10,7 +10,7 @@ from statistics import fmean
 import numpy as np
 
 from metrics import is_parse_failure_verdict
-from runner.modal_batch import HARNESS_ERROR_VERDICT, SCRIPTED_VARIANTS
+from runner.modal_batch import HARNESS_ERROR_VERDICT, SCRIPTED_VARIANTS, is_provider_refusal
 
 
 OUTCOME_CATEGORIES = (
@@ -36,7 +36,7 @@ REPLICATE_HEADERS = (
 
 def classify(record: dict) -> str:
     """Classify a batch record in the required exclusion-priority order."""
-    if record.get("provider_refusal", False):
+    if is_provider_refusal(record):
         return "provider_refusal"
     if (
         record.get("spend_cap_stop", False)

@@ -14,7 +14,7 @@ import math
 import os
 import sys
 from dataclasses import dataclass, field
-from typing import Callable, Optional
+from typing import Callable, Mapping, Optional
 
 # USD per million tokens (input, output), public list prices. Matched by the
 # longest key that prefixes the model id, so dated ids resolve too.
@@ -35,7 +35,34 @@ API_KEY_ENV = "ANTHROPIC_API_KEY"
 
 
 class ProviderRefusal(RuntimeError):
-    pass
+    """The provider ended the call with ``stop_reason == "refusal"``.
+
+    Carries the provider's own stop information so the episode record can
+    persist it instead of inferring the refusal from the exception type."""
+
+    def __init__(self, message: str = "provider refused", *,
+                 stop_reason: str = "refusal", stop_details: Optional[dict] = None) -> None:
+        super().__init__(message)
+        self.stop_reason = stop_reason
+        self.stop_details = stop_details
+
+    @property
+    def provider_stop(self) -> dict:
+        return {"stop_reason": self.stop_reason, "stop_details": self.stop_details}
+
+
+def stop_details_payload(details) -> Optional[dict]:
+    """JSON form of the SDK's ``Message.stop_details`` (``RefusalStopDetails``
+    in anthropic 1.11: ``type``, ``category``, ``explanation``); every field the
+    SDK returns is kept, including ones newer than this code."""
+    if details is None:
+        return None
+    if isinstance(details, Mapping):
+        return dict(details)
+    dump = getattr(details, "model_dump", None)
+    if callable(dump):
+        return dump(mode="json")
+    return dict(vars(details))
 
 
 def sampling_settings(model: str, temperature: float) -> dict:
@@ -155,6 +182,7 @@ class DryRunClient:
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
             "stop_reason": "dry_run",
+            "stop_details": None,
         })
         self.ledger.record(input_tokens, output_tokens, label=self.model)
         return reply
@@ -232,8 +260,14 @@ class AnthropicClient:
                 "input_tokens": usage.input_tokens,
                 "output_tokens": usage.output_tokens,
                 "stop_reason": getattr(response, "stop_reason", None),
+                "stop_details": stop_details_payload(getattr(response, "stop_details", None)),
             })
             self._record_usage(usage.input_tokens, usage.output_tokens)
             if response.stop_reason != "refusal":
                 return text
-        raise ProviderRefusal("Anthropic returned stop_reason=refusal")
+        stop_details = self.call_log[-1]["stop_details"]
+        category = (stop_details or {}).get("category")
+        raise ProviderRefusal(
+            f"Anthropic returned stop_reason=refusal (stop_details.category={category})",
+            stop_reason="refusal", stop_details=stop_details,
+        )

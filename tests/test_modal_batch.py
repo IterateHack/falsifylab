@@ -886,6 +886,85 @@ def test_remote_worker_catches_provider_refusal_and_keeps_partial_trajectory(mon
     assert len(result["trajectory"]["turns"]) == 1
 
 
+REFUSAL_STOP_DETAILS = {
+    "type": "refusal",
+    "category": "reasoning_extraction",
+    "explanation": "asked to reproduce internal reasoning",
+}
+
+
+def test_live_client_refusal_persists_stop_details_in_episode_record(tmp_path, monkeypatch):
+    import runner.factories as factories
+    from runner.model_clients import AnthropicClient, TokenLedger
+
+    types = pytest.importorskip("anthropic.types")
+    refusal = types.Message(
+        id="msg_test", type="message", role="assistant", model="m", content=[],
+        stop_reason="refusal", stop_details=REFUSAL_STOP_DETAILS,
+        usage={"input_tokens": 50, "output_tokens": 0},
+    )
+    client = AnthropicClient(
+        "m", TokenLedger(2, 10, log=None), provider_retries=0,
+        client=SimpleNamespace(messages=SimpleNamespace(create=Mock(return_value=refusal))),
+    )
+
+    class CallingAgent:
+        def __init__(self, *, variant, model, seed, client, scenario):
+            self.client = client
+
+        def act(self, observation, state):
+            self.client.complete("system", [{"role": "user", "content": "go"}])
+
+    monkeypatch.setattr(
+        batch, "resolve",
+        lambda ref: {"env": lambda *, seed, scenario, budget: FakeEnv(seed=seed),
+                     "agent": CallingAgent}[ref],
+    )
+    monkeypatch.setattr(factories, "make_client", Mock(return_value=client))
+    client_spec = {
+        "mode": "live", "temperature": DEFAULT_TEMPERATURE, "max_tokens": 2048,
+        "usd_per_mtok_in": 2, "usd_per_mtok_out": 10, "spend_limit_usd": 1.0, "budget": 8,
+    }
+    job = batch.build_jobs(["v"], ["m"], [7], 1)[0]
+    result = batch.remote_episode(job, "env", "agent", 10, client_spec=client_spec)
+    expected = {"stop_reason": "refusal", "stop_details": REFUSAL_STOP_DETAILS}
+    assert result["provider_stop"] == expected
+    assert result["model_call_log"][0]["stop_details"] == REFUSAL_STOP_DETAILS
+
+    output = tmp_path / "live-refusal"
+    batch.collect_results([result], output, {}, TRUTH,
+                          Mock(return_value=verdict("INSUFFICIENT_EVIDENCE", score=0)))
+    (record,) = [json.loads(line) for line in (output / "results.jsonl").read_text().splitlines()]
+    assert record["provider_stop"] == expected
+    assert record["provider_stop"]["stop_details"]["category"] == "reasoning_extraction"
+    assert record["provider_refusal"] is True
+    assert record["outcome"] == "provider_refusal"
+    assert record["metrics"] is None
+    summary = json.loads((output / "summary.json").read_text())["v"]
+    assert summary["n_provider_refusal"] == 1
+    assert summary["n_scored"] == 0
+
+
+def test_provider_refusal_is_classified_from_captured_stop_with_legacy_fallback():
+    job = batch.build_jobs(["v"], ["m"], [7], 1)[0]
+    trajectory = episode()
+
+    def build(extra):
+        return batch.build_record(job, trajectory, verdict(), TRUTH, refusals=[],
+                                  aborted_on_refusals=False, extra=extra)
+
+    refused = build({"provider_stop": {"stop_reason": "refusal", "stop_details": None}})
+    assert refused["provider_refusal"] is True and refused["metrics"] is None
+    completed = build({"provider_stop": {"stop_reason": "end_turn", "stop_details": None},
+                       "provider_refusal": True})
+    assert completed["provider_refusal"] is False and completed["outcome"] == "completed"
+    legacy = build({"provider_refusal": True})
+    assert legacy["provider_refusal"] is True and legacy["provider_stop"] is None
+    assert build({})["provider_refusal"] is False
+    scored, _, refusals, _ = batch.split_science_records([refused, completed, legacy])
+    assert refusals == [refused, legacy] and scored == [completed]
+
+
 def test_collect_spend_guard_persists_only_the_record_that_exceeds_limit(tmp_path):
     jobs = batch.build_jobs(["v"], ["m"], [7], 2)
     results = [
@@ -921,6 +1000,7 @@ def test_remote_worker_resolves_factories_without_truth_or_rubric(monkeypatch):
         "trajectory": asdict(episode()),
         "refusals": [],
         "aborted_on_refusals": False,
+        "provider_stop": None,
         "provider_refusal": False,
         "spend_cap_stop": False,
         "spend_cap_stop_reason": None,
@@ -1197,6 +1277,8 @@ def test_default_cli_runs_real_bundle_dry_run_without_modal(tmp_path, monkeypatc
         assert "output_tokens" in record["tokens"]
         assert "cost_usd" in record["tokens"]
         assert record["model_call_log"][0]["stop_reason"] == "dry_run"
+        assert record["provider_stop"] == {"stop_reason": "dry_run", "stop_details": None}
+        assert record["provider_refusal"] is False
         assert "hostname" in record["worker"]
         assert record["worker"]["on_modal"] is False
     assert (output / "summary.json").is_file()

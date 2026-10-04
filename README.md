@@ -110,7 +110,9 @@ variant and per cell:
   science (shared rule: `metrics.split_parse_failures`, used by `metrics.py`, `summary.json`
   and `grid_summary.json`).
 - **Provider refusals** (Anthropic returned `stop_reason=refusal`) keep their usage and partial trajectory
-  but are not scored as science.
+  but are not scored as science. Each record's `provider_stop` holds the SDK's `stop_reason` and
+  `stop_details` (refusal `category`, `explanation`) for the final call, and the refusal
+  classification reads it; stage 2 wave 1 predates this field, so its refusals have no category.
 
 Episodes aborted after repeated Env refusals (overspend, malformed conclude) stay **in** the
 metrics, carrying the auditor's own `R_visible` and `final_score`, with `clean_success`

@@ -86,6 +86,18 @@ def test_classify_all_categories_and_priority():
     )) == "spend_cap_stop"
 
 
+def test_classify_reads_captured_provider_stop_and_accepts_records_without_it():
+    refused = _record()
+    refused["provider_stop"] = {"stop_reason": "refusal", "stop_details": None}
+    assert classify(refused) == "provider_refusal"
+    completed = _record()
+    completed["provider_stop"] = {"stop_reason": "end_turn", "stop_details": None}
+    assert classify(completed) == "science"
+    wave1_refusal = _record(provider_refusal=True)
+    assert "provider_stop" not in wave1_refusal
+    assert classify(wave1_refusal) == "provider_refusal"
+
+
 def test_science_records_preserve_order_and_exclude_each_non_science_category():
     records = [
         _record(seed=0),
