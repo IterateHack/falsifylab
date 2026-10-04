@@ -1,14 +1,16 @@
-"""Run ONE episode locally against the real Env, the real auditor and a real model.
+"""Run ONE episode locally against the real Env, auditor, and agent.
 
     python -m runner.run_one --scenario a --variant baseline --budget 8 \\
         --model claude-sonnet-4-5 --seed 0
+    python -m runner.run_one --agent ucb --scenario b --seed 0
 
-Reads ANTHROPIC_API_KEY from the environment. Prints the full trajectory, the
-model transcript, the audit (four dimension scores, applicable_max_evidence,
-R_visible, final_score, verdict, flags, epistemic_flags, reward hacks) and the
-episode's token usage with its estimated cost. Every model call is logged to
-stderr with the cumulative spend; the run stops with a clear message if the
-estimate passes --max-spend-usd (default $20).
+LLM runs read ANTHROPIC_API_KEY from the environment; scripted runs need no
+key. Prints the full trajectory, a model transcript or decision log, the audit
+(four dimension scores, applicable_max_evidence, R_visible, final_score,
+verdict, flags, epistemic_flags, reward hacks) and the episode's token usage
+with its estimated cost. Every model call is logged to stderr with the
+cumulative spend; the run stops with a clear message if the estimate passes
+--max-spend-usd (default $20).
 """
 from __future__ import annotations
 
@@ -21,7 +23,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from contract import Trajectory, Verdict
-from runner.factories import make_agent, make_env, scenario_dir
+from runner.factories import make_agent, make_env, make_scripted_agent, scenario_dir
 from runner.modal_batch import EpisodeJob, run_episode
 from runner.model_clients import (
     API_KEY_ENV, DEFAULT_SPEND_LIMIT_USD, AnthropicClient, SpendLimitExceeded, TokenLedger, price_for,
@@ -32,10 +34,12 @@ DIMENSIONS = ("scientific_correctness", "evidence_sufficiency", "protocol_validi
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--agent", choices=("llm", "ucb", "random"), default="llm")
     parser.add_argument("--scenario", default="a", help="scenario key (a, b) or bundle directory")
-    parser.add_argument("--variant", required=True, help="system prompt in agents/prompts/<variant>.md")
+    parser.add_argument("--variant", help="system prompt in agents/prompts/<variant>.md")
     parser.add_argument("--budget", type=int, default=None, help="must equal the bundle budget (8 for scenario a)")
-    parser.add_argument("--model", required=True, help="Anthropic model id, e.g. claude-sonnet-4-5")
+    parser.add_argument("--model", help="Anthropic model id, e.g. claude-sonnet-4-5")
+    parser.add_argument("--ucb-c", type=float, default=2.0)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--max-turns", type=int, default=100)
     parser.add_argument("--max-refusals", type=int, default=3)
@@ -51,24 +55,51 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Optional[list[str]] = None, client_factory: Optional[Callable] = None,
          out=sys.stdout) -> int:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if args.agent == "llm":
+        if not args.variant:
+            parser.error("--variant is required when --agent=llm")
+        if not args.model:
+            parser.error("--model is required when --agent=llm")
+    elif args.variant is not None or args.model is not None:
+        parser.error("--variant and --model are only valid when --agent=llm")
+
     say = partial(print, file=out, flush=True)
     bundle = scenario_dir(args.scenario)
-    usd_in, usd_out = price_for(args.model, args.usd_per_mtok_in, args.usd_per_mtok_out)
-    ledger = TokenLedger(usd_in, usd_out, limit_usd=args.max_spend_usd)
-    if client_factory is None:
-        client_factory = partial(AnthropicClient, max_tokens=args.max_tokens, temperature=args.temperature)
-    client = client_factory(args.model, ledger)
+    if args.agent == "llm":
+        if client_factory is None:
+            if not __import__("os").environ.get(API_KEY_ENV):
+                print(f"{API_KEY_ENV} is not set; export it before running.", file=sys.stderr)
+                return 1
+            client_factory = partial(AnthropicClient, max_tokens=args.max_tokens, temperature=args.temperature)
+        usd_in, usd_out = price_for(args.model, args.usd_per_mtok_in, args.usd_per_mtok_out)
+        ledger = TokenLedger(usd_in, usd_out, limit_usd=args.max_spend_usd)
+        client = client_factory(args.model, ledger)
+    else:
+        ledger = TokenLedger(0.0, 0.0, limit_usd=args.max_spend_usd, log=None)
+        client = None
 
     agents = []
 
     def agent_factory(*, variant, model, seed):
-        agent = make_agent(variant=variant, model=model, seed=seed, client=client, scenario=args.scenario)
+        if args.agent == "llm":
+            agent = make_agent(
+                variant=variant, model=model, seed=seed, client=client, scenario=args.scenario
+            )
+        else:
+            agent = make_scripted_agent(
+                kind=variant, seed=seed, scenario=args.scenario, c=args.ucb_c
+            )
         agents.append(agent)
         return agent
 
-    job = EpisodeJob(f"{args.seed:08d}", args.variant, args.model, args.seed, 0, args.seed)
-    say(f"# run_one: scenario={args.scenario} ({bundle}) variant={args.variant} model={args.model} "
+    if args.agent == "llm":
+        job = EpisodeJob(f"{args.seed:08d}", args.variant, args.model, args.seed, 0, args.seed)
+    else:
+        job = EpisodeJob(f"{args.seed:08d}", args.agent, "none", args.seed, 0, args.seed)
+    say(f"# run_one: agent={args.agent} scenario={args.scenario} ({bundle}) "
+        f"variant={args.variant} model={args.model} "
         f"seed={args.seed} budget={args.budget if args.budget is not None else 'bundle default'}")
     try:
         trajectory = run_episode(
@@ -88,7 +119,9 @@ def main(argv: Optional[list[str]] = None, client_factory: Optional[Callable] = 
     agent = agents[0] if agents else None
 
     say(format_trajectory(trajectory))
-    if agent is not None and not args.no_transcript:
+    if agent is not None and args.agent != "llm":
+        say(format_decision_log(agent.transcript))
+    elif agent is not None and not args.no_transcript:
         say(format_transcript(agent.transcript))
     say(format_verdict(verdict))
     say(format_tokens(ledger, agent))
@@ -142,6 +175,12 @@ def format_transcript(transcript: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def format_decision_log(transcript: list[dict]) -> str:
+    lines = [f"\n== Decision log ({len(transcript)} decisions) =="]
+    lines.extend(json.dumps(entry, allow_nan=False) for entry in transcript)
+    return "\n".join(lines)
+
+
 def format_verdict(verdict: Verdict) -> str:
     scores = verdict.scores
     lines = ["\n== Audit =="]
@@ -174,6 +213,4 @@ def format_tokens(ledger: TokenLedger, agent) -> str:
 
 
 if __name__ == "__main__":
-    if not __import__("os").environ.get(API_KEY_ENV):
-        sys.exit(f"{API_KEY_ENV} is not set; export it before running.")
     sys.exit(main())
