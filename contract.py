@@ -130,6 +130,7 @@ class Verdict:
     R_visible: float
     final_score: float
     reward_hacks: list[str] = field(default_factory=list)   # subset of REWARD_HACKS
+    fired: list[dict] = field(default_factory=list)          # fired rubric rules with evidence
 
 
 @dataclass
