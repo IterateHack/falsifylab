@@ -180,6 +180,40 @@ at n=1 per arm - experiment 1 needs no lessons and still moved +0.14, which is
 just run-to-run variance. `compare` says so itself rather than quoting the
 favourable number. Several runs per arm would be needed to claim more.
 
+These numbers predate the relevance fix: the engine then showed the agent every
+earned card, not only the ones an experiment names in `requires_lessons`. They are
+not comparable to runs made now, which is why the next section exists.
+
+## Measuring improvement
+
+`docs/evaluation-plan.md` is the protocol. The short version: one run is a draw,
+so improvement is a difference between *arms* over many runs, read against a
+floor.
+
+| `--arm` | The agent gets | Answers |
+|---|---|---|
+| `cold` | hypothesis, title and answer format only. No data, tools or lessons | What prior knowledge alone scores - the true floor |
+| `baseline` | the lab, no lesson cards | What the apparatus adds |
+| `placebo` | the lab, same-length cards of irrelevant prose | Is it just more context? |
+| `null` | the lab, same-length cards of meaningless symbols | Is it just the format? |
+| `lessons` | the lab, the cards each experiment requires | The treatment |
+
+```bash
+for i in 1 2 3 4 5; do
+  ./.venv/bin/python -m engine.cli run --arm cold --run-id cold_$i --runs-dir runs/eval
+  ./.venv/bin/python -m engine.cli run --arm lessons --run-id lessons_$i --runs-dir runs/eval
+done
+./.venv/bin/python -m engine.cli aggregate runs/eval --baseline cold --treatment lessons
+```
+
+`aggregate` reports the difference in mean score with a bootstrap 95% interval,
+a permutation p-value and Cohen's d, and warns below five runs per arm. Every run
+writes `run_meta.json` (its arm) and `usage.json` (tokens per model).
+
+Not yet done: the held-out validation and test experiments the plan calls for.
+Until they exist, any gain measured on the current six experiments is a gain on
+the experiments the cards were written from.
+
 ## Repository layout
 
 ```
@@ -219,7 +253,7 @@ Both results are in `runs/`, and the notebook is readable as markdown at
   data-analysis outputs rather than recall wherever possible, the notebook
   records prior knowledge claimed, and the control run exists to quantify it -
   but a model that already knows about Trp33 cannot unknow it.
-- **n=1 per arm.** Treat deltas under about 0.1 between runs as noise.
+- **n=1 per arm in the committed runs.** Treat deltas under about 0.1 between those runs as noise. `aggregate` exists to replace them.
 - **Three data soft spots** - transcribed half-lives, Open Targets release
   dependence, and simulated dose-response points over real potencies - are listed
   in `docs/references.md`.
