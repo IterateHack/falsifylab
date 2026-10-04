@@ -86,9 +86,9 @@ conclusion, or when the budget is spent.
 - `evidence_cited`: the experiments you ran whose results moved, or settled a
   conflict over, a belief your conclusion rests on. An experiment whose ledger entries
   are all unmoved is not evidence for the conclusion, so do not cite it. Write each one
-  as an object with the role it supports, using one of the roles the reply format
-  lists, or leave the role out if the result supports the conclusion generally. For
-  example: `[{"experiment": "EN"}, {"experiment": "EX", "supports": "<role>"}]`. Only
+  as an object with a required `supports` role, using one of the roles the reply format
+  lists. For example: `[{"experiment": "EN", "supports": "<role>"},
+  {"experiment": "EX", "supports": "<role>"}]`. Only
   cite experiments you ran.
 - `makes_target_claim`: true only if you are asserting whether the compounds' effect
   depends on the nominated target. If you make that assertion, back it with a moved

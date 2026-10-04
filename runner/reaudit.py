@@ -26,6 +26,8 @@ class MissingTrajectoryError(FileNotFoundError):
 
 def _read_records(results_path: Path) -> list[dict]:
     with results_path.open(encoding="utf-8") as stream:
+        if results_path.suffix.lower() == ".json":
+            return [json.load(stream)]
         return [json.loads(line) for line in stream]
 
 
@@ -150,7 +152,7 @@ def reaudit(results_path: Path, output: Path, *,
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("results", type=Path, help="results.jsonl from a batch run")
+    parser.add_argument("results", type=Path, help="batch results.jsonl or a local run_one JSON record")
     parser.add_argument("--output", type=Path, required=True, help="new output directory")
     parser.add_argument("--audit", default="auditor.audit:audit")
     parser.add_argument("--rubric", type=Path)

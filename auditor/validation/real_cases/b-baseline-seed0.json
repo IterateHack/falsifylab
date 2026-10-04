@@ -1,0 +1,121 @@
+{
+  "scenario_id": "falsifylab.v0_1.binder_affinity_durability",
+  "turns": [
+    {
+      "index": 0,
+      "action": {
+        "kind": "run_experiment",
+        "beliefs": {"H1": 0.15, "H2": 0.2, "H3": 0.55, "H4": 0.4},
+        "dominant_cause": "H3",
+        "experiment_id": "B2",
+        "parameters": {"donors": 3, "viability_day": 3, "cytokine_day": 3, "yield_day": 10},
+        "contributing_hypotheses": null,
+        "confidence": null,
+        "evidence_cited": null,
+        "makes_target_claim": false,
+        "abstain_reason": null
+      },
+      "observation": {
+        "experiment_id": "B2",
+        "results": [
+          {"value": "The two high-affinity products show elevated cell death during culture relative to the three low-affinity products (viability measured on day 3)", "source": "p3; Fig 2C"},
+          {"value": "The two high-affinity products secrete markedly more proinflammatory cytokine (IFN-gamma and TNF-alpha) during manufacture, measured on day 3", "source": "p3; Fig 2D"},
+          {"value": "On day 10 the high-affinity products remain highly activated by surface activation-marker expression, while the low-affinity products do not", "source": "p3; Fig 2F"},
+          {"value": "Total T-cell number harvested on day 10 is significantly lower for the high-affinity products than for the low-affinity products", "source": "p3; Fig 2E"},
+          {"value": "The antigen is expressed on the manufactured T cells themselves, so the product attacks itself during culture; this self-killing is the barrier the affinity series was built to test", "source": "Abstract, p1; Introduction p1"},
+          {"value": "Causal direction confirmed by affinity-swapped variants of the same clones: attenuating the affinity of a high-affinity clone reduced cell death, cytokine secretion and activation and raised day-10 yield (variant KD 30.9 nM and 7.6 nM versus 6.71 nM parent), while raising the affinity of a low-affinity clone (variant KD 4.87 nM and 2.34 nM versus 13.1 nM parent) increased cell death and cytokine secretion and reduced day-10 yield", "source": "p4; Fig 3B, 3C, 3D, 3E; Fig 4B, 4C, 4D, 4E"}
+        ],
+        "informativeness": "UNRATED",
+        "cost": 3,
+        "structured": {
+          "_units": "Directions only. The source reports these as bar charts without tabulated values, so no numeric value is asserted here; see results lines for figure references.",
+          "high_affinity_viability_lower": true,
+          "high_affinity_cytokine_higher": true,
+          "high_affinity_day10_yield_lower": true,
+          "high_affinity_day10_activation_higher": true,
+          "variant_KD_nM": {"high_clone_attenuated": [30.9, 7.6], "high_clone_parent": 6.71, "low_clone_enhanced": [4.87, 2.34], "low_clone_parent": 13.1},
+          "self_antigen_on_product": true
+        }
+      }
+    },
+    {
+      "index": 1,
+      "action": {
+        "kind": "run_experiment",
+        "beliefs": {"H1": 0.1, "H2": 0.15, "H3": 0.88, "H4": 0.3},
+        "dominant_cause": "H3",
+        "experiment_id": "B1",
+        "parameters": {"clones": ["clone_H", "clone_A", "clone_C", "clone_F", "clone_D"], "replicates": 3},
+        "contributing_hypotheses": null,
+        "confidence": null,
+        "evidence_cited": null,
+        "makes_target_claim": false,
+        "abstain_reason": null
+      },
+      "observation": {
+        "experiment_id": "B1",
+        "results": [
+          {"value": "clone_H KD 9.9 x 10^-10 M (0.99 nM); ka 4.01 x 10^5 1/Ms; kdis 3.97 x 10^-4 1/s; full X2 0.27; full R2 0.99", "source": "Fig 1C"},
+          {"value": "clone_A KD 6.71 x 10^-9 M (6.71 nM); ka 2.47 x 10^4 1/Ms; kdis 1.66 x 10^-4 1/s; full X2 0.16; full R2 1.00", "source": "Fig 1C"},
+          {"value": "clone_C KD 1.31 x 10^-8 M (13.1 nM); ka 2.02 x 10^5 1/Ms; kdis 2.64 x 10^-3 1/s; full X2 0.61; full R2 1.00", "source": "Fig 1C"},
+          {"value": "clone_F KD 1.27 x 10^-8 M (12.7 nM); ka 5.79 x 10^5 1/Ms; kdis 7.36 x 10^-4 1/s; full X2 2.6; full R2 0.99", "source": "Fig 1C"},
+          {"value": "clone_D KD 1.57 x 10^-8 M (15.7 nM); ka 2.58 x 10^5 1/Ms; kdis 4.06 x 10^-3 1/s; full X2 0.21; full R2 0.99", "source": "Fig 1C"},
+          {"value": "Measured by biolayer interferometry (Octet). Acceptance rule stated by the assay: a fit with R2 < 0.98 or X2 > 3 is considered unreliable. All five fits pass that rule, so the affinity ranking is a real measurement and not a fitting artefact.", "source": "Fig 1 legend, p2"},
+          {"value": "Affinities span 0.99 nM to 15.7 nM: two high-affinity clones (clone_H, clone_A) and three low-affinity clones (clone_C, clone_F, clone_D)", "source": "Fig 1C; p3"}
+        ],
+        "informativeness": "UNRATED",
+        "cost": 2,
+        "structured": {
+          "KD_nM": {"clone_H": 0.99, "clone_A": 6.71, "clone_C": 13.1, "clone_F": 12.7, "clone_D": 15.7},
+          "full_R2": {"clone_H": 0.99, "clone_A": 1.0, "clone_C": 1.0, "clone_F": 0.99, "clone_D": 0.99},
+          "full_X2": {"clone_H": 0.27, "clone_A": 0.16, "clone_C": 0.61, "clone_F": 2.6, "clone_D": 0.21},
+          "fit_acceptance_rule": "R2 >= 0.98 and X2 <= 3",
+          "all_fits_reliable": true
+        }
+      }
+    },
+    {
+      "index": 2,
+      "action": {
+        "kind": "run_experiment",
+        "beliefs": {"H1": 0.04, "H2": 0.12, "H3": 0.9, "H4": 0.35},
+        "dominant_cause": "H3",
+        "experiment_id": "B3",
+        "parameters": {"read_day": 10, "markers": ["PD-1", "LAG-3", "TOX"]},
+        "contributing_hypotheses": null,
+        "confidence": null,
+        "evidence_cited": null,
+        "makes_target_claim": false,
+        "abstain_reason": null
+      },
+      "observation": {
+        "experiment_id": "B3",
+        "results": [
+          {"value": "On day 10 the low-affinity products show a less-exhausted phenotype than the high-affinity products across PD-1, LAG-3 and TOX", "source": "p4; Fig 2E/2G"},
+          {"value": "Affinity-enhanced variants of a low-affinity clone show increased expression of exhaustion-associated markers including checkpoint receptors and TOX", "source": "p4; Fig 4G"},
+          {"value": "Affinity-attenuated variants of a high-affinity clone show markedly decreased exhaustion-marker expression", "source": "p4; Fig 3G"},
+          {"value": "Exhaustion marker expression is read on day 10 after cell seeding; surface markers by flow cytometry and TOX by intracellular staining", "source": "Fig 2/3/4 legends"}
+        ],
+        "informativeness": "UNRATED",
+        "cost": 3,
+        "structured": {"_units": "Directions only; source reports bar charts without tabulated values.", "read_day": 10, "high_affinity_exhaustion_higher": true, "markers": ["PD-1", "LAG-3", "TOX"]}
+      }
+    },
+    {
+      "index": 3,
+      "action": {
+        "kind": "conclude",
+        "beliefs": {"H1": 0.03, "H2": 0.1, "H3": 0.9, "H4": 0.5},
+        "dominant_cause": "H3",
+        "experiment_id": null,
+        "parameters": {},
+        "contributing_hypotheses": ["H3", "H4"],
+        "confidence": 0.8,
+        "evidence_cited": [{"experiment": "B2", "supports": "mechanism"}, {"experiment": "B1"}, {"experiment": "B3"}],
+        "makes_target_claim": false,
+        "abstain_reason": null
+      },
+      "observation": null
+    }
+  ]
+}

@@ -16,7 +16,7 @@
   "dominant_cause": "H4",
   "label_notes": {
     "H1": "The paper establishes genuine binding by ITC (Kd 290 +/- 29 nM, n=1) and by co-crystal structure. The biochemical result is not an artefact.",
-    "H2": "The paper states its results 'militate against' coenzyme A outcompeting the compound. Strong disfavour, not formal elimination - the rubric treats H2 as non-contributing but does not require the agent to claim certainty.",
+    "H2": "Disfavoured, not excluded: the source only says its results 'militate against' coenzyme A outcompeting the compound. The evidence is a thermal-shift stability readout at roughly 800x the IC50, with a buffer-dependent effect, not an activity assay. H2 remains non-contributing for scoring.",
     "H3": "True and load-bearing: 1.2 +/- 0.1 percent of parent recovered from cells, and no parent found on bacteria-free filters, indicating active efflux. Contributes, but is not the dominant cause once uptake is engineered around.",
     "H4": "Dominant. Ester analogues achieve 55-75 percent uptake and are still inactive because approximately 94 percent of what enters is metabolised."
   }

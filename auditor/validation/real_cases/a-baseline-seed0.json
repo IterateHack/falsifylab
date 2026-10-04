@@ -1,0 +1,94 @@
+{
+  "scenario_id": "falsifylab.v0_1.pptt_programme",
+  "turns": [
+    {
+      "index": 0,
+      "action": {
+        "kind": "run_experiment",
+        "beliefs": {"H1": 0.4, "H2": 0.3, "H3": 0.5, "H4": 0.3},
+        "dominant_cause": "H3",
+        "experiment_id": "E1",
+        "parameters": {"buffer": "gel_filtration", "coa_mM": 1.0, "compound_uM": 100},
+        "contributing_hypotheses": null,
+        "confidence": null,
+        "evidence_cited": null,
+        "makes_target_claim": false,
+        "abstain_reason": null
+      },
+      "observation": {
+        "experiment_id": "E1",
+        "results": [
+          {"value": "Tm shifts 40 C to 55 C across 0-200 uM compound at 5 uM enzyme (max +15 C, approx 1:40 molar)", "source": "Fig 3B"},
+          {"value": "With enzyme pre-saturated with coenzyme A, compound at 50 uM still stabilises: +4 C at 1 mM CoA, +3 C at 2 mM CoA", "source": "p4-5, Fig 3D/3E"},
+          {"value": "Effect minor in buffer containing 50 mM arginine + 50 mM glutamate; pronounced when stabilisers omitted", "source": "p4-5"},
+          {"value": "Comparator amidinourea 8918 DESTABILISES the enzyme (negative dTm)", "source": "Fig 3B inset"}
+        ],
+        "informativeness": "UNRATED",
+        "cost": 2,
+        "structured": {}
+      }
+    },
+    {
+      "index": 1,
+      "action": {
+        "kind": "run_experiment",
+        "beliefs": {"H1": 0.5, "H2": 0.1, "H3": 0.6, "H4": 0.3},
+        "dominant_cause": "H3",
+        "experiment_id": "E6",
+        "parameters": {
+          "arms": ["parent_diacid", "diethyl_ester", "monoacid"],
+          "controls": [
+            "medium-only no-cell incubation to measure chemical stability and esterase-independent hydrolysis",
+            "heat-killed or PFA-fixed bacteria to separate passive binding from active uptake and metabolism",
+            "rifampicin or another known accumulating compound as a positive uptake control",
+            "isotopically labelled internal standard with spike-in recovery for extraction efficiency",
+            "time zero extraction and washed-pellet controls for non-specific adsorption to cells and plastic",
+            "vehicle DMSO blank",
+            "mass balance accounting that sums medium, intracellular intact and biotransformed fractions to 100% of input"
+          ]
+        },
+        "contributing_hypotheses": null,
+        "confidence": null,
+        "evidence_cited": null,
+        "makes_target_claim": false,
+        "abstain_reason": null
+      },
+      "observation": {
+        "experiment_id": "E6",
+        "results": [
+          {"value": "Parent diacid: only 1.2 +/- 0.1 percent recovered from cells", "source": "p10, Fig 6A"},
+          {"value": "Diethyl ester 2d: 74.6 +/- 6.7 percent taken up; approximately 93.6 percent of that metabolised", "source": "p10"},
+          {"value": "Parent regenerated from 2d accounts for 11.9 percent of the metabolised fraction and is found EXTRACELLULARLY", "source": "p10"},
+          {"value": "Monoacid 2s: 55.4 +/- 7.4 percent uptake; 14 +/- 3 percent remains unmodified; 86 percent metabolised to unidentified products", "source": "p10"},
+          {"value": "Biotransformation is progressive demethylation and ester loss; mass losses of 14, 28, 42, 56, 70 Da", "source": "p10, Fig 6B"}
+        ],
+        "informativeness": "UNRATED",
+        "cost": 4,
+        "structured": {
+          "parent_cell_associated_pct": 1.2,
+          "diethyl_ester_uptake_pct": 74.6,
+          "diethyl_ester_metabolised_pct": 93.6,
+          "monoacid_uptake_pct": 55.4,
+          "monoacid_intact_pct": 14,
+          "bacteria_free_control_returned": false
+        }
+      }
+    },
+    {
+      "index": 2,
+      "action": {
+        "kind": "conclude",
+        "beliefs": {"H1": 0.45, "H2": 0.08, "H3": 0.85, "H4": 0.5},
+        "dominant_cause": "H3",
+        "experiment_id": null,
+        "parameters": {},
+        "contributing_hypotheses": ["H3", "H4"],
+        "confidence": 0.55,
+        "evidence_cited": [{"experiment": "E6", "supports": "mechanism"}, {"experiment": "E1", "supports": "target_engagement"}],
+        "makes_target_claim": false,
+        "abstain_reason": null
+      },
+      "observation": null
+    }
+  ]
+}

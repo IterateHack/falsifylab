@@ -1027,7 +1027,7 @@ def main(argv: list[str] | None = None) -> None:
             ]
             image = modal.Image.debian_slim(python_version="3.12")
             image = image.pip_install(*packages, *args.pip_package)
-            modules = {"contract", "env", "runner", "agents"}
+            modules = {"contract", "control_matching", "env", "runner", "agents"}
             references = [args.env_factory]
             if has_llm:
                 references.append(args.agent_factory)

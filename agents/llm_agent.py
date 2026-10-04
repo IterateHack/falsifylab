@@ -76,7 +76,7 @@ from contract import Action, HypothesisId, Observation, State
 
 AGENT_DIR = Path(__file__).resolve().parent.parent / "agent"
 BRIEFING_EXPERIMENT_ID = "__briefing__"
-SUPPORTS = ("mechanism", "target_claim", "potency", "target_engagement")
+SUPPORTS = ("mechanism", "durability", "target_claim", "potency", "target_engagement")
 
 RESPONSE_SPEC = """\
 Reply with one JSON object and nothing else. No prose outside it, no code fence.
@@ -93,7 +93,7 @@ To finish:
  "dominant_cause": "H<n>" | null,
  "makes_target_claim": true | false,
  "confidence": 0.0-1.0 | null,
- "evidence_cited": [{"experiment": "<experiment_id>", "supports": "mechanism|target_claim|potency|target_engagement"}],
+ "evidence_cited": [{"experiment": "<experiment_id>", "supports": "mechanism|durability|target_claim|potency|target_engagement"}],
  "beliefs": {"H1": ..., "H2": ..., "H3": ..., "H4": ...},
  "reasoning": "your reasoning for this action"}
 
@@ -107,8 +107,8 @@ Field shapes:
 - contributing_hypotheses: a list of hypothesis ids.
 - makes_target_claim: a boolean.
 - evidence_cited: a list of objects, each with an "experiment" field holding an
-  experiment id; "supports" is optional and, if present, is one of mechanism,
-  target_claim, potency, target_engagement. Bare strings are not accepted.
+  experiment id; "supports" is required on every citation and must be one of
+  mechanism, durability, target_claim, potency, target_engagement. Bare strings are not accepted.
 - parameters: an object carrying every required parameter of the chosen
   experiment.
 """
@@ -381,7 +381,7 @@ class LLMAgent:
         if raw is None:
             return None
         if not isinstance(raw, list):
-            raise ParseFailure("'evidence_cited' must be a list of {experiment, supports?} objects")
+            raise ParseFailure("'evidence_cited' must be a list of {experiment, supports} objects")
         citations: list[dict] = []
         for i, entry in enumerate(raw):
             if isinstance(entry, str):
@@ -399,13 +399,12 @@ class LLMAgent:
                 )
             citation = {"experiment": eid}
             supports = entry.get("supports")
-            if supports is not None:
-                if supports not in SUPPORTS:
-                    raise ParseFailure(
-                        f"evidence_cited[{i}] has supports {supports!r}; use one of "
-                        f"{', '.join(SUPPORTS)} or omit it"
-                    )
-                citation["supports"] = supports
+            if not isinstance(supports, str) or supports not in SUPPORTS:
+                raise ParseFailure(
+                    f"evidence_cited[{i}].supports is required; use one of "
+                    f"{', '.join(SUPPORTS)}, got {supports!r}"
+                )
+            citation["supports"] = supports
             citations.append(citation)
         return citations
 
