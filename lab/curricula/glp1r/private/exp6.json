@@ -1,0 +1,141 @@
+{
+  "penalties": [
+    {
+      "any_of": [
+        "cardiovascular outcome",
+        "reduces mortality",
+        "reduces cv events",
+        "proven cardiovascular benefit"
+      ],
+      "id": "overclaim_cv",
+      "unless_any_of": [
+        "not established",
+        "not yet",
+        "unproven",
+        "no evidence",
+        "has not been",
+        "remains"
+      ],
+      "weight": 1.5,
+      "why": "H1 is about target validity and oral feasibility; CV outcome claims are not supported by the evidence in this curriculum"
+    },
+    {
+      "any_of": [
+        "cures obesity",
+        "cure for obesity",
+        "eliminates obesity"
+      ],
+      "id": "overclaim_cure",
+      "weight": 1.5,
+      "why": "overclaiming beyond the trial result"
+    }
+  ],
+  "reference": "Wharton S, Aronne LJ, Stefanski A, et al. Orforglipron, an Oral Small-Molecule GLP-1 Receptor Agonist for Obesity Treatment. N Engl J Med. 2025;393(18):1796-1806. doi:10.1056/NEJMoa2511774",
+  "rubric": [
+    {
+      "any_of": [
+        "supported",
+        "well supported",
+        "well-supported",
+        "holds",
+        "the hypothesis is supported",
+        "confirmed"
+      ],
+      "id": "verdict",
+      "points": "states a clear verdict on H1",
+      "weight": 2.0
+    },
+    {
+      "any_of": [
+        "genetic",
+        "gwas",
+        "mc4r",
+        "gipr",
+        "genetically supported"
+      ],
+      "id": "genetics",
+      "points": "weights the genetic support strand (experiment 1)",
+      "weight": 1.5
+    },
+    {
+      "any_of": [
+        "structure",
+        "contact residues",
+        "orthosteric",
+        "cryo-em",
+        "7ki0"
+      ],
+      "id": "structure",
+      "points": "weights the structural strand (experiment 2)",
+      "weight": 1.5
+    },
+    {
+      "any_of": [
+        "half-life",
+        "half life",
+        "albumin",
+        "dpp-4",
+        "acylation",
+        "duration of action"
+      ],
+      "id": "engineering",
+      "points": "weights the peptide-engineering strand (experiment 3)",
+      "weight": 1.0
+    },
+    {
+      "any_of": [
+        "ec50",
+        "pec50",
+        "potency",
+        "dose-response",
+        "dose response"
+      ],
+      "id": "potency",
+      "points": "weights the potency strand (experiment 4)",
+      "weight": 1.0
+    },
+    {
+      "any_of": [
+        "oral",
+        "non-peptide",
+        "nonpeptide",
+        "small molecule",
+        "small-molecule",
+        "orforglipron",
+        "ly3502970"
+      ],
+      "id": "oral_feasibility",
+      "points": "addresses the oral non-peptide claim (experiment 5)",
+      "weight": 2.0
+    },
+    {
+      "any_of": [
+        "species",
+        "rodent",
+        "trp33",
+        "w33",
+        "humanized",
+        "humanised"
+      ],
+      "id": "species_caveat",
+      "points": "carries the species caveat into the verdict",
+      "weight": 1.5
+    },
+    {
+      "any_of": [
+        "confidence",
+        "uncertain",
+        "caveat",
+        "limitation",
+        "weaker",
+        "less certain",
+        "evidence is",
+        "remains open"
+      ],
+      "id": "calibration",
+      "points": "grades its own confidence per strand instead of asserting uniformly",
+      "weight": 1.5
+    }
+  ],
+  "scoring": "Rubric against the ATTAIN-1 phase 3 result and the five earlier lessons."
+}

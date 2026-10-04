@@ -1,0 +1,175 @@
+gene,ensembl_id,biotype,target_class,traits,n_traits,bmi_genetic_association,t2d_genetic_association,bmi_genetic_literature,t2d_genetic_literature,loss_of_function_intolerance_bin,missense_constraint_score,small_molecule_tractability,antibody_tractability,is_cell_surface,n_subcellular_locations
+ABCC8,ENSG00000006071,protein_coding,ABCC subfamily; ATP-binding cassette; Primary active transporter; Transporter,type_2_diabetes,1,,0.9174,,0.8898,2,3.023,Druggable Family; High-Quality Ligand; Structure with Ligand,GO CC high conf; UniProt SigP or TMHMM; UniProt loc high conf,1,5
+ABHD17C,ENSG00000136379,protein_coding,,body_mass_index,1,0.9432,,,,1,3.741,,GO CC high conf,0,3
+ABTB3,ENSG00000151136,protein_coding,,body_mass_index,1,0.9401,,,,0,1.939,,UniProt SigP or TMHMM,0,3
+ACTR1B,ENSG00000115073,protein_coding,,body_mass_index,1,0.89,,,,3,0.959,,GO CC high conf,0,6
+ADCY3,ENSG00000138031,protein_coding,Enzyme; Lyase,body_mass_index,1,0.9229,,,,1,3.298,High-Quality Ligand,GO CC high conf; UniProt SigP or TMHMM; UniProt loc high conf,1,11
+ADCY9,ENSG00000162104,protein_coding,Enzyme; Lyase,body_mass_index,1,0.9206,,,,1,1.391,,GO CC high conf; Human Protein Atlas loc; UniProt SigP or TMHMM; UniProt loc high conf,1,5
+ADGRL2,ENSG00000117114,protein_coding,,body_mass_index,1,0.8969,,,,0,2.626,,GO CC med conf; Human Protein Atlas loc; UniProt SigP or TMHMM; UniProt loc med conf,1,2
+ADH1B,ENSG00000196616,protein_coding,Enzyme; Oxidoreductase,body_mass_index,1,0.9315,,,,4,0.875,Druggable Family; High-Quality Pocket; Structure with Ligand,GO CC high conf,1,7
+AKT2,ENSG00000105221,protein_coding,AGC protein kinase AKT family; AGC protein kinase group; Enzyme; Kinase; Protein Kinase,type_2_diabetes,1,,0.7139,,0.8304,0,3.7,Druggable Family; High-Quality Ligand; High-Quality Pocket; Structure with Ligand,GO CC high conf; UniProt loc med conf,1,7
+AMY2A,ENSG00000243480,protein_coding,Enzyme; Hydrolase,type_2_diabetes,1,,,,,1,4.885,Druggable Family; High-Quality Ligand; Med-Quality Pocket; Structure with Ligand,GO CC high conf; UniProt SigP or TMHMM; UniProt loc med conf,0,4
+ANAPC4,ENSG00000053900,protein_coding,,body_mass_index,1,0.9505,,,,1,3.178,,,0,1
+APOE,ENSG00000130203,protein_coding,,body_mass_index;type_2_diabetes,2,0.9651,0.9453,,,4,-0.226,Structure with Ligand,GO CC high conf; UniProt SigP or TMHMM; UniProt loc high conf,0,7
+ARG1,ENSG00000118520,protein_coding,Enzyme; Hydrolase,body_mass_index,1,0.9183,,,,2,0.233,High-Quality Ligand; Med-Quality Pocket; Structure with Ligand,GO CC high conf,0,2
+ARPP21,ENSG00000172995,protein_coding,,body_mass_index,1,0.925,,,,2,-0.432,,,0,3
+BANK1,ENSG00000153064,protein_coding,,body_mass_index,1,0.927,,,,4,-0.766,,Human Protein Atlas loc,1,3
+BARHL2,ENSG00000143032,protein_coding,,body_mass_index,1,0.9014,,,,1,0.933,,,0,1
+BDNF,ENSG00000176697,protein_coding,Secreted protein,body_mass_index,1,0.9617,,,,0,2.934,,GO CC high conf; UniProt SigP or TMHMM; UniProt loc high conf,0,1
+BNC2,ENSG00000173068,protein_coding,,body_mass_index,1,0.9173,,,,0,0.203,,,0,3
+CACNA1C,ENSG00000151067,protein_coding,Ion channel; Voltage-gated calcium channel; Voltage-gated ion channel,body_mass_index,1,0.896,,,,0,9.491,Druggable Family; High-Quality Ligand; Structure with Ligand,GO CC high conf; UniProt SigP or TMHMM; UniProt loc high conf; UniProt loc med conf,1,9
+CACNB2,ENSG00000165995,protein_coding,Auxiliary transport protein; Calcium channel auxiliary subunit beta family,body_mass_index,1,0.9026,,,,2,-1.27,Druggable Family; High-Quality Ligand; Structure with Ligand,GO CC high conf; UniProt loc med conf,1,1
+CADM1,ENSG00000182985,protein_coding,,body_mass_index,1,0.9399,,,,0,3.058,,GO CC high conf; Human Protein Atlas loc; UniProt SigP or TMHMM; UniProt loc high conf,1,3
+CADM2,ENSG00000175161,protein_coding,,body_mass_index,1,0.937,,,,0,2.197,,GO CC high conf; UniProt SigP or TMHMM; UniProt loc high conf,1,3
+CALCR,ENSG00000004948,protein_coding,Calcitonin receptor; Calcitonin-like receptor; Family B G protein-coupled receptor; Membrane receptor; Peptide receptor (family B GPCR),body_mass_index,1,0.7392,,,,3,0.544,Druggable Family; High-Quality Ligand; Structure with Ligand,GO CC high conf; UniProt SigP or TMHMM; UniProt loc high conf,1,4
+CBLN4,ENSG00000054803,protein_coding,,body_mass_index,1,0.927,,,,2,1.832,,GO CC med conf; UniProt SigP or TMHMM; UniProt loc med conf,0,9
+CDKAL1,ENSG00000145996,protein_coding,Enzyme; Transferase,type_2_diabetes,1,,0.7988,,0.6079,1,1.465,,UniProt SigP or TMHMM,0,1
+COXFA4,ENSG00000189043,protein_coding,Enzyme; Oxidoreductase,type_2_diabetes,1,,,,,5,-0.481,Druggable Family; Structure with Ligand,UniProt SigP or TMHMM,0,2
+COXFA4L2,ENSG00000185633,protein_coding,,type_2_diabetes,1,,,,,5,-0.502,,,0,2
+CPNE4,ENSG00000196353,protein_coding,Unclassified protein,body_mass_index,1,0.9238,,,,1,3.681,,GO CC med conf,0,2
+CPS1,ENSG00000021826,protein_coding,Enzyme; Ligase,body_mass_index,1,0.9155,,,,2,1.328,Druggable Family; High-Quality Ligand; High-Quality Pocket; Structure with Ligand,GO CC med conf; UniProt loc high conf; UniProt loc med conf,1,7
+CRB2,ENSG00000148204,protein_coding,,body_mass_index,1,0.9141,,,,3,0.083,Structure with Ligand,GO CC med conf; UniProt SigP or TMHMM; UniProt loc med conf,0,4
+DPP4,ENSG00000197635,protein_coding,Enzyme; Protease; Serine protease; Serine protease S9B subfamily; Serine protease SC clan,type_2_diabetes,1,,,,,2,-0.095,Druggable Family; High-Quality Ligand; High-Quality Pocket; Structure with Ligand,GO CC high conf; UniProt SigP or TMHMM; UniProt loc high conf,1,7
+DPYD,ENSG00000188641,protein_coding,Enzyme; Oxidoreductase,body_mass_index,1,0.9433,,,,4,-0.573,Druggable Family,,0,1
+EDEM3,ENSG00000116406,protein_coding,,body_mass_index,1,0.8957,,,,1,1.593,,UniProt SigP or TMHMM,0,2
+ENPP1,ENSG00000197594,protein_coding,Enzyme,type_2_diabetes,1,,0.8895,,0.6079,2,1.906,High-Quality Ligand; Structure with Ligand,GO CC high conf; UniProt SigP or TMHMM; UniProt loc high conf; UniProt loc med conf,1,3
+ENTPD6,ENSG00000197586,protein_coding,,body_mass_index,1,0.8947,,,,3,0.288,,GO CC high conf; UniProt SigP or TMHMM; UniProt loc high conf,1,5
+ERBB4,ENSG00000178568,protein_coding,Enzyme; Kinase; Protein Kinase; TK protein kinase group; Tyrosine protein kinase EGFR family,body_mass_index,1,0.9784,,,,0,3.081,Druggable Family; High-Quality Ligand; High-Quality Pocket; Structure with Ligand,GO CC high conf; UniProt SigP or TMHMM; UniProt loc high conf,1,3
+ETV5,ENSG00000244405,protein_coding,,body_mass_index,1,0.9355,,,,0,3.312,,GO CC med conf,0,2
+FAIM2,ENSG00000135472,protein_coding,,body_mass_index,1,0.8913,,,,2,1.695,,GO CC med conf; UniProt SigP or TMHMM; UniProt loc med conf,1,4
+FHIT,ENSG00000189283,protein_coding,Enzyme; Hydrolase,body_mass_index,1,0.9229,,,,5,-1.821,High-Quality Ligand; Med-Quality Pocket; Structure with Ligand,GO CC high conf; Human Protein Atlas loc,1,5
+FIGN,ENSG00000182263,protein_coding,,body_mass_index,1,0.8974,,,,0,1.202,,,0,2
+FLT3,ENSG00000122025,protein_coding,Enzyme; Kinase; Protein Kinase; TK protein kinase group; Tyrosine protein kinase PDGFR family,body_mass_index,1,0.9727,,,,0,1.5,Druggable Family; High-Quality Ligand; Med-Quality Pocket; Structure with Ligand,GO CC high conf; UniProt SigP or TMHMM,0,3
+FOXG1,ENSG00000176165,protein_coding,,body_mass_index,1,0.9273,,,,0,4.04,,,0,1
+FOXO3,ENSG00000118689,protein_coding,Transcription factor,body_mass_index,1,0.8934,,,,0,5.28,Structure with Ligand,UniProt loc high conf,0,5
+FTO,ENSG00000140718,protein_coding,Enzyme; Oxidoreductase,body_mass_index;type_2_diabetes,2,0.9869,0.98,,,3,0.962,High-Quality Ligand; Structure with Ligand,,0,5
+FUBP1,ENSG00000162613,protein_coding,Transcription factor,body_mass_index,1,0.8953,,,,0,3.384,,,0,2
+GADD45G,ENSG00000130222,protein_coding,,body_mass_index,1,0.8901,,,,2,2.023,High-Quality Pocket; Structure with Ligand,,0,0
+GCK,ENSG00000106633,protein_coding,Enzyme,type_2_diabetes,1,,0.9304,,0.814,2,3.351,Druggable Family; High-Quality Ligand; High-Quality Pocket; Structure with Ligand,,0,4
+GIGYF1,ENSG00000146830,protein_coding,,type_2_diabetes,1,,0.8523,,,1,-1.043,,,0,5
+GIPR,ENSG00000010310,protein_coding,Family B G protein-coupled receptor; Gastric inhibitory polypeptide receptor; Glucagon-like receptor; Membrane receptor; Peptide receptor (family B GPCR),body_mass_index;type_2_diabetes,2,0.801,0.6074,,,5,-0.9,Druggable Family; High-Quality Ligand; Structure with Ligand,GO CC high conf; UniProt SigP or TMHMM; UniProt loc high conf,1,2
+GLP1R,ENSG00000112164,protein_coding,Family B G protein-coupled receptor; Glucagon-like peptide receptor; Glucagon-like receptor; Membrane receptor; Peptide receptor (family B GPCR),type_2_diabetes,1,,0.7751,,,1,1.625,Druggable Family; High-Quality Ligand; Structure with Ligand,GO CC high conf; UniProt SigP or TMHMM; UniProt loc high conf,1,5
+GPD2,ENSG00000115159,protein_coding,Enzyme; Oxidoreductase,type_2_diabetes,1,,0.6174,,,2,2.111,Druggable Family,,0,2
+GPR151,ENSG00000173250,protein_coding,Family A G protein-coupled receptor; Membrane receptor,body_mass_index,1,0.7669,,,,5,-0.089,Druggable Family,GO CC med conf; UniProt SigP or TMHMM; UniProt loc high conf,1,1
+GRID1,ENSG00000182771,protein_coding,,body_mass_index,1,0.9104,,,,0,2.673,Druggable Family; Structure with Ligand,GO CC med conf; UniProt SigP or TMHMM; UniProt loc high conf,0,1
+GRP,ENSG00000134443,protein_coding,,body_mass_index,1,0.9287,,,,5,-0.834,Structure with Ligand,GO CC high conf; UniProt SigP or TMHMM; UniProt loc high conf,0,3
+HECTD4,ENSG00000173064,protein_coding,,body_mass_index,1,0.7572,,,,0,10.13,,,0,4
+HHIP,ENSG00000164161,protein_coding,,body_mass_index,1,0.9176,,,,0,0.836,High-Quality Pocket; Structure with Ligand,GO CC med conf; UniProt SigP or TMHMM; UniProt loc med conf,1,5
+HMGCR,ENSG00000113161,protein_coding,Enzyme; Oxidoreductase,type_2_diabetes,1,,0.4912,,,0,5.012,Druggable Family; High-Quality Ligand; High-Quality Pocket; Structure with Ligand,UniProt SigP or TMHMM,0,2
+HNF1A,ENSG00000135100,protein_coding,Transcription factor,type_2_diabetes,1,,0.9464,,0.8275,1,2.148,,,0,2
+HNF1B,ENSG00000275410,protein_coding,,type_2_diabetes,1,,0.8392,,0.7998,0,2.434,,,0,3
+HNF4A,ENSG00000101076,protein_coding,Unclassified protein,type_2_diabetes,1,,0.8656,,0.6687,0,2.82,Druggable Family; High-Quality Ligand; Med-Quality Pocket; Structure with Ligand,,0,2
+INS,ENSG00000254647,protein_coding,Secreted protein,type_2_diabetes,1,,0.7022,,,4,1.071,Structure with Ligand,GO CC high conf; UniProt SigP or TMHMM; UniProt loc med conf,0,1
+INSR,ENSG00000171105,protein_coding,Enzyme; Kinase; Protein Kinase; TK protein kinase group; Tyrosine protein kinase InsR family,type_2_diabetes,1,,0.5975,,0.304,1,5.83,Druggable Family; High-Quality Ligand; High-Quality Pocket; Structure with Ligand,GO CC high conf; Human Protein Atlas loc; UniProt SigP or TMHMM; UniProt loc med conf,1,8
+IRS1,ENSG00000169047,protein_coding,Unclassified protein,type_2_diabetes,1,,0.7739,,0.304,1,0.814,High-Quality Ligand; Med-Quality Pocket; Structure with Ligand,GO CC high conf; Human Protein Atlas loc,1,6
+IRS2,ENSG00000185950,protein_coding,,type_2_diabetes,1,,0.7297,,,1,-0.539,,GO CC high conf,0,3
+JADE2,ENSG00000043143,protein_coding,,body_mass_index,1,0.8954,,,,0,3.445,,,0,1
+JAZF1,ENSG00000153814,protein_coding,,type_2_diabetes,1,,0.9464,,,1,2.924,,,0,5
+KCNB2,ENSG00000182674,protein_coding,Ion channel; Potassium channels; Voltage-gated ion channel; Voltage-gated potassium channel,body_mass_index,1,0.9346,,,,0,3.779,Druggable Family,GO CC high conf; Human Protein Atlas loc; UniProt SigP or TMHMM; UniProt loc med conf,1,6
+KCNJ11,ENSG00000187486,protein_coding,Inwardly rectifying potassium channel; Ion channel; Potassium channels; Voltage-gated ion channel,type_2_diabetes,1,,0.9215,,0.8655,4,3.046,Druggable Family; High-Quality Ligand; Structure with Ligand,GO CC high conf; UniProt SigP or TMHMM,0,1
+KCNK3,ENSG00000171303,protein_coding,Ion channel; Potassium channels; Two-pore domain potassium channel; Voltage-gated ion channel,body_mass_index,1,0.9009,,,,1,3.313,Druggable Family; High-Quality Ligand; Structure with Ligand,GO CC high conf; UniProt SigP or TMHMM; UniProt loc high conf,1,1
+KCNQ1,ENSG00000053918,protein_coding,Ion channel; Potassium channels; Voltage-gated ion channel; Voltage-gated potassium channel,type_2_diabetes,1,,0.8814,,0.6079,2,2.152,Druggable Family; High-Quality Ligand; Structure with Ligand,GO CC high conf; Human Protein Atlas loc; UniProt SigP or TMHMM; UniProt loc high conf; UniProt loc med conf,1,9
+KCTD15,ENSG00000153885,protein_coding,,body_mass_index,1,0.9128,,,,1,1.251,,,0,3
+KIF16B,ENSG00000089177,protein_coding,,body_mass_index,1,0.9146,,,,2,1.974,,,0,5
+KIT,ENSG00000157404,protein_coding,Enzyme; Kinase; Protein Kinase; TK protein kinase group; Tyrosine protein kinase PDGFR family,body_mass_index,1,0.9118,,,,0,4.355,Druggable Family; High-Quality Ligand; High-Quality Pocket; Structure with Ligand,GO CC high conf; Human Protein Atlas loc; UniProt SigP or TMHMM; UniProt loc med conf,1,4
+KL,ENSG00000133116,protein_coding,Enzyme; Hydrolase,type_2_diabetes,1,,0.9282,,,2,0.527,,GO CC high conf; UniProt SigP or TMHMM; UniProt loc high conf; UniProt loc med conf,1,3
+LMX1B,ENSG00000136944,protein_coding,,body_mass_index,1,0.9466,,,,0,2.25,,,0,2
+MC4R,ENSG00000166603,protein_coding,Family A G protein-coupled receptor; Melanocortin receptor; Membrane receptor; Peptide receptor (family A GPCR); Short peptide receptor (family A GPCR),body_mass_index,1,0.9798,,,,5,-0.097,Druggable Family; High-Quality Ligand; Structure with Ligand,GO CC high conf; UniProt SigP or TMHMM; UniProt loc high conf,1,2
+MEF2C,ENSG00000081189,protein_coding,,body_mass_index,1,0.8935,,,,0,5.704,,,0,4
+MGAM,ENSG00000257335,protein_coding,Enzyme; Hydrolase,type_2_diabetes,1,,,,,2,2.566,Druggable Family; High-Quality Ligand; High-Quality Pocket; Structure with Ligand,GO CC high conf; UniProt SigP or TMHMM; UniProt loc med conf,0,1
+MT-ND1,ENSG00000198888,protein_coding,Enzyme; Oxidoreductase,type_2_diabetes,1,,,,0.304,,,Structure with Ligand,UniProt SigP or TMHMM,0,1
+MT-ND2,ENSG00000198763,protein_coding,,type_2_diabetes,1,,,,,,,Structure with Ligand,UniProt SigP or TMHMM,0,1
+MT-ND3,ENSG00000198840,protein_coding,,type_2_diabetes,1,,,,,,,Structure with Ligand,UniProt SigP or TMHMM,0,2
+MT-ND4,ENSG00000198886,protein_coding,Enzyme; Oxidoreductase,type_2_diabetes,1,,,,,,,Druggable Family; Structure with Ligand,UniProt SigP or TMHMM,0,5
+MT-ND4L,ENSG00000212907,protein_coding,,type_2_diabetes,1,,,,,,,Structure with Ligand,UniProt SigP or TMHMM,0,4
+MT-ND5,ENSG00000198786,protein_coding,,type_2_diabetes,1,,,,,,,Structure with Ligand,UniProt SigP or TMHMM,0,1
+MT-ND6,ENSG00000198695,protein_coding,,type_2_diabetes,1,,,,,,,Structure with Ligand,UniProt SigP or TMHMM,0,1
+MTNR1B,ENSG00000134640,protein_coding,Family A G protein-coupled receptor; Melatonin receptor; Membrane receptor; Monoamine-derivative receptor (family A GPCR); Small molecule receptor (family A GPCR),type_2_diabetes,1,,0.9078,,,5,0.165,Druggable Family; High-Quality Ligand; Structure with Ligand,GO CC high conf; UniProt SigP or TMHMM; UniProt loc med conf,1,1
+NDUFA1,ENSG00000125356,protein_coding,,type_2_diabetes,1,,,,,,0.799,Structure with Ligand,UniProt SigP or TMHMM,0,3
+NDUFA10,ENSG00000130414,protein_coding,Enzyme; Oxidoreductase,type_2_diabetes,1,,0.0749,,,3,0.764,Structure with Ligand,,0,2
+NDUFA11,ENSG00000174886,protein_coding,,type_2_diabetes,1,,,,,5,-0.112,Structure with Ligand,UniProt SigP or TMHMM,0,5
+NDUFA12,ENSG00000184752,protein_coding,,type_2_diabetes,1,,,,,4,-0.23,Structure with Ligand,UniProt loc med conf,0,3
+NDUFA13,ENSG00000186010,protein_coding,Enzyme; Oxidoreductase,type_2_diabetes,1,,0.0547,,,5,-0.633,Structure with Ligand,UniProt SigP or TMHMM,0,3
+NDUFA2,ENSG00000131495,protein_coding,,type_2_diabetes,1,,,,,5,-0.701,Structure with Ligand,UniProt loc high conf,0,2
+NDUFA3,ENSG00000170906,protein_coding,,type_2_diabetes,1,,,,,5,-0.181,Structure with Ligand,UniProt SigP or TMHMM,0,1
+NDUFA5,ENSG00000128609,protein_coding,Enzyme; Oxidoreductase,type_2_diabetes,1,,0.0352,,,3,0.928,Structure with Ligand,UniProt loc high conf,0,2
+NDUFA6,ENSG00000184983,protein_coding,,type_2_diabetes,1,,,,,5,-0.114,Structure with Ligand,UniProt loc high conf,0,5
+NDUFA7,ENSG00000267855,protein_coding,,type_2_diabetes,1,,,,,5,-0.866,Structure with Ligand,UniProt loc high conf,0,2
+NDUFA8,ENSG00000119421,protein_coding,,type_2_diabetes,1,,,,,4,0.419,Structure with Ligand,UniProt loc high conf,0,7
+NDUFA9,ENSG00000139180,protein_coding,,type_2_diabetes,1,,,,,1,0.429,Structure with Ligand,,0,3
+NDUFAB1,ENSG00000004779,protein_coding,Enzyme; Oxidoreductase,type_2_diabetes,1,,,,,1,0.545,Structure with Ligand,,0,2
+NDUFAF1,ENSG00000137806,protein_coding,,type_2_diabetes,1,,,,,3,-0.122,,,0,4
+NDUFAF2,ENSG00000164182,protein_coding,Enzyme; Oxidoreductase,type_2_diabetes,1,,,,,2,1.012,,,0,2
+NDUFAF3,ENSG00000178057,protein_coding,,type_2_diabetes,1,,,,,5,-0.069,,,0,2
+NDUFAF4,ENSG00000123545,protein_coding,Enzyme; Oxidoreductase,type_2_diabetes,1,,,,,3,0.127,,,0,5
+NDUFB1,ENSG00000183648,protein_coding,,type_2_diabetes,1,,,,,5,0.757,Structure with Ligand,UniProt SigP or TMHMM,0,3
+NDUFB10,ENSG00000140990,protein_coding,Enzyme; Oxidoreductase,type_2_diabetes,1,,,,,5,-2.286,Structure with Ligand,UniProt loc high conf,0,1
+NDUFB11,ENSG00000147123,protein_coding,,type_2_diabetes,1,,,,,,0.95,Structure with Ligand,UniProt SigP or TMHMM,0,7
+NDUFB2,ENSG00000090266,protein_coding,,type_2_diabetes,1,,0.2099,,,5,-0.373,Structure with Ligand,UniProt loc high conf,0,3
+NDUFB3,ENSG00000119013,protein_coding,,type_2_diabetes,1,,,,,5,0.89,Structure with Ligand,UniProt SigP or TMHMM,0,1
+NDUFB4,ENSG00000065518,protein_coding,,type_2_diabetes,1,,,,,4,-0.133,Structure with Ligand,UniProt SigP or TMHMM,0,5
+NDUFB5,ENSG00000136521,protein_coding,Enzyme; Oxidoreductase,type_2_diabetes,1,,,,,5,0.097,Structure with Ligand,UniProt SigP or TMHMM,0,3
+NDUFB6,ENSG00000165264,protein_coding,Enzyme; Oxidoreductase,type_2_diabetes,1,,0.11,,,5,-0.455,Structure with Ligand,UniProt SigP or TMHMM,0,3
+NDUFB7,ENSG00000099795,protein_coding,Enzyme; Oxidoreductase,type_2_diabetes,1,,,,,5,-0.734,Structure with Ligand,UniProt loc high conf,0,2
+NDUFB8,ENSG00000166136,protein_coding,Enzyme; Oxidoreductase,type_2_diabetes,1,,0.3075,,,3,0.455,Structure with Ligand,UniProt SigP or TMHMM,0,2
+NDUFB9,ENSG00000147684,protein_coding,Enzyme; Oxidoreductase,type_2_diabetes,1,,,,,4,0.625,Structure with Ligand,UniProt loc high conf,0,2
+NDUFC1,ENSG00000109390,protein_coding,,type_2_diabetes,1,,,,,5,-0.841,Structure with Ligand,UniProt SigP or TMHMM,0,2
+NDUFC2,ENSG00000151366,protein_coding,,type_2_diabetes,1,,,,,1,0.123,Structure with Ligand,GO CC high conf; UniProt SigP or TMHMM,0,2
+NDUFS1,ENSG00000023228,protein_coding,Enzyme; Oxidoreductase,type_2_diabetes,1,,,,,2,-0.015,Structure with Ligand,UniProt loc med conf,0,2
+NDUFS2,ENSG00000158864,protein_coding,Enzyme; Oxidoreductase,type_2_diabetes,1,,,,,1,2.22,Structure with Ligand,UniProt loc med conf,0,4
+NDUFS3,ENSG00000213619,protein_coding,Enzyme; Oxidoreductase,type_2_diabetes,1,,0.1005,,,2,0.254,Structure with Ligand,UniProt loc high conf,0,4
+NDUFS4,ENSG00000164258,protein_coding,,type_2_diabetes,1,,0.5393,,,5,-0.446,Structure with Ligand,UniProt loc high conf,0,5
+NDUFS5,ENSG00000168653,protein_coding,,type_2_diabetes,1,,,,,4,-0.264,Structure with Ligand,UniProt loc high conf,0,2
+NDUFS6,ENSG00000145494,protein_coding,Enzyme; Oxidoreductase,type_2_diabetes,1,,,,,5,-1.148,Structure with Ligand,UniProt loc high conf,0,1
+NDUFS7,ENSG00000115286,protein_coding,Enzyme; Oxidoreductase,type_2_diabetes,1,,,,,1,1.449,Structure with Ligand,UniProt loc med conf,0,1
+NDUFS8,ENSG00000110717,protein_coding,,type_2_diabetes,1,,,,,2,1.081,Structure with Ligand,UniProt loc med conf,0,2
+NDUFV1,ENSG00000167792,protein_coding,Enzyme; Oxidoreductase,type_2_diabetes,1,,,,,4,1.099,Structure with Ligand,UniProt loc med conf,0,3
+NDUFV2,ENSG00000178127,protein_coding,Enzyme; Oxidoreductase,type_2_diabetes,1,,,,,2,-0.255,Structure with Ligand,UniProt loc med conf,0,4
+NDUFV3,ENSG00000160194,protein_coding,,type_2_diabetes,1,,,,,5,0.008,Structure with Ligand,UniProt loc high conf,0,2
+NEGR1,ENSG00000172260,protein_coding,,body_mass_index,1,0.9255,,,,0,1.768,,GO CC high conf; UniProt SigP or TMHMM; UniProt loc med conf,1,4
+NEUROD1,ENSG00000162992,protein_coding,,type_2_diabetes,1,,0.6565,,0.7836,2,0.686,,,0,2
+NFIL3,ENSG00000165030,protein_coding,,body_mass_index,1,0.9293,,,,3,2.033,,,0,2
+NLGN1,ENSG00000169760,protein_coding,,body_mass_index,1,0.9522,,,,0,3.455,Druggable Family,GO CC high conf; UniProt SigP or TMHMM; UniProt loc high conf; UniProt loc med conf,1,8
+NR3C2,ENSG00000151623,protein_coding,Nuclear hormone receptor subfamily 3; Nuclear hormone receptor subfamily 3 group C; Nuclear hormone receptor subfamily 3 group C member 2; Nuclear receptor; Transcription factor,type_2_diabetes,1,,,,,0,2.907,Druggable Family; High-Quality Ligand; Med-Quality Pocket; Structure with Ligand,UniProt loc med conf,0,4
+NRXN1,ENSG00000179915,protein_coding,,body_mass_index,1,0.9173,,,,0,1.303,,GO CC high conf; Human Protein Atlas loc; UniProt SigP or TMHMM; UniProt loc med conf,1,4
+ONECUT1,ENSG00000169856,protein_coding,,body_mass_index,1,0.9233,,,,2,0.522,,,0,2
+PAM,ENSG00000145730,protein_coding,Enzyme,type_2_diabetes,1,,0.7776,,,2,0.964,Druggable Family; High-Quality Ligand,GO CC med conf; UniProt SigP or TMHMM; UniProt loc med conf,0,6
+PAX4,ENSG00000106331,protein_coding,,type_2_diabetes,1,,0.8098,,0.3648,3,-0.334,,,0,2
+PCDH17,ENSG00000118946,protein_coding,,body_mass_index,1,0.8955,,,,0,1.011,,GO CC med conf; Human Protein Atlas loc; UniProt SigP or TMHMM; UniProt loc med conf,1,4
+PCDH7,ENSG00000169851,protein_coding,,body_mass_index,1,0.8998,,,,0,1.876,,GO CC high conf; Human Protein Atlas loc; UniProt SigP or TMHMM; UniProt loc med conf,1,3
+PCSK1,ENSG00000175426,protein_coding,Enzyme; Protease; Serine protease; Serine protease S8B subfamily; Serine protease SB clan,body_mass_index,1,0.8498,,,,2,1.838,High-Quality Ligand,UniProt SigP or TMHMM,0,1
+PDX1,ENSG00000139515,protein_coding,,type_2_diabetes,1,,0.6553,,0.6079,4,-0.775,,,0,3
+PLEKHA5,ENSG00000052126,protein_coding,,body_mass_index,1,0.9028,,,,0,1.273,,,0,3
+POC5,ENSG00000152359,protein_coding,,body_mass_index,1,0.9453,,,,3,-0.27,,,0,2
+PPARA,ENSG00000186951,protein_coding,Nuclear hormone receptor subfamily 1; Nuclear hormone receptor subfamily 1 group C; Nuclear hormone receptor subfamily 1 group C member 1; Nuclear receptor; Transcription factor,type_2_diabetes,1,,0.1831,,,2,2.476,Druggable Family; High-Quality Ligand; High-Quality Pocket; Structure with Ligand,,0,6
+PPARG,ENSG00000132170,protein_coding,Nuclear hormone receptor subfamily 1; Nuclear hormone receptor subfamily 1 group C; Nuclear hormone receptor subfamily 1 group C member 3; Nuclear receptor; Transcription factor,body_mass_index;type_2_diabetes,2,0.9654,0.8977,,0.9191,1,3.169,Druggable Family; High-Quality Ligand; High-Quality Pocket; Structure with Ligand,,0,4
+PRMT2,ENSG00000160310,protein_coding,,body_mass_index,1,0.9002,,,,1,1.659,,,0,5
+PRR16,ENSG00000184838,protein_coding,,body_mass_index,1,0.9236,,,,1,-0.778,,,0,3
+PTBP2,ENSG00000117569,protein_coding,,body_mass_index,1,0.902,,,,0,3.998,,,0,2
+PTPRG,ENSG00000144724,protein_coding,Enzyme; Phosphatase; Protein Phosphatase; Receptor tyrosine-protein phosphatase; Tyrosine protein phosphatase,body_mass_index,1,0.7317,,,,2,-0.045,Druggable Family; Structure with Ligand,GO CC high conf; Human Protein Atlas loc; UniProt SigP or TMHMM,1,2
+RAB21,ENSG00000080371,protein_coding,,body_mass_index,1,0.903,,,,1,1.152,Med-Quality Pocket; Structure with Ligand,,0,7
+RALYL,ENSG00000184672,protein_coding,,body_mass_index,1,0.9168,,,,4,0.03,,,0,1
+RFX6,ENSG00000185002,protein_coding,,type_2_diabetes,1,,0.8249,,,1,1.74,,,0,1
+RIT2,ENSG00000152214,protein_coding,,body_mass_index,1,0.8914,,,,5,0.807,,GO CC high conf; UniProt loc high conf,1,5
+SALL3,ENSG00000256463,protein_coding,,body_mass_index,1,0.9063,,,,1,-2.704,,,0,1
+SEC16B,ENSG00000120341,protein_coding,,body_mass_index,1,0.945,,,,3,0.251,,Human Protein Atlas loc; UniProt loc med conf,1,5
+SH2B3,ENSG00000111252,protein_coding,,body_mass_index,1,0.9302,,,,3,-1.738,,GO CC med conf,0,1
+SKOR1,ENSG00000188779,protein_coding,,body_mass_index,1,0.9088,,,,1,0.271,,,0,2
+SLC2A2,ENSG00000163581,protein_coding,Electrochemical transporter; SLC superfamily of solute carriers; SLC02 family of hexose and sugar alcohol transporters; Transporter,body_mass_index;type_2_diabetes,2,0.8931,0.8938,,0.7937,2,1.388,High-Quality Ligand,GO CC high conf; Human Protein Atlas loc; UniProt SigP or TMHMM; UniProt loc high conf,1,4
+SLC30A8,ENSG00000164756,protein_coding,,type_2_diabetes,1,,0.8643,,,3,0.26,,GO CC high conf; Human Protein Atlas loc; UniProt SigP or TMHMM; UniProt loc high conf,1,4
+SLC39A8,ENSG00000138821,protein_coding,,body_mass_index,1,0.9324,,,,1,1.566,,GO CC high conf; UniProt SigP or TMHMM; UniProt loc high conf,1,4
+SLC5A2,ENSG00000140675,protein_coding,Electrochemical transporter; SLC superfamily of solute carriers; SLC05 family of sodium-dependent glucose transporters; Transporter,type_2_diabetes,1,,,,,4,-1.117,Druggable Family; High-Quality Ligand; Structure with Ligand,GO CC high conf; UniProt SigP or TMHMM; UniProt loc high conf,0,1
+SOX5,ENSG00000134532,protein_coding,,body_mass_index,1,0.9024,,,,0,4.198,,,0,2
+SPARC,ENSG00000113140,protein_coding,,body_mass_index,1,0.9353,,,,2,1.664,Med-Quality Pocket,GO CC high conf; UniProt SigP or TMHMM; UniProt loc high conf,0,3
+TAFA5,ENSG00000219438,protein_coding,,body_mass_index,1,0.9001,,,,2,0.985,,GO CC med conf; UniProt SigP or TMHMM; UniProt loc high conf,0,1
+TCF7L2,ENSG00000148737,protein_coding,,body_mass_index;type_2_diabetes,2,0.9062,0.7975,,0.6079,0,2.106,High-Quality Ligand,,0,5
+TECRL,ENSG00000205678,protein_coding,,body_mass_index,1,0.9048,,,,5,-1.079,,UniProt SigP or TMHMM,0,2
+TFAP2B,ENSG00000008196,protein_coding,,body_mass_index,1,0.956,,,,0,1.585,,,0,2
+TNIK,ENSG00000154310,protein_coding,Enzyme; Kinase; Protein Kinase; STE protein kinase MSN subfamily; STE protein kinase STE20 family; STE protein kinase group,body_mass_index,1,0.9154,,,,0,5.657,Druggable Family; High-Quality Ligand; High-Quality Pocket; Structure with Ligand,,0,6
+TRIM66,ENSG00000166436,protein_coding,Bromodomain; Epigenetic regulator; Reader,body_mass_index,1,0.922,,,,2,0.33,,,0,2
+TRPS1,ENSG00000104447,protein_coding,,body_mass_index,1,0.9237,,,,0,2.198,,,0,2
+TUSC3,ENSG00000104723,protein_coding,,body_mass_index,1,0.8953,,,,4,-1.653,,GO CC high conf; UniProt SigP or TMHMM,0,1
+VWC2,ENSG00000188730,protein_coding,,body_mass_index,1,0.9075,,,,2,0.055,,GO CC med conf; UniProt SigP or TMHMM; UniProt loc med conf,0,2
+WFS1,ENSG00000109501,protein_coding,Unclassified protein,type_2_diabetes,1,,0.9274,,0.7599,5,-6.492,,UniProt SigP or TMHMM,0,2
+ZFHX3,ENSG00000140836,protein_coding,,body_mass_index,1,0.9119,,,,0,-1.404,,,0,3
+ZNF536,ENSG00000198597,protein_coding,,body_mass_index,1,0.9004,,,,0,2.158,,,0,3

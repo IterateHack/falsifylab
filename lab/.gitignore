@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+.DS_Store
+node_modules/
+web/dist/
+runs/
+!replays/
+*.log
+.pytest_cache/
+curricula/*/data/raw/
+art/.cache/
+devin/sessions.json
+web/tsconfig.tsbuildinfo

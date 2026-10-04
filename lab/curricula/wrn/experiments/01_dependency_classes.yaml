@@ -1,0 +1,42 @@
+id: h2exp1_dependency_classes
+hypothesis_id: wrn_synthetic_lethal
+order: 1
+title: Common essentials vs selective dependencies
+type: computational
+requires_lessons: []
+inputs:
+  datasets: [data/h2exp1_depmap_gene_effects.csv]
+  tools: [run_python]
+audit: audit/h2exp1.yaml
+limits: {max_tool_calls: 30, timeout_s: 420, max_python_seconds: 90}
+task: |
+  `data/h2exp1_depmap_gene_effects.csv` holds DepMap CRISPR knockout results for
+  17 genes across roughly 1250 cancer cell lines, taken from the Open Targets
+  Platform. `gene_effect` is the Chronos score for that gene in that cell line:
+  about 0 means knocking the gene out did nothing, and about -1 means the knockout
+  killed the line.
+
+  Classify every gene into exactly one of three classes:
+
+  - `common_essential` - required by almost every cell line
+  - `selective` - genuinely required by some lines and not others
+  - `non_essential` - not required by essentially any line
+
+  A drug target needs to be the middle one. A common essential would be toxic
+  everywhere; a non-essential does nothing. The distinction between `selective`
+  and `non_essential` is the one that takes care: look at the shape of each
+  gene's distribution, not only its average.
+answer_format: |
+  {"classifications": {"GENE": "common_essential" | "selective" | "non_essential", ...},
+   "method": "the rule you applied and why"}
+
+  Classify all 17 genes. Scoring is macro-averaged F1 across the three classes,
+  so the rare class counts as much as the common one.
+scorer:
+  type: deterministic
+  entrypoint: scorers/h2exp1.py::score
+  ground_truth: private/h2exp1.json
+teaching:
+  papers:
+    - "Tsherniak A, Vazquez F, Montgomery PG, et al. Defining a Cancer Dependency Map. Cell. 2017;170(3):564-576.e16. doi:10.1016/j.cell.2017.06.010"
+  lesson_card: lessons/h2exp1.md

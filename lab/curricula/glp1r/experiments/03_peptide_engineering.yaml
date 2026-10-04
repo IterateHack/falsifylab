@@ -1,0 +1,36 @@
+id: exp3_peptide_engineering
+hypothesis_id: glp1r_oral_agonist
+order: 3
+title: Peptide engineering
+type: reasoning
+requires_lessons: [exp2_structure_contacts]
+inputs:
+  datasets: [data/exp3_analogues.csv]
+  tools: [run_python]
+audit: audit/exp3.yaml
+limits: {max_tool_calls: 24, timeout_s: 420, max_python_seconds: 60}
+task: |
+  `data/exp3_analogues.csv` lists nine GLP-1 receptor agonists with their
+  backbone, the residue at the DPP-4 cleavage position, any acylation or fusion,
+  and an approximate half-life.
+
+  Two things are wanted.
+
+  1. Rank all nine from longest-acting to shortest-acting.
+  2. Explain the mechanisms that set duration of action: what is being protected
+     against, what each structural strategy achieves, and why the modification is
+     attached where it is rather than somewhere else.
+
+  The approximate half-life column is context, not the answer - treat the
+  ordering as the claim you are making, and make the mechanism explicit.
+answer_format: |
+  {"ranking": ["LongestActing", ..., "ShortestActing"],
+   "reasoning": "the mechanisms, in prose"}
+scorer:
+  type: rubric
+  entrypoint: scorers/exp3.py::score
+  ground_truth: private/exp3.json
+teaching:
+  papers:
+    - "Lau J, Bloch P, Schaffer L, et al. Discovery of the Once-Weekly Glucagon-Like Peptide-1 (GLP-1) Analogue Semaglutide. J Med Chem. 2015;58(18):7370-7380. doi:10.1021/acs.jmedchem.5b00726"
+  lesson_card: lessons/exp3.md

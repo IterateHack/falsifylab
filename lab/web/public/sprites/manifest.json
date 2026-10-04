@@ -1,0 +1,231 @@
+{
+  "scientist_walk.png": {
+    "frames": 4,
+    "w": 16,
+    "h": 24,
+    "fps": 8,
+    "facing": "right",
+    "sheet_w": 64,
+    "sheet_h": 24
+  },
+  "scientist_idle.png": {
+    "frames": 2,
+    "w": 16,
+    "h": 24,
+    "fps": 2,
+    "facing": "away",
+    "sheet_w": 32,
+    "sheet_h": 24
+  },
+  "scientist_work.png": {
+    "frames": 3,
+    "w": 16,
+    "h": 24,
+    "fps": 6,
+    "facing": "away",
+    "sheet_w": 48,
+    "sheet_h": 24
+  },
+  "scientist_read.png": {
+    "frames": 2,
+    "w": 16,
+    "h": 24,
+    "fps": 2,
+    "facing": "front",
+    "sheet_w": 32,
+    "sheet_h": 24
+  },
+  "scientist_success.png": {
+    "frames": 2,
+    "w": 16,
+    "h": 24,
+    "fps": 4,
+    "facing": "front",
+    "sheet_w": 32,
+    "sheet_h": 24
+  },
+  "scientist_fail.png": {
+    "frames": 2,
+    "w": 16,
+    "h": 24,
+    "fps": 3,
+    "facing": "front",
+    "sheet_w": 32,
+    "sheet_h": 24
+  },
+  "floor.png": {
+    "frames": 1,
+    "w": 16,
+    "h": 16,
+    "sheet_w": 16,
+    "sheet_h": 16
+  },
+  "wall.png": {
+    "frames": 1,
+    "w": 16,
+    "h": 16,
+    "sheet_w": 16,
+    "sheet_h": 16
+  },
+  "window.png": {
+    "frames": 1,
+    "w": 48,
+    "h": 32,
+    "sheet_w": 48,
+    "sheet_h": 32
+  },
+  "whiteboard.png": {
+    "frames": 1,
+    "w": 64,
+    "h": 32,
+    "sheet_w": 64,
+    "sheet_h": 32
+  },
+  "shelf.png": {
+    "frames": 1,
+    "w": 48,
+    "h": 16,
+    "sheet_w": 48,
+    "sheet_h": 16
+  },
+  "bench.png": {
+    "frames": 1,
+    "w": 304,
+    "h": 64,
+    "sheet_w": 304,
+    "sheet_h": 64
+  },
+  "status_lights.png": {
+    "frames": 4,
+    "w": 8,
+    "h": 8,
+    "sheet_w": 32,
+    "sheet_h": 8
+  },
+  "decor_beaker.png": {
+    "frames": 4,
+    "w": 16,
+    "h": 16,
+    "fps": 6,
+    "reactive": true,
+    "sheet_w": 64,
+    "sheet_h": 16
+  },
+  "decor_burner.png": {
+    "frames": 3,
+    "w": 16,
+    "h": 16,
+    "fps": 8,
+    "reactive": true,
+    "sheet_w": 48,
+    "sheet_h": 16
+  },
+  "decor_centrifuge.png": {
+    "frames": 2,
+    "w": 16,
+    "h": 16,
+    "fps": 8,
+    "reactive": true,
+    "sheet_w": 32,
+    "sheet_h": 16
+  },
+  "decor_laptop.png": {
+    "frames": 2,
+    "w": 16,
+    "h": 16,
+    "fps": 2,
+    "sheet_w": 32,
+    "sheet_h": 16
+  },
+  "decor_flask.png": {
+    "frames": 3,
+    "w": 16,
+    "h": 16,
+    "fps": 3,
+    "sheet_w": 48,
+    "sheet_h": 16
+  },
+  "decor_tubes.png": {
+    "frames": 1,
+    "w": 16,
+    "h": 16,
+    "sheet_w": 16,
+    "sheet_h": 16
+  },
+  "decor_pipettes.png": {
+    "frames": 1,
+    "w": 16,
+    "h": 16,
+    "sheet_w": 16,
+    "sheet_h": 16
+  },
+  "decor_petri.png": {
+    "frames": 1,
+    "w": 16,
+    "h": 16,
+    "sheet_w": 16,
+    "sheet_h": 16
+  },
+  "decor_microscope.png": {
+    "frames": 1,
+    "w": 16,
+    "h": 16,
+    "sheet_w": 16,
+    "sheet_h": 16
+  },
+  "decor_clipboard.png": {
+    "frames": 1,
+    "w": 16,
+    "h": 16,
+    "sheet_w": 16,
+    "sheet_h": 16
+  },
+  "station_1.png": {
+    "frames": 1,
+    "w": 32,
+    "h": 32,
+    "kind": "dna",
+    "sheet_w": 32,
+    "sheet_h": 32
+  },
+  "station_2.png": {
+    "frames": 1,
+    "w": 32,
+    "h": 32,
+    "kind": "structure",
+    "sheet_w": 32,
+    "sheet_h": 32
+  },
+  "station_3.png": {
+    "frames": 1,
+    "w": 32,
+    "h": 32,
+    "kind": "peptide",
+    "sheet_w": 32,
+    "sheet_h": 32
+  },
+  "station_4.png": {
+    "frames": 1,
+    "w": 32,
+    "h": 32,
+    "kind": "plate",
+    "sheet_w": 32,
+    "sheet_h": 32
+  },
+  "station_5.png": {
+    "frames": 1,
+    "w": 32,
+    "h": 32,
+    "kind": "flask",
+    "sheet_w": 32,
+    "sheet_h": 32
+  },
+  "station_6.png": {
+    "frames": 1,
+    "w": 32,
+    "h": 32,
+    "kind": "verdict",
+    "sheet_w": 32,
+    "sheet_h": 32
+  }
+}
