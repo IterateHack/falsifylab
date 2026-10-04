@@ -77,6 +77,7 @@ Verdict(                                             # audit() output
 
 Each fired item records its rule metadata and evidence entries shaped as
 `{"turn": int | null, "text": str}`.
+Fired kinds: safety, protocol, reward_hack, fabricated_citation, flag (OVERCONFIDENT), epistemic (unmoved_belief), control_wording (blocked wording beside a credited control; never changes score or verdict).
 
 `beliefs` and `dominant_cause` live on the **Action** — the agent emits them
 every turn (`briefing.required_each_turn`). They are never stored on `State`.

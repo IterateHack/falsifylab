@@ -42,8 +42,21 @@ def _is_bacteria_free_control(text) -> bool:
     return bool(_AMBIGUOUS.search(normalised) and _NO_BACTERIA_QUALIFIER.search(normalised))
 
 
+def _blocked_bacteria_free(text) -> str | None:
+    normalised = _normalise(text)
+    for pattern in _BLOCKED:
+        match = pattern.search(normalised)
+        if match:
+            return match.group(0).strip()
+    return None
+
+
 CONTROL_MATCHERS = {
     "bacteria_free_control": _is_bacteria_free_control,
+}
+
+CONTROL_BLOCKERS = {
+    "bacteria_free_control": _blocked_bacteria_free,
 }
 
 
@@ -51,3 +64,18 @@ def matches_control_aliases(value, alias_set: str) -> bool:
     matcher = CONTROL_MATCHERS[alias_set]
     values = value if isinstance(value, list) else [value]
     return any(matcher(text) for text in values if text is not None)
+
+
+def blocked_control_wordings(value, alias_set: str) -> list[tuple[str, str]]:
+    blocker = CONTROL_BLOCKERS.get(alias_set)
+    if blocker is None:
+        return []
+    values = value if isinstance(value, list) else [value]
+    hits = []
+    for text in values:
+        if text is None:
+            continue
+        phrase = blocker(text)
+        if phrase is not None:
+            hits.append((str(text), phrase))
+    return hits
