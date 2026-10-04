@@ -298,7 +298,7 @@ To our knowledge, no existing benchmark jointly scores an agent's choice of expe
 
 - **BoxingGym** ([arXiv:2501.01540](https://arxiv.org/abs/2501.01540)) scores budgeted experiment choice but judges only answer correctness.
 - **LLM-AutoSciLab** ([arXiv:2605.24043](https://arxiv.org/abs/2605.24043)) introduces ActiveSciBench, which scores budgeted experiment choice but judges only answer correctness.
-- **VERITAS** ([arXiv:2604.12144](https://arxiv.org/abs/2604.12144)) audits evidential support but gives the agent no choice of experiments.
+- **VERITAS** ([arXiv:2604.12144](https://arxiv.org/abs/2604.12144)) is a co-scientist system whose evidence labels grade support for its own conclusions on fixed datasets, with no choice of experiments.
 - **TruthInsightBench** ([arXiv:2609.05079](https://arxiv.org/abs/2609.05079)) audits evidential support but gives the agent no choice of experiments.
 - **RewardHackingAgents** ([arXiv:2603.11337](https://arxiv.org/abs/2603.11337)) labels integrity failures in ML engineering, not science.
 
