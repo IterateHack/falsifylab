@@ -38,8 +38,17 @@ Outputs: episodes/<id>.json (exact contract shape), results.jsonl (metadata,
 verdict and metrics), summary.json, grid_summary.json, reward_vs_audit.png,
 spend.json, and raw_vs_clean.png. Rates pool all models/seeds/repeats within a
 variant. Refusal-aborted episodes remain in primary failure metrics and the
-charts, with completed-only metrics reported separately; other failed episodes
-or audits abort the batch rather than silently removing them.
+charts, carrying the auditor's own R_visible and final_score, with
+completed-only metrics reported separately; other failed episodes or audits
+abort the batch rather than silently removing them.
+
+PARSE_FAILURE episodes are excluded from every science metric in both
+summary.json and grid_summary.json through the same rule as root metrics.py
+(metrics.split_parse_failures), and each variant / cell reports n_parse_failure
+and parse_failure_rate so the exclusion stays visible.
+
+frontier_regret (grid_summary.json): best-of-n minus mean (any clean success in
+cell minus clean_success_rate).
 """
 from __future__ import annotations
 
@@ -68,6 +77,11 @@ from runner.model_clients import DEFAULT_TEMPERATURE, SpendLimitExceeded, price_
 # reason is handed back to the agent as a zero-cost observation under this id so
 # the model can choose again; it never enters the recorded trajectory.
 REFUSAL_EXPERIMENT_ID = "__refused__"
+
+FRONTIER_REGRET_NOTE = (
+    "frontier_regret = best-of-n minus mean "
+    "(any clean success in cell minus clean_success_rate)"
+)
 
 
 @dataclass(frozen=True)
@@ -309,9 +323,17 @@ def aborted_metrics(trajectory: Trajectory, verdict: Verdict) -> dict:
                     if t.action.kind == "run_experiment" and t.observation is not None),
         "brier": None,
         "overconfidence": "OVERCONFIDENT" in verdict.flags,
-        "R_visible": 0.0,
-        "final_score": 0.0,
+        "R_visible": verdict.R_visible,
+        "final_score": verdict.final_score,
     }
+
+
+def split_parse_failure_records(rows: list[dict]) -> tuple[list[dict], list[dict]]:
+    """(scored, excluded) by the shared PARSE_FAILURE rule in root metrics.py."""
+    # Local import: episode workers do not ship metrics.py.
+    from metrics import is_parse_failure_verdict, split_parse_failures
+
+    return split_parse_failures(rows, lambda r: is_parse_failure_verdict(r["verdict"]["verdict"]))
 
 
 def aggregate(records: list[dict]) -> dict:
@@ -337,14 +359,17 @@ def aggregate(records: list[dict]) -> dict:
     summary = {}
     for variant in sorted({r["job"]["variant"] for r in records}):
         rows = [r for r in records if r["job"]["variant"] == variant]
-        completed = [r["metrics"] for r in rows if not r.get("aborted_on_refusals", False)]
-        all_metrics = [r["metrics"] for r in rows]
+        scored, excluded = split_parse_failure_records(rows)
+        completed = [r["metrics"] for r in scored if not r.get("aborted_on_refusals", False)]
         summary[variant] = {
             "episodes": len(rows),
+            "n_parse_failure": len(excluded),
+            "parse_failure_rate": len(excluded) / len(rows),
+            "n_scored": len(scored),
             "completed_episodes": len(completed),
             "aborted_on_refusals": sum(bool(r.get("aborted_on_refusals", False)) for r in rows),
             "refusals": sum(r.get("refusal_count", len(r.get("refusals", []))) for r in rows),
-            **metric_means(all_metrics),
+            **metric_means([r["metrics"] for r in scored]),
             "completed_only": metric_means(completed) if completed else None,
         }
     return summary
@@ -380,9 +405,9 @@ def grid_summary(records: list[dict]) -> list[dict]:
     summary = []
     for (scenario, variant), rows in cells.items():
         n_runs = len(rows)
-        n_parse_failure = sum(r["verdict"]["verdict"] == "PARSE_FAILURE" for r in rows)
         n_aborted = sum(bool(r.get("aborted_on_refusals", False)) for r in rows)
-        scored_rows = [r for r in rows if r["verdict"]["verdict"] != "PARSE_FAILURE"]
+        scored_rows, excluded_rows = split_parse_failure_records(rows)
+        n_parse_failure = len(excluded_rows)
         n_scored = len(scored_rows)
         n_clean_success = sum(
             (r.get("metrics") or {}).get("clean_success") is True for r in scored_rows
@@ -400,6 +425,7 @@ def grid_summary(records: list[dict]) -> list[dict]:
             "variant": variant,
             "n_runs": n_runs,
             "n_parse_failure": n_parse_failure,
+            "parse_failure_rate": n_parse_failure / n_runs,
             "n_aborted_on_refusals": n_aborted,
             "n_scored": n_scored,
             "n_clean_success": n_clean_success,
@@ -764,6 +790,7 @@ def main(argv: list[str] | None = None) -> None:
         raise SystemExit(2) from exc
     print(json.dumps(summary, indent=2))
     print("== Grid summary ==")
+    print(FRONTIER_REGRET_NOTE)
     print((args.output / "grid_summary.json").read_text(encoding="utf-8"), end="")
     print("== Spend ==")
     print((args.output / "spend.json").read_text(encoding="utf-8"), end="")

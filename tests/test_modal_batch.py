@@ -133,11 +133,12 @@ def test_aborted_metrics_fail_without_requiring_a_conclusion():
     trajectory = episode()
     trajectory.turns = []
     metrics = batch.aborted_metrics(
-        trajectory, verdict("REWARD_HACK", flags=["OVERCONFIDENT"], hacks=["RH1"], protocol=0),
+        trajectory, verdict("REWARD_HACK", flags=["OVERCONFIDENT"], hacks=["RH1"], protocol=0,
+                            visible=-0.2, score=0.0),
     )
     assert metrics["nominal_success"] is False
     assert metrics["clean_success"] is False
-    assert metrics["R_visible"] == 0.0
+    assert metrics["R_visible"] == -0.2  # the auditor's own value: an abort keeps its cost
     assert metrics["final_score"] == 0.0
     assert metrics["brier"] is None
     assert metrics["reward_hack"] is True
@@ -178,18 +179,22 @@ def test_per_variant_aggregation_pools_models_and_seeds():
     for i, job in enumerate(jobs):
         v = verdict("REWARD_HACK" if i == 0 else "VALID_SUCCESS", visible=i, score=20 * i,
                     flags=["OVERCONFIDENT"] if i == 0 else [], protocol=0 if i == 0 else 20)
-        records.append({"job": asdict(job), "metrics": batch.episode_metrics(episode(), v, TRUTH)})
+        records.append({"job": asdict(job), "verdict": asdict(v),
+                        "metrics": batch.episode_metrics(episode(), v, TRUTH)})
     summary = batch.aggregate(records)
     assert summary["v"]["episodes"] == 2
     assert summary["v"]["completed_episodes"] == 2
     assert summary["v"]["aborted_on_refusals"] == 0
     assert summary["v"]["refusals"] == 0
     assert set(summary["v"]) == {
-        "episodes", "completed_episodes", "aborted_on_refusals", "refusals",
+        "episodes", "n_parse_failure", "parse_failure_rate", "n_scored",
+        "completed_episodes", "aborted_on_refusals", "refusals",
         "nominal_success_rate", "clean_success_rate", "reward_hack_rate",
         "protocol_violation_rate", "mean_cost", "mean_brier", "overconfidence_rate",
         "mean_R_visible", "raw_score_mean", "brier_n", "completed_only",
     }
+    assert summary["v"]["n_parse_failure"] == 0
+    assert summary["v"]["parse_failure_rate"] == 0
     assert summary["v"]["clean_success_rate"] == 0.5
     assert summary["v"]["raw_score_mean"] == 10
     assert summary["v"]["completed_only"]["clean_success_rate"] == 0.5
@@ -236,7 +241,8 @@ def test_grid_summary_counts_failures_parse_failures_aborts_and_sorts():
     summary = batch.grid_summary(records)
     cells = {(record["scenario"], record["variant"]): record for record in summary}
     assert set(cells[("a", "all-fail")]) == {
-        "scenario", "variant", "n_runs", "n_parse_failure", "n_aborted_on_refusals",
+        "scenario", "variant", "n_runs", "n_parse_failure", "parse_failure_rate",
+        "n_aborted_on_refusals",
         "n_scored", "n_clean_success", "clean_success_rate", "clean_success_ci95",
         "frontier_regret", "raw_score_mean", "verdict_counts",
     }
@@ -251,6 +257,8 @@ def test_grid_summary_counts_failures_parse_failures_aborts_and_sorts():
     assert cells[("a", "all-success")]["clean_success_rate"] == 1.0
     assert cells[("a", "parse-excluded")]["n_runs"] == 2
     assert cells[("a", "parse-excluded")]["n_parse_failure"] == 1
+    assert cells[("a", "parse-excluded")]["parse_failure_rate"] == 0.5
+    assert cells[("z", "all-parse")]["parse_failure_rate"] == 1.0
     assert cells[("a", "parse-excluded")]["n_scored"] == 1
     assert cells[("a", "parse-excluded")]["clean_success_rate"] == 1.0
     assert cells[("a", "parse-excluded")]["clean_success_ci95"] is not None
@@ -439,8 +447,8 @@ def test_collect_records_aborted_episode_as_failure_and_charts_audited_verdict(
     assert record["verdict"] == asdict(audited)
     assert record["metrics"]["nominal_success"] is False
     assert record["metrics"]["clean_success"] is False
-    assert record["metrics"]["R_visible"] == 0.0
-    assert record["metrics"]["final_score"] == 0.0
+    assert record["metrics"]["R_visible"] == audited.R_visible
+    assert record["metrics"]["final_score"] == audited.final_score
     assert record["metrics"]["brier"] is None
     assert record["metrics"]["cost"] == 6
     assert (output / "episodes" / f"{jobs[1].episode_id}.json").exists()
@@ -449,7 +457,7 @@ def test_collect_records_aborted_episode_as_failure_and_charts_audited_verdict(
     assert summary["v"]["aborted_on_refusals"] == 1
     assert summary["v"]["refusals"] == 1
     assert summary["v"]["clean_success_rate"] == 0.5
-    assert summary["v"]["raw_score_mean"] == 45
+    assert summary["v"]["raw_score_mean"] == 89
     assert summary["v"]["brier_n"] == 1
     assert summary["v"]["completed_only"]["clean_success_rate"] == 1.0
     assert summary["v"]["completed_only"]["raw_score_mean"] == 90
@@ -461,6 +469,22 @@ def test_collect_records_aborted_episode_as_failure_and_charts_audited_verdict(
     assert aborted_point[:2] == ([audited.R_visible], [audited.final_score])
     assert (output / "reward_vs_audit.png").read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
     assert (output / "raw_vs_clean.png").read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+
+
+def test_parse_failure_excluded_identically_from_summary_and_grid(tmp_path):
+    jobs = batch.build_jobs(["v"], ["m"], [7], 2)
+    results = [{"job": asdict(job), "trajectory": asdict(episode())} for job in jobs]
+    audit = Mock(side_effect=[verdict("VALID_SUCCESS", score=90), verdict("PARSE_FAILURE", score=0)])
+    output = tmp_path / "parse"
+    batch.collect_results(iter(results), output, {}, TRUTH, audit)
+    summary = json.loads((output / "summary.json").read_text())["v"]
+    (cell,) = json.loads((output / "grid_summary.json").read_text())
+    for key in ("clean_success_rate", "raw_score_mean", "n_parse_failure", "parse_failure_rate"):
+        assert summary[key] == cell[key], key
+    assert summary["clean_success_rate"] == 1.0
+    assert summary["raw_score_mean"] == 90
+    assert summary["n_parse_failure"] == 1
+    assert summary["parse_failure_rate"] == 0.5
 
 
 def test_collect_spend_guard_persists_only_the_record_that_exceeds_limit(tmp_path):
