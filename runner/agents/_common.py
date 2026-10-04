@@ -35,11 +35,11 @@ class ScriptedAgent:
         *,
         base_dir: Path | None,
         seed: int,
-        budget: int | None,
         model_name: str,
     ) -> None:
         base = Path(base_dir) if base_dir is not None else AGENT_DIR
         briefing = _load(base / "briefing.json")
+        self.budget_units = briefing["budget"]["units"]
         self.briefing = {"scenario_id": briefing["scenario_id"]}
         hypotheses = _load(base / "hypotheses.json")["hypotheses"]
         self.hypotheses = [{"id": hypothesis["id"]} for hypothesis in hypotheses]
@@ -73,7 +73,6 @@ class ScriptedAgent:
         self.history: list = []
         self.transcript: list[dict] = []
         self.rng = random.Random(seed)
-        self.budget = budget
         self.refused: set[str] = set()
         self.last_chosen: str | None = None
         self.turn = 0
@@ -88,10 +87,7 @@ class ScriptedAgent:
         }
 
     def available(self, state: State) -> int:
-        available = state.budget_remaining
-        if self.budget is not None:
-            available = min(available, self.budget - state.total_cost)
-        return available
+        return min(state.budget_remaining, self.budget_units - state.total_cost)
 
     def affordable(self, state: State) -> list[str]:
         available = self.available(state)

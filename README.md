@@ -77,6 +77,32 @@ scenario-specific branches in `env.py` and one silent default in `audit.py`; see
 `scenarios/b_cd5_affinity/FINDINGS.md`. We report these rather than patch them — the
 second scenario was built as a test of generality, and a test that fails is a result.
 
+## Scripted baselines
+
+`runner/agents/` holds two zero-model-call controls for comparing **experiment
+selection**: `RandomAgent` (uniform over affordable experiments) and `UCBAgent`
+(UCB1, `c=2`, `--ucb-c` to change). Run one with
+`python -m runner.run_one --agent ucb --scenario a --seed 0`. Both read only
+`agent/`, take their budget from `briefing.budget.units` (the same budget the Env
+and the LLM agent get), and use the runner's refusal handling.
+
+The Env exposes no per-step reward, and the auditor's evidence score needs the
+answer key, so UCB's reward is content-free: the fraction of readout entries not
+yet seen this episode, scaled by cost.
+
+With budget 8 against a 17-unit menu (scenario b: 9 against 19), UCB reduces to
+cost-aware novelty, and that is a property of the setup. It tries untried
+affordable experiments first. Over 500 seeds it makes an index-phase pull in
+28 (a) and 61 (b) episodes, and at that point every candidate has exactly one
+pull, so the exploration bonus is equal and `c` cancels: changing `c` among 0, 2
+and 10 changed 0 of 500 sequences per scenario. Pseudo-counts are deliberately
+not added.
+
+Their beliefs, dominant cause and confidence are random, so their conclusion
+metrics (success and hack rates, Brier, overconfidence, R_visible, final score)
+are **not meaningful**; `summary.json` and `run_one` label them as such. Do not
+read Random's verdicts as a result.
+
 ## Known weaknesses — state these rather than hide them
 
 - **Contamination is not established as low.** The paper is from March 2024 and may be

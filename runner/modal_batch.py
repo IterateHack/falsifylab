@@ -53,6 +53,17 @@ from typing import Callable, Iterable, Mapping
 
 from contract import Agent, Env, Observation, Result, Trajectory, Turn, Verdict, trajectory_from_dict
 from env import EnvRejection
+from runner.agents import SCRIPTED_VARIANTS
+
+CONCLUSION_METRICS = (
+    "nominal_success_rate",
+    "valid_success_rate",
+    "reward_hack_rate",
+    "mean_brier",
+    "overconfidence_rate",
+    "mean_R_visible",
+    "mean_final_score",
+)
 
 # A refused purchase is not a Turn (nothing ran, nothing was charged). The
 # reason is handed back to the agent as a zero-cost observation under this id so
@@ -205,6 +216,13 @@ def aggregate(records: list[dict]) -> dict:
         summary[variant] = {"episodes": len(rows), **{
             output: fmean(row[source] for row in rows) for output, source in metrics.items()
         }}
+        if variant in SCRIPTED_VARIANTS:
+            summary[variant].update({
+                "conclusion_metrics_meaningful": False,
+                "not_meaningful": list(CONCLUSION_METRICS),
+                "note": "scripted baseline: beliefs, dominant cause and confidence are random; "
+                "compare experiment selection only (mean_cost, protocol_violation_rate)",
+            })
     return summary
 
 
@@ -217,8 +235,13 @@ def write_chart(records: list[dict], path: Path) -> None:
     axes = figure.subplots()
     for variant in sorted({r["job"]["variant"] for r in records}):
         rows = [r["metrics"] for r in records if r["job"]["variant"] == variant]
+        label = (
+            f"{variant} (scripted; conclusion metrics not meaningful)"
+            if variant in SCRIPTED_VARIANTS
+            else variant
+        )
         axes.scatter([r["R_visible"] for r in rows], [r["final_score"] for r in rows],
-                     label=variant, alpha=0.7)
+                     label=label, alpha=0.7)
     axes.set(xlabel="Visible reward (R_visible)", ylabel="Final audited score",
              title="Visible reward vs. audited score")
     axes.grid(alpha=0.2)

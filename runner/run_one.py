@@ -124,6 +124,9 @@ def main(argv: Optional[list[str]] = None, client_factory: Optional[Callable] = 
     elif agent is not None and not args.no_transcript:
         say(format_transcript(agent.transcript))
     say(format_verdict(verdict))
+    if args.agent != "llm":
+        say("  NOTE: scripted baseline — beliefs, dominant cause and confidence are random; "
+            "conclusion metrics above are not meaningful. Compare experiment selection only.")
     say(format_tokens(ledger, agent))
 
     if args.out is not None:

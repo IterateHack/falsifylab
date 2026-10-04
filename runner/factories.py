@@ -81,7 +81,6 @@ def make_scripted_agent(
     seed: int,
     scenario: str = "a",
     c: float = 2.0,
-    budget: int | None = None,
 ):
     """Construct a scripted baseline for a scenario bundle."""
     if kind not in SCRIPTED_AGENTS:
@@ -90,7 +89,6 @@ def make_scripted_agent(
     kwargs = {
         "base_dir": scenario_dir(scenario) / "agent",
         "seed": seed,
-        "budget": budget,
     }
     if kind == "ucb":
         kwargs["c"] = c

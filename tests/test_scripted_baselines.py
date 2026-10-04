@@ -3,7 +3,6 @@ from dataclasses import asdict
 import io
 import json
 import math
-from functools import partial
 from pathlib import Path
 import random
 
@@ -13,8 +12,32 @@ from contract import Observation, Result, State, VERDICTS, trajectory_from_dict
 from runner import run_one
 from runner.agents.random_agent import RandomAgent
 from runner.agents.ucb import UCBAgent
-from runner.factories import make_env, make_scripted_agent, scenario_dir
+from runner.agents import SCRIPTED_VARIANTS
+from runner.factories import (
+    SCRIPTED_AGENTS,
+    make_agent,
+    make_env,
+    make_scripted_agent,
+    scenario_dir,
+)
 from runner.modal_batch import EpisodeJob, REFUSAL_EXPERIMENT_ID, run_episode
+
+
+def test_scripted_agent_registry_matches_variants():
+    assert set(SCRIPTED_AGENTS) == SCRIPTED_VARIANTS
+
+
+@pytest.mark.parametrize("scenario", ["a", "b"])
+@pytest.mark.parametrize("kind", ["random", "ucb"])
+def test_bundle_budget_matches_env_and_both_agent_factories(kind, scenario):
+    env = make_env(seed=0, scenario=scenario)
+    scripted = make_scripted_agent(kind=kind, seed=0, scenario=scenario)
+    llm = make_agent(
+        variant="baseline", model="unused", seed=0, client=None, scenario=scenario
+    )
+
+    assert env.state.budget_remaining == scripted.budget_units
+    assert scripted.budget_units == llm.briefing["budget"]["units"]
 
 
 @pytest.mark.parametrize("kind", ["random", "ucb"])
@@ -27,7 +50,7 @@ def test_real_env_scripted_episodes(kind, scenario, seed):
 @pytest.mark.parametrize(
     "argv,kind,scenario,seed",
     [
-        (["--agent", "random", "--scenario", "a", "--budget", "8", "--seed", "1"], "random", "a", 1),
+        (["--agent", "random", "--scenario", "a", "--seed", "1"], "random", "a", 1),
         (["--agent", "ucb", "--scenario", "b", "--seed", "2"], "ucb", "b", 2),
     ],
 )
@@ -49,6 +72,7 @@ def test_run_one_scripted_cli(argv, kind, scenario, seed, tmp_path, monkeypatch)
     assert record["verdict"]["verdict"] in VERDICTS
     assert record["trajectory"]["turns"][-1]["action"]["kind"] == "conclude"
     assert "== Decision log" in output.getvalue()
+    assert "NOTE: scripted baseline" in output.getvalue()
     assert record["job"]["seed"] == seed
     assert record["scenario_dir"] == str(scenario_dir(scenario))
 
@@ -63,7 +87,9 @@ def test_run_one_rejects_scripted_model_options_and_missing_llm_model():
 def _synthetic_agent_dir(tmp_path: Path) -> Path:
     agent_dir = tmp_path / "agent"
     agent_dir.mkdir(parents=True)
-    (agent_dir / "briefing.json").write_text(json.dumps({"scenario_id": "synthetic"}))
+    (agent_dir / "briefing.json").write_text(
+        json.dumps({"scenario_id": "synthetic", "budget": {"units": 2}})
+    )
     (agent_dir / "hypotheses.json").write_text(
         json.dumps({"hypotheses": [{"id": "H1"}, {"id": "H2"}]})
     )
@@ -155,15 +181,10 @@ def test_ucb_refusal_excludes_last_arm_without_crediting_pull(tmp_path):
 
 
 @pytest.mark.parametrize("agent_type", [RandomAgent, UCBAgent])
-def test_scripted_agents_conclude_when_nothing_is_affordable_and_respect_cap(
-    tmp_path, agent_type
-):
+def test_scripted_agents_conclude_when_nothing_is_affordable(tmp_path, agent_type):
     agent_dir = _synthetic_agent_dir(tmp_path / agent_type.__name__)
     agent = agent_type(base_dir=agent_dir, seed=0)
     conclusion = agent.act(_briefing(), State("synthetic", 0, 0, [], False))
-    assert conclusion.kind == "conclude"
-    capped = agent_type(base_dir=agent_dir, seed=0, budget=0)
-    conclusion = capped.act(_briefing(), State("synthetic", 2, 0, [], False))
     assert conclusion.kind == "conclude"
 
 
@@ -194,7 +215,7 @@ def _assert_valid_parameters(parameters, schema):
 
 @pytest.mark.parametrize("scenario", ["a", "b"])
 def test_random_agent_uses_affordable_experiments_and_schema_parameters(scenario):
-    generator = make_scripted_agent(kind="random", seed=19, scenario=scenario, budget=8)
+    generator = make_scripted_agent(kind="random", seed=19, scenario=scenario)
     for experiment in generator.experiments:
         _assert_valid_parameters(
             generator._parameters_for(experiment["id"]),
@@ -202,8 +223,8 @@ def test_random_agent_uses_affordable_experiments_and_schema_parameters(scenario
         )
 
     for seed in range(5):
-        agent = make_scripted_agent(kind="random", seed=seed, scenario=scenario, budget=8)
-        state = State(scenario, 8, 0, [], False)
+        agent = make_scripted_agent(kind="random", seed=seed, scenario=scenario)
+        state = State(scenario, agent.budget_units, 0, [], False)
         observation = _briefing()
         for _ in range(20):
             action = agent.act(observation, state)
@@ -211,7 +232,7 @@ def test_random_agent_uses_affordable_experiments_and_schema_parameters(scenario
                 assert agent.affordable(state) == []
                 break
             experiment = next(item for item in agent.experiments if item["id"] == action.experiment_id)
-            available = min(state.budget_remaining, 8 - state.total_cost)
+            available = min(state.budget_remaining, agent.budget_units - state.total_cost)
             assert experiment["cost"] <= available
             _assert_valid_parameters(action.parameters, experiment.get("parameters") or {})
             state.budget_remaining -= experiment["cost"]
@@ -234,20 +255,26 @@ def test_real_env_scripted_episodes_are_reproducible(kind, scenario, seed):
 
 def _run_real_env_episode(kind, scenario, seed):
     agent_instances = []
+    env_instances = []
 
     def agent_factory(*, variant, model, seed):
-        agent = make_scripted_agent(kind=kind, seed=seed, scenario=scenario, budget=8)
+        agent = make_scripted_agent(kind=kind, seed=seed, scenario=scenario)
         agent_instances.append(agent)
         return agent
+
+    def env_factory(*, seed):
+        env = make_env(seed=seed, scenario=scenario)
+        env_instances.append(env)
+        return env
 
     job = EpisodeJob(f"{seed:08d}", kind, "none", seed, 0, seed)
     trajectory = run_episode(
         job,
-        partial(make_env, scenario=scenario),
+        env_factory,
         agent_factory,
     )
     hypothesis_ids = {item["id"] for item in agent_instances[0].hypotheses}
-    menu_costs = [item["cost"] for item in agent_instances[0].experiments]
+    budget_units = agent_instances[0].budget_units
     assert trajectory.turns[-1].action.kind == "conclude"
     assert trajectory.turns[-1].action.abstain_reason is None
     total_cost = sum(
@@ -255,8 +282,13 @@ def _run_real_env_episode(kind, scenario, seed):
         for turn in trajectory.turns
         if turn.action.kind == "run_experiment" and turn.observation is not None
     )
-    assert total_cost <= 8
-    assert 8 - total_cost < min(menu_costs)
+    assert total_cost <= budget_units
+    assert agent_instances[0].affordable(env_instances[0].state) == []
+    assert all(
+        experiment["id"] in agent_instances[0].refused
+        or experiment["cost"] > env_instances[0].state.budget_remaining
+        for experiment in agent_instances[0].experiments
+    )
     run_ids = {
         turn.action.experiment_id
         for turn in trajectory.turns
@@ -272,7 +304,7 @@ def _run_real_env_episode(kind, scenario, seed):
 
     repeat = run_episode(
         job,
-        partial(make_env, scenario=scenario),
+        env_factory,
         agent_factory,
     )
     assert asdict(repeat) == asdict(trajectory)

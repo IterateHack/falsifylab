@@ -9,7 +9,14 @@ from runner.agents._common import ScriptedAgent
 
 
 class UCBAgent(ScriptedAgent):
-    """Select experiments using content-free novelty rewards."""
+    """Select experiments using content-free novelty rewards.
+
+    In this setup (A: budget 8 vs menu 17; B: 9 vs 19), UCB1 reduces to
+    cost-aware novelty. It tries untried affordable arms first. In the few
+    episodes that make an index-phase pull, every candidate has exactly one
+    pull, so the exploration bonus is identical and ``c`` cancels. Pseudo-counts
+    are deliberately not added; this is a property of the setup.
+    """
 
     def __init__(
         self,
@@ -17,10 +24,9 @@ class UCBAgent(ScriptedAgent):
         base_dir: Path | None = None,
         seed: int = 0,
         c: float = 2.0,
-        budget: int | None = None,
         model_name: str = "ucb",
     ) -> None:
-        super().__init__(base_dir=base_dir, seed=seed, budget=budget, model_name=model_name)
+        super().__init__(base_dir=base_dir, seed=seed, model_name=model_name)
         self.c = c
         self.counts = dict.fromkeys(self.experiment_ids, 0)
         self.sums = dict.fromkeys(self.experiment_ids, 0.0)

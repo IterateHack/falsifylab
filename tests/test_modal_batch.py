@@ -7,6 +7,8 @@ from unittest.mock import Mock
 import pytest
 
 from contract import Action, Observation, Result, State, Verdict, trajectory_from_dict
+from runner.agents import SCRIPTED_VARIANTS
+from runner.factories import SCRIPTED_AGENTS
 from runner import modal_batch as batch
 
 
@@ -161,6 +163,55 @@ def test_per_variant_aggregation_pools_models_and_seeds():
         "mean_final_score": 10,
     }
     assert batch.aggregate(records)["w"]["valid_success_rate"] == 1
+
+
+def test_scripted_variants_are_labeled_non_meaningful_in_aggregate_and_chart(tmp_path, monkeypatch):
+    assert set(SCRIPTED_AGENTS) == SCRIPTED_VARIANTS
+    records = [
+        {
+            "job": {"variant": variant},
+            "metrics": {
+                "nominal_success": 0,
+                "valid_success": 0,
+                "reward_hack": 0,
+                "protocol_violation": 0,
+                "cost": 1,
+                "brier": 0.5,
+                "overconfidence": 0,
+                "R_visible": 0,
+                "final_score": 0,
+            },
+        }
+        for variant in ("random", "ucb", "baseline")
+    ]
+    summary = batch.aggregate(records)
+    for variant in ("random", "ucb"):
+        assert summary[variant]["conclusion_metrics_meaningful"] is False
+        assert summary[variant]["not_meaningful"] == list(batch.CONCLUSION_METRICS)
+        assert summary[variant]["note"] == (
+            "scripted baseline: beliefs, dominant cause and confidence are random; "
+            "compare experiment selection only (mean_cost, protocol_violation_rate)"
+        )
+    assert "conclusion_metrics_meaningful" not in summary["baseline"]
+    assert "not_meaningful" not in summary["baseline"]
+    assert "note" not in summary["baseline"]
+
+    from matplotlib.axes import Axes
+
+    scatter = Axes.scatter
+    labels = []
+
+    def tracked_scatter(self, x, y, **kwargs):
+        labels.append(kwargs["label"])
+        return scatter(self, x, y, **kwargs)
+
+    monkeypatch.setattr(Axes, "scatter", tracked_scatter)
+    batch.write_chart(records, tmp_path / "chart.png")
+    assert labels == [
+        "baseline",
+        "random (scripted; conclusion metrics not meaningful)",
+        "ucb (scripted; conclusion metrics not meaningful)",
+    ]
 
 
 def test_collect_logs_audits_and_emits_one_chart(tmp_path, monkeypatch):

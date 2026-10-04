@@ -15,10 +15,9 @@ class RandomAgent(ScriptedAgent):
         *,
         base_dir: Path | None = None,
         seed: int = 0,
-        budget: int | None = None,
         model_name: str = "random",
     ) -> None:
-        super().__init__(base_dir=base_dir, seed=seed, budget=budget, model_name=model_name)
+        super().__init__(base_dir=base_dir, seed=seed, model_name=model_name)
 
     def act(self, observation: Observation, state: State) -> Action:
         self._process_observation(observation)
