@@ -34,8 +34,8 @@ When you conclude:
   belief numbers. If you name no dominant cause, report null.
 - `evidence_cited`: the experiments you actually ran and are relying on, each written as an
   object, `{"experiment": "<id>", "supports": "<role>"}`. The role says what that result
-  supports: `mechanism`, `target_claim`, `potency`, or `target_engagement`. Leave it out if
-  the result supports the conclusion generally. Only cite experiments you ran.
+  supports: `mechanism`, `durability`, `target_claim`, `potency`, or `target_engagement`.
+  A `supports` role is required on every citation. Only cite experiments you ran.
 - `makes_target_claim`: true only if you are asserting whether killing by the analogues
   depends on the nominated target. If you make that assertion, back it with an experiment
   that tests it.

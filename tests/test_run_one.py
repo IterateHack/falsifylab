@@ -71,7 +71,9 @@ def test_factories_against_real_bundle():
     assert agent.model_name == "claude-x"
 
 
-def test_run_one_prints_every_section(tmp_path):
+def test_run_one_prints_every_section(tmp_path, monkeypatch):
+    provenance = Mock(return_value="abc123")
+    monkeypatch.setattr(run_one, "code_sha", provenance)
     out = io.StringIO()
     code = run_one.main(
         ["--scenario", "a", "--variant", "baseline", "--budget", "8", "--model", "claude-sonnet-4-5",
@@ -87,6 +89,8 @@ def test_run_one_prints_every_section(tmp_path):
         assert label in text, label
     assert "NOTE: scripted baseline" not in text
     record = json.loads((tmp_path / "ep.json").read_text())
+    assert record["code_sha"] == "abc123"
+    provenance.assert_called_once_with()
     assert record["tokens"]["model_calls"] == 1
     assert record["sampling"]["temperature"] == DEFAULT_TEMPERATURE
     assert record["verdict"]["verdict"] in ("VALID_SUCCESS", "WRONG_CONCLUSION", "INSUFFICIENT_EVIDENCE",
@@ -388,6 +392,40 @@ def test_sampling_request_and_record_match_model_support(tmp_path, model, sent):
     assert sampling["model"] == model
     assert sampling["temperature"] == (0.3 if sent else None)
     assert sampling["sampling_params_sent"] is sent
+    assert sampling["provider_retries"] == 1
+
+
+@pytest.mark.parametrize("scenario,experiment", [("a", "E1"), ("b", "B1")])
+@pytest.mark.parametrize("supports", [None, "", 3, [], "not-a-role"])
+def test_missing_or_invalid_citation_supports_gets_shape_retry(scenario, experiment, supports):
+    from agents.llm_agent import _response_spec
+
+    bad = json.loads(ABSTAIN)
+    citation = {"experiment": experiment}
+    if supports is not None:
+        citation["supports"] = supports
+    bad["evidence_cited"] = [citation]
+    client = StubClient("offline", TokenLedger(0, 0, log=None), replies=[json.dumps(bad), ABSTAIN])
+    agent = make_agent(variant="baseline", model="offline", seed=0, client=client, scenario=scenario)
+    env = make_env(seed=0, scenario=scenario)
+    agent.act(env.reset(), env.state)
+    assert agent.parse_failures == 1
+    assert "supports" in agent.transcript[0]["error"]
+    retry = client.seen[1][-1]["content"]
+    assert _response_spec(agent.experiment_ids) in retry
+    assert '"supports" is required' in retry
+    assert '"supports" is required' in client.seen[0][0]["content"]
+
+
+@pytest.mark.parametrize("supports", ["mechanism", "durability", "potency", "target_claim", "target_engagement"])
+def test_citation_supports_validation_is_shape_only(supports):
+    agent = make_agent(variant="baseline", model="offline", seed=0, client=None, scenario="b")
+    env = make_env(seed=0, scenario="b")
+    reply = json.loads(ABSTAIN)
+    reply["evidence_cited"] = [{"experiment": "B1", "supports": supports}]
+    action = agent.parse(json.dumps(reply), env.state)
+    assert action.evidence_cited == reply["evidence_cited"]
+    env.step(action)
 
 
 def test_schema_uses_complete_ids_not_prefixes():
@@ -409,7 +447,8 @@ def test_sdk_serializes_sampling_and_provider_refusal(monkeypatch, model, sent):
     monkeypatch.setattr(sdk.messages, "_post", request)
     from runner.model_clients import ProviderRefusal
 
-    client = AnthropicClient(model, TokenLedger(2, 10, log=None), client=sdk)
+    client = AnthropicClient(model, TokenLedger(2, 10, log=None), client=sdk,
+                             provider_retries=0)
     with pytest.raises(ProviderRefusal):
         client.complete("system", [{"role": "user", "content": "hello"}])
     kwargs = request.call_args.kwargs
@@ -423,6 +462,27 @@ def test_sonnet_55_price():
     assert price_for("claude-sonnet-5-5") == (2.0, 10.0)
 
 
+def test_make_client_passes_scoped_episode_and_stage_ledgers(monkeypatch):
+    from runner import factories
+
+    constructor = Mock(return_value=SimpleNamespace(name="client"))
+    monkeypatch.setattr(factories, "AnthropicClient", constructor)
+    stage = TokenLedger(2, 10, log=None)
+    client = factories.make_client(
+        mode="live", model="claude-sonnet-5-5", scenario="a", temperature=0.3,
+        max_tokens=2048, usd_per_mtok_in=None, usd_per_mtok_out=None,
+        spend_limit_usd=0.5, provider_retries=2, stage_ledger=stage,
+    )
+
+    assert client.name == "client"
+    kwargs = constructor.call_args.kwargs
+    episode_ledger = constructor.call_args.args[1]
+    assert isinstance(episode_ledger, TokenLedger)
+    assert episode_ledger is not stage
+    assert kwargs["provider_retries"] == 2
+    assert kwargs["stage_ledger"] is stage
+
+
 def test_provider_refusal_is_typed_and_charged():
     from runner.model_clients import ProviderRefusal
 
@@ -430,6 +490,7 @@ def test_provider_refusal_is_typed_and_charged():
                                stop_reason="refusal")
     create = Mock(return_value=response)
     client = AnthropicClient("claude-sonnet-5-5", TokenLedger(2, 10, log=None),
+                             provider_retries=0,
                              client=SimpleNamespace(messages=SimpleNamespace(create=create)))
     with pytest.raises(ProviderRefusal):
         client.complete("system", [{"role": "user", "content": "hello"}])
@@ -437,6 +498,85 @@ def test_provider_refusal_is_typed_and_charged():
     assert client.ledger.cost_usd == pytest.approx(0.00024)
     assert client.call_log[0]["stop_reason"] == "refusal"
     create.assert_called_once()
+
+
+def test_provider_refusal_retries_once_and_charges_each_attempt():
+    from runner.model_clients import ProviderRefusal
+
+    responses = [
+        SimpleNamespace(content=[], usage=SimpleNamespace(input_tokens=100, output_tokens=0),
+                        stop_reason="refusal"),
+        SimpleNamespace(content=[SimpleNamespace(text="accepted")],
+                        usage=SimpleNamespace(input_tokens=110, output_tokens=10),
+                        stop_reason="end_turn"),
+    ]
+    create = Mock(side_effect=responses)
+    episode_ledger = TokenLedger(2, 10, log=None)
+    stage_ledger = TokenLedger(2, 10, log=None)
+    client = AnthropicClient(
+        "claude-sonnet-5-5", episode_ledger, provider_retries=1, stage_ledger=stage_ledger,
+        client=SimpleNamespace(messages=SimpleNamespace(create=create)),
+    )
+
+    assert client.complete("system", [{"role": "user", "content": "same prompt"}]) == "accepted"
+    assert create.call_count == 2
+    assert create.call_args_list[0].kwargs == create.call_args_list[1].kwargs
+    assert [entry["stop_reason"] for entry in client.call_log] == ["refusal", "end_turn"]
+    assert episode_ledger.calls == stage_ledger.calls == 2
+    assert episode_ledger.input_tokens == stage_ledger.input_tokens == 210
+    assert episode_ledger.output_tokens == stage_ledger.output_tokens == 10
+
+    create.side_effect = [responses[0], responses[0]]
+    exhausted = AnthropicClient(
+        "claude-sonnet-5-5", TokenLedger(2, 10, log=None), provider_retries=1,
+        client=SimpleNamespace(messages=SimpleNamespace(create=create)),
+    )
+    with pytest.raises(ProviderRefusal):
+        exhausted.complete("system", [{"role": "user", "content": "same prompt"}])
+    assert create.call_count == 4
+
+
+def test_stage_ledger_is_shared_without_contaminating_episode_records():
+    response = SimpleNamespace(
+        content=[SimpleNamespace(text="ok")],
+        usage=SimpleNamespace(input_tokens=10, output_tokens=5),
+        stop_reason="end_turn",
+    )
+    create = Mock(return_value=response)
+    sdk = SimpleNamespace(messages=SimpleNamespace(create=create))
+    stage = TokenLedger(2, 10, log=None)
+    first = AnthropicClient("claude-sonnet-5-5", TokenLedger(2, 10, log=None),
+                            stage_ledger=stage, client=sdk)
+    second = AnthropicClient("claude-sonnet-5-5", TokenLedger(2, 10, log=None),
+                             stage_ledger=stage, client=sdk)
+
+    first.complete("system", [{"role": "user", "content": "one"}])
+    second.complete("system", [{"role": "user", "content": "two"}])
+
+    assert first.ledger.calls == second.ledger.calls == 1
+    assert len(first.call_log) == len(second.call_log) == 1
+    assert stage.calls == 2
+    assert stage.input_tokens == 20
+    assert stage.output_tokens == 10
+
+
+@pytest.mark.parametrize("limit", ["episode", "stage"])
+def test_limit_failures_still_record_usage_in_both_ledgers(limit):
+    response = SimpleNamespace(
+        content=[SimpleNamespace(text="ok")],
+        usage=SimpleNamespace(input_tokens=1000, output_tokens=0),
+        stop_reason="end_turn",
+    )
+    episode = TokenLedger(2, 10, limit_usd=0.001 if limit == "episode" else 1.0, log=None)
+    stage = TokenLedger(2, 10, limit_usd=0.001 if limit == "stage" else 1.0, log=None)
+    client = AnthropicClient(
+        "claude-sonnet-5-5", episode, stage_ledger=stage, provider_retries=0,
+        client=SimpleNamespace(messages=SimpleNamespace(create=Mock(return_value=response))),
+    )
+    with pytest.raises(SpendLimitExceeded):
+        client.complete("system", [{"role": "user", "content": "call"}])
+    assert episode.calls == stage.calls == 1
+    assert episode.input_tokens == stage.input_tokens == 1000
 
 
 @pytest.mark.parametrize("after_purchase", [False, True])

@@ -4,6 +4,7 @@ from contextlib import nullcontext
 import json
 import math
 from pathlib import Path
+from itertools import product
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -77,6 +78,34 @@ def test_full_grid_and_reproducible_paired_repeat_seeds():
         for repeat in range(3):
             assert len({j.effective_seed for j in jobs if j.seed == seed and j.repeat == repeat}) == 1
     assert batch.build_jobs(["v"], ["m"], [0], 1, scenario="b")[0].scenario == "b"
+
+
+def test_build_jobs_adds_scripted_agents_after_llm_jobs():
+    variants, models, seeds, repeats = ["v1", "v2"], ["m"], [3, 4], 2
+    jobs = batch.build_jobs(
+        variants, models, seeds, repeats, agents=("llm", "random", "ucb"),
+    )
+    llm_count = len(variants) * len(models) * len(seeds) * repeats
+    scripted_count = 2 * len(seeds) * repeats
+    assert len(jobs) == llm_count + scripted_count
+    assert [job.variant for job in jobs[:llm_count]] == [
+        variant for variant, _, _, _ in product(variants, models, seeds, range(repeats))
+    ]
+    scripted_jobs = jobs[llm_count:]
+    assert [job.variant for job in scripted_jobs] == (
+        ["random"] * (len(seeds) * repeats) + ["ucb"] * (len(seeds) * repeats)
+    )
+    assert all(job.model == "none" for job in scripted_jobs)
+    assert [job.episode_id for job in jobs] == [f"{index:08d}" for index in range(len(jobs))]
+    assert len({job.episode_id for job in jobs}) == len(jobs)
+
+    default_jobs = batch.build_jobs(variants, models, seeds, repeats)
+    assert default_jobs == batch.build_jobs(
+        variants, models, seeds, repeats, agents=("llm",),
+    )
+    assert default_jobs == jobs[:llm_count]
+    scripted_only = batch.build_jobs([], [], [5], 1, agents=("random",))
+    assert [(job.variant, job.model) for job in scripted_only] == [("random", "none")]
 
 
 @pytest.mark.parametrize("variants,models,seeds,n", [([], ["m"], [0], 1),
@@ -189,7 +218,7 @@ def test_per_variant_aggregation_pools_models_and_seeds():
     assert summary["v"]["aborted_on_refusals"] == 0
     assert summary["v"]["refusals"] == 0
     assert set(summary["v"]) == {
-        "episodes", "n_parse_failure", "parse_failure_rate", "n_scored",
+        "episodes", "n_harness_error", "n_parse_failure", "parse_failure_rate", "n_scored",
         "n_provider_refusal", "provider_refusal_rate", "cells",
         "completed_episodes", "aborted_on_refusals", "refusals",
         "nominal_success_rate", "clean_success_rate", "reward_hack_rate",
@@ -244,7 +273,8 @@ def test_grid_summary_counts_failures_parse_failures_aborts_and_sorts():
     summary = batch.grid_summary(records)
     cells = {(record["scenario"], record["variant"]): record for record in summary}
     assert set(cells[("a", "all-fail")]) == {
-        "scenario", "variant", "n_runs", "n_parse_failure", "parse_failure_rate",
+        "scenario", "variant", "n_runs", "n_harness_error", "n_parse_failure",
+        "parse_failure_rate",
         "n_aborted_on_refusals", "n_provider_refusal", "provider_refusal_rate",
         "n_scored", "n_clean_success", "clean_success_rate", "clean_success_ci95",
         "frontier_regret", "raw_score_mean", "verdict_counts",
@@ -286,6 +316,7 @@ def test_grid_summary_counts_failures_parse_failures_aborts_and_sorts():
         "INSUFFICIENT_EVIDENCE": 1,
         "WRONG_CONCLUSION": 0,
         "PARSE_FAILURE": 1,
+        "HARNESS_ERROR": 0,
         "OTHER": 1,
     }
     assert cells[("a", "verdict-counts")]["raw_score_mean"] == pytest.approx(43.3333, abs=1e-4)
@@ -646,15 +677,77 @@ def test_worker_records_effective_sampling_with_live_stub(monkeypatch, model, se
     sdk = SimpleNamespace(messages=SimpleNamespace(create=Mock(return_value=SimpleNamespace(
         content=[SimpleNamespace(text=reply)], usage=SimpleNamespace(input_tokens=10, output_tokens=5),
         stop_reason="end_turn"))))
-    client = AnthropicClient(model, TokenLedger(2, 10, log=None), temperature=0.3, client=sdk)
-    monkeypatch.setattr(factories, "make_client", lambda **kwargs: client)
+    client = AnthropicClient(model, TokenLedger(2, 10, log=None), temperature=0.3,
+                             provider_retries=2, client=sdk)
+    made = {}
+
+    def fake_make_client(**kwargs):
+        made.update(kwargs)
+        return client
+
+    monkeypatch.setattr(factories, "make_client", fake_make_client)
     job = batch.build_jobs(["baseline"], [model], [0], 1)[0]
     result = batch.remote_episode(job, "runner.factories:make_env", "runner.factories:make_agent", 10,
                                  {"mode": "live", "temperature": 0.3, "max_tokens": 2048,
                                   "usd_per_mtok_in": None, "usd_per_mtok_out": None,
-                                  "spend_limit_usd": 0.5, "budget": 8})
+                                  "spend_limit_usd": 0.5, "provider_retries": 2, "budget": 8})
+    assert made["provider_retries"] == 2
+    assert result["sampling"]["provider_retries"] == 2
     assert result["sampling"]["temperature"] == (0.3 if sent else None)
     assert result["sampling"]["sampling_params_sent"] is sent
+
+
+def test_remote_episode_stage_ledger_keeps_episode_records_scoped(monkeypatch):
+    from runner import factories
+    from runner.model_clients import AnthropicClient, TokenLedger
+
+    class LocalEnv(FakeEnv):
+        def __init__(self, *, seed, scenario=None, budget=None):
+            super().__init__(seed=seed)
+
+    class ChargingAgent:
+        def __init__(self, *, variant, model, seed, client, scenario=None):
+            self.client = client
+
+        def act(self, observation, state):
+            self.client.complete("system", [{"role": "user", "content": "call"}])
+            return Action("conclude", dominant_cause="d", confidence=0.9,
+                          beliefs=dict.fromkeys(TRUTH["contribution_labels"], 0.5))
+
+    response = SimpleNamespace(
+        content=[SimpleNamespace(text="ok")],
+        usage=SimpleNamespace(input_tokens=10, output_tokens=5),
+        stop_reason="end_turn",
+    )
+    sdk = SimpleNamespace(messages=SimpleNamespace(create=Mock(return_value=response)))
+    stage = TokenLedger(2, 10, log=None)
+
+    def make_client(**kwargs):
+        assert kwargs["stage_ledger"] is stage
+        return AnthropicClient(
+            kwargs["model"], TokenLedger(2, 10, log=None),
+            stage_ledger=kwargs["stage_ledger"], client=sdk,
+        )
+
+    monkeypatch.setattr(factories, "make_client", make_client)
+    monkeypatch.setattr(batch, "resolve", lambda ref: {"env": LocalEnv, "agent": ChargingAgent}[ref])
+    jobs = batch.build_jobs(["v"], ["claude-sonnet-5-5"], [0], 2)
+    client_spec = {
+        "mode": "live", "temperature": 1.0, "max_tokens": 2048,
+        "usd_per_mtok_in": None, "usd_per_mtok_out": None,
+        "spend_limit_usd": 1.0, "provider_retries": 1, "budget": 8,
+    }
+    results = [
+        batch.remote_episode(job, "env", "agent", 10, client_spec=client_spec,
+                             stage_ledger=stage)
+        for job in jobs
+    ]
+
+    assert [result["tokens"]["model_calls"] for result in results] == [1, 1]
+    assert [len(result["model_call_log"]) for result in results] == [1, 1]
+    assert stage.calls == 2
+    assert stage.input_tokens == 20
+    assert stage.output_tokens == 10
 
 
 def test_remote_worker_catches_provider_refusal_and_keeps_partial_trajectory(monkeypatch):
@@ -713,6 +806,155 @@ def test_remote_worker_resolves_factories_without_truth_or_rubric(monkeypatch):
         "provider_refusal": False,
         "outcome": "completed",
     }
+
+
+def test_remote_episode_returns_harness_error_and_propagates_spend_limit(monkeypatch):
+    import runner.factories as factories
+
+    job = batch.build_jobs(["v"], ["m"], [7], 1)[0]
+    client = SimpleNamespace(
+        model="m",
+        temperature=DEFAULT_TEMPERATURE,
+        sampling={"model": "m", "temperature": DEFAULT_TEMPERATURE, "sampling_params_sent": True},
+        max_tokens=2048,
+        ledger=SimpleNamespace(snapshot=lambda: {"cost_usd": 0.01}),
+        call_log=[{"stop_reason": "end_turn"}],
+    )
+
+    def failing_agent(*, variant, model, seed, client, scenario):
+        raise RuntimeError("boom")
+
+    def compatible_env(*, seed, scenario, budget):
+        return FakeEnv(seed=seed)
+
+    monkeypatch.setattr(
+        batch, "resolve",
+        lambda ref: {"env": compatible_env, "agent": failing_agent}[ref],
+    )
+    monkeypatch.setattr(factories, "make_client", Mock(return_value=client))
+    client_spec = {
+        "mode": "live",
+        "temperature": DEFAULT_TEMPERATURE,
+        "max_tokens": 2048,
+        "usd_per_mtok_in": None,
+        "usd_per_mtok_out": None,
+        "spend_limit_usd": 20.0,
+        "budget": 8,
+    }
+    result = batch.remote_episode(job, "env", "agent", 10, client_spec=client_spec)
+    assert result["job"] == asdict(job)
+    assert result["harness_error"] == {"type": "RuntimeError", "message": "boom"}
+    assert result["tokens"] == {"cost_usd": 0.01}
+    assert result["sampling"]["client"] == "live"
+    assert result["model_call_log"] == client.call_log
+    assert "worker" in result
+
+    def spend_agent(*, variant, model, seed):
+        raise SpendLimitExceeded("stop")
+
+    monkeypatch.setattr(batch, "resolve", lambda ref: {"env": FakeEnv, "agent": spend_agent}[ref])
+    with pytest.raises(SpendLimitExceeded, match="stop"):
+        batch.remote_episode(job, "env", "agent", 10)
+
+
+def test_collect_records_harness_errors_without_audit_or_episode_file(tmp_path, capsys):
+    jobs = batch.build_jobs(["v"], ["m"], [0, 1, 2], 1)
+    harness_error = {
+        "type": "RuntimeError",
+        "message": "worker failed",
+    }
+    results = [
+        {"job": asdict(jobs[0]), "trajectory": asdict(episode())},
+        {"job": asdict(jobs[1]), "trajectory": asdict(episode())},
+        {
+            "job": asdict(jobs[2]),
+            "harness_error": harness_error,
+            "sampling": None,
+            "tokens": {"input_tokens": 12, "output_tokens": 3, "cost_usd": 0.02},
+            "worker": {"on_modal": False},
+        },
+    ]
+    audit = Mock(side_effect=[
+        verdict("VALID_SUCCESS", score=90),
+        verdict("PARSE_FAILURE", score=0),
+    ])
+    output = tmp_path / "harness-errors"
+
+    summary = batch.collect_results(results, output, {}, TRUTH, audit, code_sha="abc123")
+
+    assert audit.call_count == 2
+    records = [json.loads(line) for line in (output / "results.jsonl").read_text().splitlines()]
+    assert all(record["code_sha"] == "abc123" for record in records)
+    error_record = records[2]
+    assert error_record["verdict"] == {"verdict": batch.HARNESS_ERROR_VERDICT}
+    assert error_record["harness_error"] == harness_error
+    assert error_record["trajectory"] is None
+    assert error_record["metrics"] is None
+    assert error_record["sampling"] is None
+    assert error_record["tokens"]["cost_usd"] == 0.02
+    assert not (output / "episodes" / f"{jobs[2].episode_id}.json").exists()
+    assert len(list((output / "episodes").glob("*.json"))) == 2
+    assert summary["v"]["episodes"] == 3
+    assert summary["v"]["n_harness_error"] == 1
+    assert summary["v"]["n_scored"] == 1
+    assert summary["v"]["clean_success_rate"] == 1.0
+    assert summary["v"]["raw_score_mean"] == 90
+    (cell,) = json.loads((output / "grid_summary.json").read_text())
+    assert cell["n_runs"] == 3
+    assert cell["n_harness_error"] == 1
+    assert cell["n_scored"] == 1
+    assert cell["clean_success_rate"] == 1.0
+    assert cell["raw_score_mean"] == 90
+    assert cell["verdict_counts"]["HARNESS_ERROR"] == 1
+    assert cell["verdict_counts"]["PARSE_FAILURE"] == 1
+    spend = json.loads((output / "spend.json").read_text())
+    assert spend["input_tokens"] == 12
+    assert spend["output_tokens"] == 3
+    assert spend["cost_usd"] == 0.02
+    assert (output / "reward_vs_audit.png").is_file()
+    assert (output / "raw_vs_clean.png").is_file()
+    assert "1 episode(s) HARNESS_ERROR" in capsys.readouterr().err
+
+
+def test_collect_results_accepts_real_scripted_records_with_null_sampling(tmp_path):
+    from auditor.audit import audit, load_rubric
+    from runner.factories import make_env, scenario_dir
+
+    bundle = scenario_dir("a")
+    rubric = load_rubric(bundle / "auditor" / "rubric.json")
+    truth = json.loads((bundle / "auditor" / "truth.json").read_text(encoding="utf-8"))
+    budget = make_env(seed=0, scenario="a").state.budget_remaining
+    jobs = batch.build_jobs([], [], [0], 1, scenario="a", agents=("random", "ucb"))
+    client_spec = {
+        "mode": "dry-run",
+        "temperature": DEFAULT_TEMPERATURE,
+        "max_tokens": 2048,
+        "usd_per_mtok_in": 3.0,
+        "usd_per_mtok_out": 15.0,
+        "spend_limit_usd": 20.0,
+        "budget": budget,
+    }
+    results = [
+        batch.remote_episode(
+            job,
+            "runner.factories:make_env",
+            "runner.factories:make_agent",
+            100,
+            client_spec=client_spec,
+        )
+        for job in jobs
+    ]
+    assert all("trajectory" in result and "harness_error" not in result for result in results)
+    assert all(result["sampling"] is None for result in results)
+
+    output = tmp_path / "scripted-records"
+    batch.collect_results(results, output, rubric, truth, audit)
+
+    records = [json.loads(line) for line in (output / "results.jsonl").read_text().splitlines()]
+    assert len(records) == 2
+    assert all(record["sampling"] is None for record in records)
+    spend = json.loads((output / "spend.json").read_text())
+    assert spend["estimated"] is False
 
 
 def test_worker_bundle_files_include_only_required_agent_data_for_a_and_b():
@@ -800,6 +1042,8 @@ def test_default_cli_runs_real_bundle_dry_run_without_modal(tmp_path, monkeypatc
 
     modal_app = Mock(side_effect=AssertionError("Modal must not be touched for a dry run"))
     monkeypatch.setattr(modal, "App", modal_app)
+    provenance = Mock(return_value="abc123")
+    monkeypatch.setattr(batch, "code_sha", provenance)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("MODAL_TASK_ID", raising=False)
     output = tmp_path / "dry-run"
@@ -816,7 +1060,9 @@ def test_default_cli_runs_real_bundle_dry_run_without_modal(tmp_path, monkeypatc
     modal_app.assert_not_called()
     records = [json.loads(line) for line in (output / "results.jsonl").read_text().splitlines()]
     assert len(records) == 2
+    assert provenance.call_count == 1
     for record in records:
+        assert record["code_sha"] == "abc123"
         assert record["sampling"]["temperature"] == DEFAULT_TEMPERATURE
         assert record["sampling"]["client"] == "dry-run"
         assert record["sampling"]["seed_applied_to_model"] is False
@@ -838,6 +1084,129 @@ def test_default_cli_runs_real_bundle_dry_run_without_modal(tmp_path, monkeypatc
     }
     assert spend["episodes"] == 2
     assert spend["estimated"] is True
+
+
+def test_cli_dry_run_warns_when_code_sha_is_unavailable(tmp_path, monkeypatch, capsys):
+    import modal
+
+    monkeypatch.setattr(
+        modal, "App", Mock(side_effect=AssertionError("Modal must not be touched for a dry run")),
+    )
+    provenance = Mock(return_value=None)
+    monkeypatch.setattr(batch, "code_sha", provenance)
+    output = tmp_path / "no-code-sha"
+
+    batch.main(["--agents", "random", "--seeds", "0", "--output", str(output)])
+
+    captured = capsys.readouterr()
+    assert "code_sha unavailable: not a git checkout or git not installed" in captured.err
+    provenance.assert_called_once_with()
+    records = [json.loads(line) for line in (output / "results.jsonl").read_text().splitlines()]
+    assert len(records) == 1
+    assert records[0]["code_sha"] is None
+
+
+def test_scripted_only_cli_dry_run_needs_no_llm_axes_or_client(tmp_path, monkeypatch):
+    import modal
+    import runner.factories as factories
+
+    monkeypatch.setattr(
+        modal, "App", Mock(side_effect=AssertionError("Modal must not be touched")),
+    )
+    monkeypatch.setattr(
+        factories, "make_client",
+        Mock(side_effect=AssertionError("scripted agents must not build a client")),
+    )
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("MODAL_TASK_ID", raising=False)
+    output = tmp_path / "scripted"
+
+    batch.main([
+        "--agents", "random", "ucb", "--seeds", "0", "1",
+        "--agent-factory", "runner.factories:missing_agent",
+        "--output", str(output),
+    ])
+
+    records = [json.loads(line) for line in (output / "results.jsonl").read_text().splitlines()]
+    assert len(records) == 4
+    assert all(record["sampling"] is None for record in records)
+    assert all("tokens" not in record for record in records)
+    assert all("model_call_log" not in record for record in records)
+    assert all(record["worker"]["on_modal"] is False for record in records)
+    assert {record["job"]["variant"] for record in records} == {"random", "ucb"}
+    summary = json.loads((output / "summary.json").read_text())
+    grid = json.loads((output / "grid_summary.json").read_text())
+    assert {"random", "ucb"} <= set(summary)
+    assert {row["variant"] for row in grid} == {"random", "ucb"}
+    assert all(row["conclusion_metrics_meaningful"] is False for row in grid)
+
+
+def test_mixed_llm_and_scripted_cli_dry_run(tmp_path, monkeypatch):
+    import modal
+
+    monkeypatch.setattr(
+        modal, "App", Mock(side_effect=AssertionError("Modal must not be touched")),
+    )
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    output = tmp_path / "mixed"
+    batch.main([
+        "--agents", "llm", "random", "--variants", "baseline",
+        "--models", "claude-sonnet-4-5", "--seeds", "0", "--output", str(output),
+    ])
+
+    records = [json.loads(line) for line in (output / "results.jsonl").read_text().splitlines()]
+    assert len(records) == 2
+    rows = {record["job"]["variant"]: record for record in records}
+    assert rows["baseline"]["sampling"]["client"] == "dry-run"
+    assert rows["random"]["sampling"] is None
+
+
+@pytest.mark.parametrize(
+    "arguments, expected_error",
+    [
+        (
+            ["--agents", "random", "--variants", "baseline"],
+            "--variants and --models are only valid with --agents llm",
+        ),
+        (
+            ["--agents", "llm", "--variants", "baseline"],
+            "--models required when --agents includes llm",
+        ),
+        (
+            ["--agents", "llm", "--variants", "baseline", "--models", "unknown-model"],
+            "no price known for model",
+        ),
+    ],
+)
+def test_agents_cli_errors(tmp_path, capsys, arguments, expected_error):
+    with pytest.raises(SystemExit) as error:
+        batch.main([
+            *arguments, "--seeds", "0", "--output", str(tmp_path / "error"),
+        ])
+    assert error.value.code == 2
+    assert expected_error in capsys.readouterr().err
+
+
+def test_agents_cli_rejects_duplicate_agents(tmp_path, capsys):
+    with pytest.raises(SystemExit) as error:
+        batch.main([
+            "--agents", "random", "random", "--seeds", "0",
+            "--output", str(tmp_path / "duplicate-agents"),
+        ])
+    assert error.value.code == 2
+    assert "--agents must not contain duplicates" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("scenario", ["a", "b"])
+def test_worker_bundle_remote_paths_are_posix_and_fenced(scenario):
+    files = batch.worker_bundle_files(scenario)
+    for _, remote_path in files:
+        assert remote_path.startswith("/root/")
+        assert "\\" not in remote_path
+        assert all(
+            excluded not in remote_path.lower()
+            for excluded in ("rubric.json", "truth.json", "constraints.json", "/tests/", "/golden/")
+        )
 
 
 def test_cli_rejects_conflicting_modes_and_budget_before_dispatch(tmp_path, monkeypatch, capsys):
@@ -904,28 +1273,35 @@ def test_cli_dispatches_parallel_map_and_real_audit_locally(
     monkeypatch.setattr(auditor, "audit", audit)
     monkeypatch.setattr(auditor, "load_rubric", loader)
 
-    def mapped(jobs, *, kwargs, order_outputs):
+    def mapped(jobs, *, kwargs, order_outputs, return_exceptions):
         assert len(jobs) == 8
-        assert order_outputs is False
+        assert order_outputs is True
+        assert return_exceptions is True
         assert set(kwargs) == {"env_factory", "agent_factory", "max_turns", "client_spec"}
         assert kwargs["client_spec"]["mode"] == "live"
         assert kwargs["client_spec"]["budget"] == 8
-        return iter({
-            "job": asdict(job),
-            "trajectory": asdict(episode()),
-            "refusals": [],
-            "aborted_on_refusals": False,
-            "sampling": {
-                "model": job.model,
-                "temperature": kwargs["client_spec"]["temperature"],
-                "max_tokens": kwargs["client_spec"]["max_tokens"],
-                "seed_applied_to_model": False,
-                "client": "live",
-            },
-            "tokens": {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0},
-            "model_call_log": [],
-            "worker": {"hostname": "mock", "modal_task_id": "mock", "on_modal": True},
-        } for job in jobs)
+        results = []
+        for index, job in enumerate(jobs):
+            if index == 0:
+                results.append(RuntimeError("container failed"))
+                continue
+            results.append({
+                "job": asdict(job),
+                "trajectory": asdict(episode()),
+                "refusals": [],
+                "aborted_on_refusals": False,
+                "sampling": {
+                    "model": job.model,
+                    "temperature": kwargs["client_spec"]["temperature"],
+                    "max_tokens": kwargs["client_spec"]["max_tokens"],
+                    "seed_applied_to_model": False,
+                    "client": "live",
+                },
+                "tokens": {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0},
+                "model_call_log": [],
+                "worker": {"hostname": "mock", "modal_task_id": "mock", "on_modal": True},
+            })
+        return iter(results)
 
     worker = Mock()
     worker.map.side_effect = mapped
@@ -946,10 +1322,13 @@ def test_cli_dispatches_parallel_map_and_real_audit_locally(
                 "--seeds", "7", "8", "--n", "2", "--secret", "extra-key",
                 "--truth", str(truth_path), "--rubric", str(rubric_path), "--output", str(output)])
     captured = capsys.readouterr().out
+    assert "agents=llm" in captured
     grid_start = captured.index("== Grid summary ==")
     assert grid_start > captured.find('"raw_score_mean"')
     assert '"scenario": "a"' in captured[grid_start:]
     worker.map.assert_called_once()
+    assert worker.map.call_args.kwargs["return_exceptions"] is True
+    assert worker.map.call_args.kwargs["order_outputs"] is True
     assert [call.args[0] for call in secret_from_name.call_args_list] == [
         "falsifylab-keys", "extra-key",
     ]
@@ -958,26 +1337,39 @@ def test_cli_dispatches_parallel_map_and_real_audit_locally(
     assert "anthropic==1.11.0" in package_args
     assert "modal==1.5.5" in package_args
     assert "matplotlib==3.11.2" in package_args
-    assert image.add_local_python_source.call_args.args == ("agents", "contract", "env", "runner")
+    assert image.add_local_python_source.call_args.args == (
+        "agents", "contract", "control_matching", "env", "runner",
+    )
     assert [
         (call.args[0], call.args[1])
         for call in image.add_local_file.call_args_list
     ] == batch.worker_bundle_files("a")
-    assert audit.call_count == 8
+    assert audit.call_count == 7
     assert audit.call_args.args[2] == TRUTH
     loader.assert_called_once_with(rubric_path)
     assert audit.call_args.args[1]["constraints"] == constraints
     assert app.function.call_args.kwargs["max_containers"] == 32
     summary = json.loads((output / "summary.json").read_text())["v"]
     assert summary["episodes"] == 4
-    assert summary["completed_episodes"] == 4
+    assert summary["n_harness_error"] == 1
+    assert summary["completed_episodes"] == 3
     assert summary["aborted_on_refusals"] == 0
     assert summary["refusals"] == 0
     records = [json.loads(line) for line in (output / "results.jsonl").read_text().splitlines()]
-    assert all(record["verdict"]["verdict"] == "PROTOCOL_VIOLATION" for record in records)
+    assert records[0]["verdict"] == {"verdict": "HARNESS_ERROR"}
+    assert records[0]["harness_error"] == {
+        "type": "RuntimeError", "message": "container failed",
+    }
+    assert records[0]["trajectory"] is None
+    assert not (output / "episodes" / f'{records[0]["job"]["episode_id"]}.json').exists()
+    grid = json.loads((output / "grid_summary.json").read_text())
+    assert next(row for row in grid if row["variant"] == "v")["n_harness_error"] == 1
+    assert all(record["verdict"]["verdict"] == "PROTOCOL_VIOLATION" for record in records[1:])
     assert all(record["aborted_on_refusals"] is False for record in records)
-    assert all(set(record["metrics"]) == set(batch.episode_metrics(episode(), verdict(), TRUTH))
-               for record in records)
+    assert all(
+        set(record["metrics"]) == set(batch.episode_metrics(episode(), verdict(), TRUTH))
+        for record in records[1:]
+    )
 
 
 def test_modal_sdk_accepts_worker_definition_without_launching_cloud():

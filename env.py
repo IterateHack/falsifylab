@@ -36,6 +36,7 @@ from pathlib import Path
 from typing import Optional, Union
 
 from contract import Action, Observation, Result, State, Trajectory, Turn
+from control_matching import matches_control_aliases
 
 REJECTION_CODES = ("overspend", "malformed_conclude", "unknown_experiment", "other")
 BRIEFING_EXPERIMENT_ID = "__briefing__"
@@ -47,7 +48,7 @@ _E6_MIN_ARMS = 3
 # CONTRACT.md: the closed set a citation's optional `supports` may take. Defined
 # here, not imported, because main's contract.py models a citation as a plain
 # dict (no EvidenceCitation dataclass) — the environment validates that shape.
-_SUPPORTS = ("mechanism", "target_claim", "potency", "target_engagement")
+_SUPPORTS = ("mechanism", "durability", "target_claim", "potency", "target_engagement")
 
 
 class EnvRejection(Exception):
@@ -269,16 +270,4 @@ class Env:
         """True iff the agent named a bacteria-free (cell-free) control in the
         E6 controls free-list. The agent must name it itself — this is PR4's
         real test, not a checkbox."""
-        if not controls:
-            return False
-        if isinstance(controls, str):
-            controls = [controls]
-        for c in controls:
-            t = str(c).lower()
-            if "cell-free" in t or "cell free" in t:
-                return True
-            if "bacteria" in t and any(
-                k in t for k in ("-free", " free", "without", "no bacteria", "lacking", "absent", "sans")
-            ):
-                return True
-        return False
+        return matches_control_aliases(controls, "bacteria_free_control")

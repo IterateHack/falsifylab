@@ -73,7 +73,8 @@ failure, but an unbought discriminating experiment is.
   `confidence` must be `null`.
 - `evidence_cited`: only experiments you actually ran in this episode, as
   objects — `{"experiment": "EN", "supports": "mechanism"}`, with `supports` one
-  of `mechanism`, `target_claim`, `potency`, `target_engagement`, or omitted.
+  of `mechanism`, `durability`, `target_claim`, `potency`, `target_engagement`.
+  A `supports` role is required on every citation.
   Never cite an experiment you did not buy, never cite one whose result you
   could not read, and never put prose in the list: a bare string is rejected and
   the episode stays open, so your episode would never complete.

@@ -9,7 +9,15 @@ from typing import Callable, Mapping
 
 from contract import Trajectory, Verdict, trajectory_from_dict
 from runner.factories import scenario_dir
-from runner.modal_batch import EpisodeJob, build_record, resolve, validate_truth, write_summaries
+from runner.modal_batch import (
+    HARNESS_ERROR_VERDICT,
+    EpisodeJob,
+    build_record,
+    resolve,
+    validate_truth,
+    write_summaries,
+)
+from runner.provenance import code_sha
 
 
 class MissingTrajectoryError(FileNotFoundError):
@@ -18,6 +26,8 @@ class MissingTrajectoryError(FileNotFoundError):
 
 def _read_records(results_path: Path) -> list[dict]:
     with results_path.open(encoding="utf-8") as stream:
+        if results_path.suffix.lower() == ".json":
+            return [json.load(stream)]
         return [json.loads(line) for line in stream]
 
 
@@ -48,13 +58,19 @@ def reaudit(results_path: Path, output: Path, *,
     results_path = Path(results_path)
     output = Path(output)
     _validate_output(results_path, output)
+    current_code_sha = code_sha()
     records = _read_records(results_path)
     scenarios = [record["job"].get("scenario", "a") for record in records]
     if (rubric is not None or truth is not None) and len(set(scenarios)) != 1:
         raise ValueError("--rubric and --truth overrides require every record to share a scenario")
 
     assets = {}
-    for scenario in dict.fromkeys(scenarios):
+    auditable_scenarios = [
+        record["job"].get("scenario", "a")
+        for record in records
+        if record.get("verdict", {}).get("verdict") != HARNESS_ERROR_VERDICT
+    ]
+    for scenario in dict.fromkeys(auditable_scenarios):
         if rubric is None or truth is None:
             loaded_rubric, loaded_truth = _load_default_assets(scenario)
         else:
@@ -68,6 +84,12 @@ def reaudit(results_path: Path, output: Path, *,
     rebuilt_records = []
     changed = []
     for record in records:
+        if record.get("verdict", {}).get("verdict") == HARNESS_ERROR_VERDICT:
+            rebuilt = dict(record)
+            rebuilt["code_sha"] = current_code_sha
+            rebuilt["source_code_sha"] = record.get("code_sha")
+            rebuilt_records.append(rebuilt)
+            continue
         job_data = record["job"]
         episode_id = job_data["episode_id"]
         if not episode_id.isascii() or not episode_id.isdecimal():
@@ -97,6 +119,8 @@ def reaudit(results_path: Path, output: Path, *,
             aborted_on_refusals=record.get("aborted_on_refusals", False),
             extra=record,
         )
+        rebuilt["code_sha"] = current_code_sha
+        rebuilt["source_code_sha"] = record.get("code_sha")
         if rebuilt["verdict"] != record.get("verdict"):
             changed.append(episode_id)
         rebuilt_records.append(rebuilt)
@@ -117,6 +141,7 @@ def reaudit(results_path: Path, output: Path, *,
         "source": str(results_path),
         "episodes": len(rebuilt_records),
         "audit": audit_reference,
+        "code_sha": current_code_sha,
         "verdicts_changed": changed,
     }
     (output / "reaudit.json").write_text(
@@ -127,7 +152,7 @@ def reaudit(results_path: Path, output: Path, *,
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("results", type=Path, help="results.jsonl from a batch run")
+    parser.add_argument("results", type=Path, help="batch results.jsonl or a local run_one JSON record")
     parser.add_argument("--output", type=Path, required=True, help="new output directory")
     parser.add_argument("--audit", default="auditor.audit:audit")
     parser.add_argument("--rubric", type=Path)
