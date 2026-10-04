@@ -33,6 +33,7 @@ SELECTION_CAPTION = (
     "(auditor.audit.eval_pred)"
 )
 CONDITIONAL_FOOTNOTE = "* scored only when the conclusion makes a target claim"
+BOUGHT_ALPHA = 0.3
 PASS_K_CAPTION = (
     "pass^k = C(c,k)/C(n,k) per cell: n counted runs (seeds), c with verdict "
     "VALID_SUCCESS; probability that k runs drawn without replacement all succeed "
@@ -997,6 +998,7 @@ def _plot_experiment_selection(
     scenario_data: dict[str, dict],
     stamp: dict,
 ) -> None:
+    from matplotlib.colors import to_rgba
     from matplotlib.lines import Line2D
     from matplotlib.patches import Patch
 
@@ -1085,22 +1087,25 @@ def _plot_experiment_selection(
             ]
             bought_values = [row.get(header) for header in bought_headers]
             parameter_values = [row.get(header) for header in parameter_headers]
-            color = "#888888" if scripted else colors[variant]
+            color = "#666666" if scripted else colors[variant]
+            hatch = scripted_hatches.get(variant, "") if scripted else ""
             bought_axes.bar(
                 [center - pair_width / 2 for center in centers],
                 [value or 0 for value in bought_values],
                 width=bar_width,
-                color=color,
-                edgecolor="#444444",
-                hatch=scripted_hatches.get(variant, "") if scripted else "",
+                color=to_rgba(color, BOUGHT_ALPHA),
+                edgecolor=color,
+                linewidth=1.2,
+                hatch=hatch,
             )
             bought_axes.bar(
                 [center + pair_width / 2 for center in centers],
                 [value or 0 for value in parameter_values],
                 width=bar_width,
                 color=color,
-                edgecolor="#222222",
-                hatch=(scripted_hatches.get(variant, "") + "..") if scripted else "..",
+                edgecolor="#111111",
+                linewidth=1.2,
+                hatch=hatch,
             )
         bought_axes.set_title(f"Scenario {scenario} · decisive bought", fontsize=12)
         bought_axes.set_ylabel("Fraction of episodes", fontsize=9)
@@ -1122,10 +1127,13 @@ def _plot_experiment_selection(
     ))
     legend_labels.append("Budget")
     legend_handles.extend([
-        Patch(facecolor="#888888", edgecolor="#444444"),
-        Patch(facecolor="#888888", edgecolor="#222222", hatch=".."),
+        Patch(
+            facecolor=to_rgba("#666666", BOUGHT_ALPHA), edgecolor="#666666",
+            linewidth=1.2,
+        ),
+        Patch(facecolor="#666666", edgecolor="#111111", linewidth=1.2),
     ])
-    legend_labels.extend(["bought", "w/ params"])
+    legend_labels.extend(["bought (pale)", "w/ params (solid)"])
     figure.legend(
         handles=legend_handles,
         labels=legend_labels,

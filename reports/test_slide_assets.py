@@ -425,7 +425,7 @@ def test_selection_cost_plot_uses_horizontal_bars_and_integer_budget(tmp_path, m
         " ".join(text.splitlines()) == slide_assets.SELECTION_CAPTION
         for text in figure_texts
     )
-    assert {"bought", "w/ params"} <= set(figure_legend_labels)
+    assert {"bought (pale)", "w/ params (solid)"} <= set(figure_legend_labels)
 
 
 def test_decisive_experiment_extraction_is_recursive_ordered_and_conditional():
@@ -1070,7 +1070,7 @@ def test_scripted_rows_are_filtered_from_success_assets_and_in_selection(tmp_pat
     assert "E6 w/ params = EV1 + EV2" in selection_markdown
     assert "random (scripted)" in figure_legend_labels
     assert "ucb (scripted)" in figure_legend_labels
-    assert {"bought", "w/ params"} <= set(figure_legend_labels)
+    assert {"bought (pale)", "w/ params (solid)"} <= set(figure_legend_labels)
     assert all("not meaningful" not in str(label) for label in figure_legend_labels)
 
 
