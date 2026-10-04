@@ -202,7 +202,13 @@ def _display_cell(header: str, value) -> str:
         except (TypeError, ValueError):
             return _cell_text(value)
         return f"{number:.3f}"
-    if header in {"mean_cost", "budget"} or header.startswith("bought "):
+    if header == "budget":
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return _cell_text(value)
+        return str(int(number)) if number.is_integer() else f"{number:g}"
+    if header == "mean_cost" or header.startswith("bought "):
         try:
             return f"{float(value):.3f}"
         except (TypeError, ValueError):
@@ -768,26 +774,27 @@ def _plot_experiment_selection(
                 continue
             model, variant = key
             scripted = variant in SCRIPTED_VARIANTS
-            cost_axes.bar(
+            cost_axes.barh(
                 index,
                 row["mean_cost"] or 0,
                 color="#888888" if scripted else colors[variant],
                 edgecolor="#444444",
                 hatch=scripted_hatches.get(variant, "") if scripted else "",
             )
-        cost_axes.axhline(budget, color="#333333", linestyle="--", linewidth=1)
+        cost_axes.axvline(budget, color="#333333", linestyle="--", linewidth=1)
         cost_axes.set_title(f"Scenario {scenario} · mean cost per episode", fontsize=12)
-        cost_axes.set_ylabel("Mean cost (budget units)", fontsize=9)
-        cost_axes.set_xticks(
+        cost_axes.set_xlabel("Mean cost (budget units)", fontsize=9)
+        cost_axes.set_yticks(
             positions,
             [_selection_series_label(model, variant) for model, variant in series_keys],
-            rotation=32,
-            ha="right",
             fontsize=9,
         )
-        cost_axes.tick_params(axis="y", labelsize=9)
-        cost_axes.set_ylim(bottom=0)
-        cost_axes.grid(axis="y", alpha=0.2)
+        cost_axes.text(
+            0.98, 0.94, f"Budget { _display_cell('budget', budget) }",
+            transform=cost_axes.transAxes, ha="right", va="top", fontsize=9,
+        )
+        cost_axes.set_xlim(left=0)
+        cost_axes.grid(axis="x", alpha=0.2)
 
         experiment_labels = [
             experiment["label"]
@@ -832,7 +839,7 @@ def _plot_experiment_selection(
         y=0.98,
     )
     figure.subplots_adjust(
-        left=0.08, right=0.98, bottom=0.33, top=0.84, hspace=0.48, wspace=0.28,
+        left=0.22, right=0.98, bottom=0.32, top=0.84, hspace=0.62, wspace=0.34,
     )
     legend_handles.append(Line2D(
         [], [], color="#333333", linestyle="--", label="Budget",
@@ -1032,7 +1039,7 @@ def _plot_validation(
         colLabels=pattern_headers,
         cellLoc="center",
         bbox=[0.01, 0.02, 0.98, 0.9],
-        colWidths=[0.22, 0.17, 0.15, 0.10, 0.24, 0.12],
+        colWidths=[0.34, 0.14, 0.14, 0.08, 0.20, 0.12],
     )
     pattern_table.auto_set_font_size(False)
     pattern_table.set_fontsize(9)

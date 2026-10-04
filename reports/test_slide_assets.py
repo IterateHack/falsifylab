@@ -235,6 +235,45 @@ def test_selection_rows_count_scored_cost_and_charged_purchases():
     assert row["bought all decisive"] == 1 / 3
 
 
+def test_selection_cost_plot_uses_horizontal_bars_and_integer_budget(tmp_path, monkeypatch):
+    plotted_text = []
+    horizontal_bars = []
+    original_text = Axes.text
+    original_barh = Axes.barh
+
+    def capture_text(self, x, y, text, *args, **kwargs):
+        plotted_text.append(text)
+        return original_text(self, x, y, text, *args, **kwargs)
+
+    def capture_barh(self, *args, **kwargs):
+        horizontal_bars.append(args)
+        return original_barh(self, *args, **kwargs)
+
+    monkeypatch.setattr(Axes, "text", capture_text)
+    monkeypatch.setattr(Axes, "barh", capture_barh)
+    rows = [{
+        "model": "model-x",
+        "scenario": "a",
+        "variant": "baseline",
+        "mean_cost": 2.0,
+        "bought E6": 1.0,
+        "bought all decisive": 1.0,
+    }]
+    scenario_data = {
+        "a": {
+            "budget": 8,
+            "experiments": [{"id": "E6", "conditional": False, "label": "E6"}],
+        },
+    }
+
+    slide_assets._plot_experiment_selection(
+        tmp_path / "selection.png", rows, scenario_data, _stamp(),
+    )
+
+    assert len(horizontal_bars) == 1
+    assert "Budget 8" in plotted_text
+
+
 def test_decisive_experiment_extraction_is_recursive_ordered_and_conditional():
     rubric = {
         "dimensions": {
@@ -442,6 +481,7 @@ def test_number_formatting_is_display_only(tmp_path):
         "best-of-n minus mean": 0.1234567,
         "recall": "100%",
         "false-alarm rate": "25%",
+        "budget": 8.0,
     }
     headers = list(row)
     markdown = "\n".join(slide_assets._markdown_table(headers, [row]))
@@ -450,6 +490,8 @@ def test_number_formatting_is_display_only(tmp_path):
     assert "0.123" in markdown
     assert "1.000" in markdown
     assert "0.250" in markdown
+    assert "| 8 |" in markdown
+    assert "8.000" not in markdown
 
     csv_path = tmp_path / "numbers.csv"
     slide_assets._write_csv(csv_path, headers, [row], _stamp())
@@ -459,6 +501,7 @@ def test_number_formatting_is_display_only(tmp_path):
         row["clean_success_ci95"], separators=(",", ":"),
     )
     assert csv_row["best-of-n minus mean"] == str(row["best-of-n minus mean"])
+    assert csv_row["budget"] == str(row["budget"])
 
 
 def test_synthetic_success_and_raw_score_metrics_have_semantic_spread(tmp_path):
