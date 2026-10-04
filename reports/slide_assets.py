@@ -782,16 +782,15 @@ def _plot_experiment_selection(
                 hatch=scripted_hatches.get(variant, "") if scripted else "",
             )
         cost_axes.axvline(budget, color="#333333", linestyle="--", linewidth=1)
-        cost_axes.set_title(f"Scenario {scenario} · mean cost per episode", fontsize=12)
-        cost_axes.set_xlabel("Mean cost (budget units)", fontsize=9)
+        cost_axes.set_title(
+            f"Scenario {scenario} · mean cost per episode "
+            f"(budget: {_display_cell('budget', budget)} units)",
+            fontsize=12,
+        )
         cost_axes.set_yticks(
             positions,
             [_selection_series_label(model, variant) for model, variant in series_keys],
             fontsize=9,
-        )
-        cost_axes.text(
-            0.98, 0.94, f"Budget { _display_cell('budget', budget) }",
-            transform=cost_axes.transAxes, ha="right", va="top", fontsize=9,
         )
         cost_axes.set_xlim(left=0)
         cost_axes.grid(axis="x", alpha=0.2)

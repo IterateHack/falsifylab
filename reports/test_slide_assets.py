@@ -236,20 +236,20 @@ def test_selection_rows_count_scored_cost_and_charged_purchases():
 
 
 def test_selection_cost_plot_uses_horizontal_bars_and_integer_budget(tmp_path, monkeypatch):
-    plotted_text = []
+    plot_titles = []
     horizontal_bars = []
-    original_text = Axes.text
+    original_set_title = Axes.set_title
     original_barh = Axes.barh
 
-    def capture_text(self, x, y, text, *args, **kwargs):
-        plotted_text.append(text)
-        return original_text(self, x, y, text, *args, **kwargs)
+    def capture_title(self, title, *args, **kwargs):
+        plot_titles.append(title)
+        return original_set_title(self, title, *args, **kwargs)
 
     def capture_barh(self, *args, **kwargs):
         horizontal_bars.append(args)
         return original_barh(self, *args, **kwargs)
 
-    monkeypatch.setattr(Axes, "text", capture_text)
+    monkeypatch.setattr(Axes, "set_title", capture_title)
     monkeypatch.setattr(Axes, "barh", capture_barh)
     rows = [{
         "model": "model-x",
@@ -271,7 +271,7 @@ def test_selection_cost_plot_uses_horizontal_bars_and_integer_budget(tmp_path, m
     )
 
     assert len(horizontal_bars) == 1
-    assert "Budget 8" in plotted_text
+    assert any("budget: 8 units" in title for title in plot_titles)
 
 
 def test_decisive_experiment_extraction_is_recursive_ordered_and_conditional():
