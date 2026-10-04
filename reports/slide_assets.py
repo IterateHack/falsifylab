@@ -712,7 +712,7 @@ def _plot_raw_vs_clean(path: Path, rows: list[dict], stamp: dict) -> None:
     axes.set_title("Raw audited score vs clean success", fontsize=14)
     axes.set_xlabel("Clean success rate (horizontal 95% Wilson CI)", fontsize=10)
     axes.set_ylabel("Raw audited score mean", fontsize=10)
-    axes.set_xlim(0, 1)
+    axes.set_xlim(-0.02, 1.02)
     axes.set_ylim(0, 100)
     axes.tick_params(axis="both", labelsize=9)
     from matplotlib.ticker import FormatStrFormatter
@@ -800,8 +800,10 @@ def _plot_cost_of_pass(path: Path, rows: list[dict], stamp: dict) -> None:
     axes.set_title("Cost of pass vs clean success", fontsize=14)
     axes.set_xlabel("Clean success rate (horizontal 95% Wilson CI)", fontsize=10)
     axes.set_ylabel("Cost of pass (budget units)", fontsize=10)
-    axes.set_xlim(0, 1)
-    axes.set_ylim(bottom=0)
+    axes.set_xlim(-0.02, 1.02)
+    axes.set_ylim(0, 1.1 * max(
+        (row["cost_of_pass"] for row in plotted_rows), default=1,
+    ))
     axes.tick_params(axis="both", labelsize=9)
     from matplotlib.ticker import FormatStrFormatter
 
