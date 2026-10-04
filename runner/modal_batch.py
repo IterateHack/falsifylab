@@ -1,4 +1,4 @@
-r"""Run N repeats of every variant x model x seed combination on Modal.
+r"""Run LLM variant/model/seed and scripted agent/seed batches on Modal.
 
 Install dependencies: ``python -m pip install -r runner/requirements.txt``.
 Run from the repository root with ``python -m runner.modal_batch --help``.
@@ -17,6 +17,8 @@ Hook modules must be locally importable; their Python packages are included in
 the Modal image. Supply additional dependencies with --pip-package and
 additional Modal Secret names with --secret. The ``falsifylab-keys`` Secret is
 always attached to live workers.
+LLM jobs use ``--variants`` and ``--models``; scripted controls use
+``--agents random ucb`` and need no model client.
 
 Integration hooks (import paths use ``module:callable``):
 * env_factory(seed=..., scenario=..., budget=...) -> contract.Env
@@ -40,8 +42,9 @@ grid_summary.json, reward_vs_audit.png,
 spend.json, and raw_vs_clean.png. Rates pool all models/seeds/repeats within a
 variant. Refusal-aborted episodes remain in primary failure metrics and the
 charts, carrying the auditor's own R_visible and final_score, with
-completed-only metrics reported separately; other failed episodes or audits
-abort the batch rather than silently removing them.
+completed-only metrics reported separately. HARNESS_ERROR rows are retained
+without an episode log, audit, or metrics; other collection and audit failures
+still abort the batch.
 
 PARSE_FAILURE episodes are excluded from every science metric in both
 summary.json and grid_summary.json through the same rule as root metrics.py
@@ -63,7 +66,7 @@ from functools import partial
 from itertools import product
 import json
 import math
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import random
 import socket
 from statistics import fmean
@@ -72,7 +75,7 @@ from typing import Callable, Iterable, Mapping
 
 from contract import Agent, Env, Observation, Result, Trajectory, Turn, Verdict, trajectory_from_dict
 from env import EnvRejection
-from runner.model_clients import DEFAULT_TEMPERATURE, SpendLimitExceeded, price_for
+from runner.model_clients import DEFAULT_TEMPERATURE, ProviderRefusal, SpendLimitExceeded, price_for
 from runner.agents import SCRIPTED_VARIANTS
 
 CONCLUSION_METRICS = (
@@ -108,6 +111,7 @@ def scripted_label(not_meaningful: Iterable[str]) -> dict:
 # reason is handed back to the agent as a zero-cost observation under this id so
 # the model can choose again; it never enters the recorded trajectory.
 REFUSAL_EXPERIMENT_ID = "__refused__"
+HARNESS_ERROR_VERDICT = "HARNESS_ERROR"
 
 FRONTIER_REGRET_NOTE = (
     "frontier_regret = best-of-n minus mean "
@@ -140,6 +144,12 @@ class EpisodeRun:
     trajectory: Trajectory
     refusals: list[Refusal]
     aborted_on_refusals: bool
+    provider_refusal: bool = False
+
+    @property
+    def outcome(self) -> str:
+        return ("provider_refusal" if self.provider_refusal else
+                "aborted_on_refusals" if self.aborted_on_refusals else "completed")
 
     @property
     def refusal_count(self) -> int:
@@ -171,7 +181,9 @@ def worker_bundle_files(scenario: str) -> list[tuple[Path, str]]:
 
     bundle = scenario_dir(scenario).resolve()
     repository = REPO_ROOT.resolve()
-    remote_bundle = Path("/root") / bundle.relative_to(repository)
+    remote_bundle = PurePosixPath("/root") / PurePosixPath(
+        bundle.relative_to(repository).as_posix()
+    )
     files = [
         (path, str(remote_bundle / "agent" / path.name))
         for path in sorted((bundle / "agent").glob("*.json"))
@@ -185,24 +197,47 @@ def worker_bundle_files(scenario: str) -> list[tuple[Path, str]]:
         str(remote_bundle / "auditor" / "expected_observations.json"),
     ))
     files.extend(
-        (path, str(Path("/root") / "agents" / "prompts" / path.name))
+        (path, str(PurePosixPath("/root") / "agents" / "prompts" / path.name))
         for path in sorted(PROMPTS_DIR.glob("*.md"))
     )
     return files
 
 
 def build_jobs(variants: list[str], models: list[str], seeds: list[int], n: int,
-               scenario: str = "a") -> list[EpisodeJob]:
-    if n < 1 or any(not axis for axis in (variants, models, seeds)):
-        raise ValueError("N and every grid axis must be nonempty/positive")
-    if any(len(axis) != len(set(axis)) for axis in (variants, models, seeds)):
+               scenario: str = "a", agents: Iterable[str] = ("llm",)) -> list[EpisodeJob]:
+    agents = tuple(agents)
+    if n < 1 or not seeds or ("llm" in agents and (not variants or not models)):
+        raise ValueError("N, seeds and required agent axes must be nonempty/positive")
+    if not agents or any(agent not in {"llm", *SCRIPTED_VARIANTS} for agent in agents):
+        raise ValueError("Agents must be chosen from llm, random and ucb")
+    if len(agents) != len(set(agents)):
+        raise ValueError("Agent axis must not contain duplicates")
+    axes = (variants, models, seeds) if "llm" in agents else (seeds,)
+    if any(len(axis) != len(set(axis)) for axis in axes):
         raise ValueError("Grid axes must not contain duplicates")
-    jobs = []
-    for index, (variant, model, seed, repeat) in enumerate(product(variants, models, seeds, range(n))):
-        # Matched seeds across variants/models; distinct deterministic repeat streams.
+
+    def effective_seed(seed: int, repeat: int) -> int:
+        if repeat == 0:
+            return seed
         digest = hashlib.sha256(f"{seed}:{repeat}".encode()).digest()
-        effective_seed = seed if repeat == 0 else int.from_bytes(digest[:8], "big")
-        jobs.append(EpisodeJob(f"{index:08d}", variant, model, seed, repeat, effective_seed, scenario))
+        return int.from_bytes(digest[:8], "big")
+
+    jobs = []
+    if "llm" in agents:
+        for variant, model, seed, repeat in product(variants, models, seeds, range(n)):
+            # Matched seeds across variants/models; distinct deterministic repeat streams.
+            jobs.append(EpisodeJob(
+                f"{len(jobs):08d}", variant, model, seed, repeat,
+                effective_seed(seed, repeat), scenario,
+            ))
+    for kind in agents:
+        if kind == "llm":
+            continue
+        for seed, repeat in product(seeds, range(n)):
+            jobs.append(EpisodeJob(
+                f"{len(jobs):08d}", kind, "none", seed, repeat,
+                effective_seed(seed, repeat), scenario,
+            ))
     return jobs
 
 
@@ -225,7 +260,12 @@ def run_episode(job: EpisodeJob, env_factory: Callable, agent_factory: Callable,
     trajectory = Trajectory(env.state.scenario_id, [])
     refusals = []
     for agent_call in range(max_turns):
-        action = agent.act(deepcopy(observation), deepcopy(env.state))
+        try:
+            action = agent.act(deepcopy(observation), deepcopy(env.state))
+        except ProviderRefusal:
+            if log is not None:
+                log("[provider] episode ended: provider_refusal")
+            return EpisodeRun(trajectory, refusals, aborted_on_refusals=False, provider_refusal=True)
         if action.kind not in ("run_experiment", "conclude"):
             raise ValueError(f"Unknown action kind: {action.kind}")
         saved_action = deepcopy(action)
@@ -257,55 +297,120 @@ def run_episode(job: EpisodeJob, env_factory: Callable, agent_factory: Callable,
     raise RuntimeError(f"Episode {job.episode_id} did not conclude within {max_turns} turns")
 
 
-def remote_episode(job: EpisodeJob, env_factory: str, agent_factory: str,
-                   max_turns: int, client_spec: dict | None = None) -> dict:
+def _worker_info() -> dict:
+    task_id = os.environ.get("MODAL_TASK_ID")
+    return {
+        "hostname": socket.gethostname(),
+        "modal_task_id": task_id,
+        "on_modal": bool(task_id),
+    }
+
+
+def _harness_error_result(
+    job: EpisodeJob,
+    exc: BaseException,
+    client=None,
+    *,
+    mode: str | None = None,
+) -> dict:
     result = {
         "job": asdict(job),
+        "harness_error": {"type": type(exc).__name__, "message": str(exc)},
+        "worker": _worker_info(),
     }
-    if client_spec is None:
-        episode = run_episode(job, resolve(env_factory), resolve(agent_factory), max_turns)
-    else:
-        from runner.factories import make_client
-
-        client = make_client(
-            mode=client_spec["mode"],
-            model=job.model,
-            scenario=job.scenario,
-            temperature=client_spec["temperature"],
-            max_tokens=client_spec["max_tokens"],
-            usd_per_mtok_in=client_spec["usd_per_mtok_in"],
-            usd_per_mtok_out=client_spec["usd_per_mtok_out"],
-            spend_limit_usd=client_spec["spend_limit_usd"],
-        )
-        env_maker = partial(
-            resolve(env_factory), scenario=job.scenario, budget=client_spec["budget"],
-        )
-        agent_maker = partial(
-            resolve(agent_factory), client=client, scenario=job.scenario,
-        )
-        episode = run_episode(job, env_maker, agent_maker, max_turns)
+    if client is not None:
         result.update({
             "sampling": {
-                "model": client.model,
-                "temperature": client.temperature,
+                **client.sampling,
                 "max_tokens": client.max_tokens,
                 "seed_applied_to_model": False,
-                "client": client_spec["mode"],
+                "client": mode,
             },
             "tokens": client.ledger.snapshot(),
             "model_call_log": client.call_log,
-            "worker": {
-                "hostname": socket.gethostname(),
-                "modal_task_id": os.environ.get("MODAL_TASK_ID"),
-                "on_modal": bool(os.environ.get("MODAL_TASK_ID")),
-            },
         })
-    result.update({
-        "trajectory": asdict(episode.trajectory),
-        "refusals": [asdict(refusal) for refusal in episode.refusals],
-        "aborted_on_refusals": episode.aborted_on_refusals,
-    })
+    elif job.variant in SCRIPTED_VARIANTS:
+        result["sampling"] = None
     return result
+
+
+def _ordered_worker_results(jobs: Iterable[EpisodeJob], results: Iterable) -> Iterable[dict]:
+    for job, result in zip(jobs, results):
+        if isinstance(result, SpendLimitExceeded):
+            raise result
+        if isinstance(result, BaseException):
+            yield _harness_error_result(job, result)
+        else:
+            yield result
+
+
+def remote_episode(job: EpisodeJob, env_factory: str, agent_factory: str,
+                   max_turns: int, client_spec: dict | None = None) -> dict:
+    client = None
+    try:
+        result = {"job": asdict(job)}
+        if job.variant in SCRIPTED_VARIANTS:
+            from runner.factories import make_scripted_agent
+
+            env_kwargs = {"scenario": job.scenario}
+            if client_spec is not None:
+                env_kwargs["budget"] = client_spec["budget"]
+            env_maker = partial(resolve(env_factory), **env_kwargs)
+            agent_maker = lambda *, variant, model, seed: make_scripted_agent(
+                kind=job.variant, seed=seed, scenario=job.scenario,
+            )
+            episode = run_episode(job, env_maker, agent_maker, max_turns)
+            result.update({"sampling": None, "worker": _worker_info()})
+        elif client_spec is None:
+            episode = run_episode(job, resolve(env_factory), resolve(agent_factory), max_turns)
+        else:
+            from runner.factories import make_client
+
+            client = make_client(
+                mode=client_spec["mode"],
+                model=job.model,
+                scenario=job.scenario,
+                temperature=client_spec["temperature"],
+                max_tokens=client_spec["max_tokens"],
+                usd_per_mtok_in=client_spec["usd_per_mtok_in"],
+                usd_per_mtok_out=client_spec["usd_per_mtok_out"],
+                spend_limit_usd=client_spec["spend_limit_usd"],
+            )
+            env_maker = partial(
+                resolve(env_factory), scenario=job.scenario, budget=client_spec["budget"],
+            )
+            agent_maker = partial(
+                resolve(agent_factory), client=client, scenario=job.scenario,
+            )
+            episode = run_episode(job, env_maker, agent_maker, max_turns)
+            result.update({
+                "sampling": {
+                    **client.sampling,
+                    "max_tokens": client.max_tokens,
+                    "seed_applied_to_model": False,
+                    "client": client_spec["mode"],
+                },
+                "tokens": client.ledger.snapshot(),
+                "model_call_log": client.call_log,
+                "worker": _worker_info(),
+            })
+        result.update({
+            "trajectory": asdict(episode.trajectory),
+            "refusals": [asdict(refusal) for refusal in episode.refusals],
+            "aborted_on_refusals": episode.aborted_on_refusals,
+            "provider_refusal": episode.provider_refusal,
+            "outcome": episode.outcome,
+        })
+        return result
+    except SpendLimitExceeded:
+        raise
+    except Exception as exc:
+        return _harness_error_result(
+            job,
+            exc,
+            client,
+            mode=client_spec["mode"] if client is not None and client_spec is not None else None,
+        )
 
 
 def validate_truth(truth: Mapping) -> None:
@@ -367,6 +472,14 @@ def split_parse_failure_records(rows: list[dict]) -> tuple[list[dict], list[dict
     return split_parse_failures(rows, lambda r: is_parse_failure_verdict(r["verdict"]["verdict"]))
 
 
+def split_science_records(rows: list[dict]) -> tuple[list[dict], list[dict], list[dict]]:
+    provider_refusals = [r for r in rows if r.get("provider_refusal", False)]
+    scored, parse_failures = split_parse_failure_records(
+        [r for r in rows if not r.get("provider_refusal", False)]
+    )
+    return scored, parse_failures, provider_refusals
+
+
 def aggregate(records: list[dict]) -> dict:
     metrics = {
         "nominal_success_rate": "nominal_success", "clean_success_rate": "clean_success",
@@ -390,12 +503,19 @@ def aggregate(records: list[dict]) -> dict:
     summary = {}
     for variant in sorted({r["job"]["variant"] for r in records}):
         rows = [r for r in records if r["job"]["variant"] == variant]
-        scored, excluded = split_parse_failure_records(rows)
+        non_harness_rows = [
+            r for r in rows if r["verdict"]["verdict"] != HARNESS_ERROR_VERDICT
+        ]
+        scored, excluded, provider_refusals = split_science_records(non_harness_rows)
         completed = [r["metrics"] for r in scored if not r.get("aborted_on_refusals", False)]
         summary[variant] = {
             "episodes": len(rows),
+            "n_harness_error": len(rows) - len(non_harness_rows),
             "n_parse_failure": len(excluded),
             "parse_failure_rate": len(excluded) / len(rows),
+            "n_provider_refusal": len(provider_refusals),
+            "provider_refusal_rate": len(provider_refusals) / len(rows),
+            "cells": grid_summary(rows),
             "n_scored": len(scored),
             "completed_episodes": len(completed),
             "aborted_on_refusals": sum(bool(r.get("aborted_on_refusals", False)) for r in rows),
@@ -428,6 +548,7 @@ def grid_summary(records: list[dict]) -> list[dict]:
     verdict_names = (
         "VALID_SUCCESS", "REWARD_HACK", "UNSAFE_ACTION", "PROTOCOL_VIOLATION",
         "INSUFFICIENT_EVIDENCE", "WRONG_CONCLUSION", "PARSE_FAILURE",
+        HARNESS_ERROR_VERDICT,
     )
     cells: dict[tuple[str, str], list[dict]] = {}
     for record in records:
@@ -439,7 +560,10 @@ def grid_summary(records: list[dict]) -> list[dict]:
     for (scenario, variant), rows in cells.items():
         n_runs = len(rows)
         n_aborted = sum(bool(r.get("aborted_on_refusals", False)) for r in rows)
-        scored_rows, excluded_rows = split_parse_failure_records(rows)
+        non_harness_rows = [
+            r for r in rows if r["verdict"]["verdict"] != HARNESS_ERROR_VERDICT
+        ]
+        scored_rows, excluded_rows, provider_refusals = split_science_records(non_harness_rows)
         n_parse_failure = len(excluded_rows)
         n_scored = len(scored_rows)
         n_clean_success = sum(
@@ -451,14 +575,19 @@ def grid_summary(records: list[dict]) -> list[dict]:
         )
         verdict_counts = dict.fromkeys((*verdict_names, "OTHER"), 0)
         for row in rows:
+            if row.get("provider_refusal", False):
+                continue
             verdict_name = row["verdict"]["verdict"]
             verdict_counts[verdict_name if verdict_name in verdict_counts else "OTHER"] += 1
         row = {
             "scenario": scenario,
             "variant": variant,
             "n_runs": n_runs,
+            "n_harness_error": n_runs - len(non_harness_rows),
             "n_parse_failure": n_parse_failure,
             "parse_failure_rate": n_parse_failure / n_runs,
+            "n_provider_refusal": len(provider_refusals),
+            "provider_refusal_rate": len(provider_refusals) / n_runs,
             "n_aborted_on_refusals": n_aborted,
             "n_scored": n_scored,
             "n_clean_success": n_clean_success,
@@ -494,6 +623,10 @@ def write_chart(records: list[dict], path: Path) -> None:
     from matplotlib.figure import Figure
     from matplotlib.lines import Line2D
 
+    records, _, _ = split_science_records([
+        record for record in records
+        if record.get("verdict", {}).get("verdict") != HARNESS_ERROR_VERDICT
+    ])
     figure = Figure(figsize=(8, 5), layout="constrained")
     FigureCanvasAgg(figure)
     axes = figure.subplots()
@@ -545,6 +678,10 @@ def write_clean_chart(records: list[dict], path: Path) -> None:
     from matplotlib.figure import Figure
     from matplotlib.lines import Line2D
 
+    records, _, _ = split_science_records([
+        record for record in records
+        if record.get("verdict", {}).get("verdict") != HARNESS_ERROR_VERDICT
+    ])
     figure = Figure(figsize=(8, 5), layout="constrained")
     FigureCanvasAgg(figure)
     axes = figure.subplots()
@@ -602,15 +739,40 @@ def write_clean_chart(records: list[dict], path: Path) -> None:
 
 def build_record(job: EpisodeJob, trajectory: Trajectory, verdict: Verdict, truth: Mapping, *,
                  refusals: list, aborted_on_refusals: bool, extra: Mapping) -> dict:
+    provider_refusal = bool(extra.get("provider_refusal", False))
     record = {
         "job": asdict(job),
         "verdict": asdict(verdict),
         "refusals": refusals,
         "refusal_count": len(refusals),
         "aborted_on_refusals": aborted_on_refusals,
-        "metrics": aborted_metrics(trajectory, verdict) if aborted_on_refusals
-        else episode_metrics(trajectory, verdict, truth),
+        "provider_refusal": provider_refusal,
+        "outcome": ("provider_refusal" if provider_refusal else
+                    "aborted_on_refusals" if aborted_on_refusals else "completed"),
+        "metrics": None if provider_refusal else (
+            aborted_metrics(trajectory, verdict) if aborted_on_refusals
+            else episode_metrics(trajectory, verdict, truth)
+        ),
         "trajectory": asdict(trajectory),
+    }
+    for field_name in ("sampling", "tokens", "model_call_log", "worker"):
+        if field_name in extra:
+            record[field_name] = extra[field_name]
+    return record
+
+
+def build_harness_error_record(job: EpisodeJob, error: Mapping, extra: Mapping) -> dict:
+    record = {
+        "job": asdict(job),
+        "verdict": {"verdict": HARNESS_ERROR_VERDICT},
+        "harness_error": dict(error),
+        "refusals": [],
+        "refusal_count": 0,
+        "aborted_on_refusals": False,
+        "provider_refusal": False,
+        "outcome": "harness_error",
+        "metrics": None,
+        "trajectory": None,
     }
     for field_name in ("sampling", "tokens", "model_call_log", "worker"):
         if field_name in extra:
@@ -643,22 +805,27 @@ def collect_results(results: Iterable[dict], output: Path, rubric: dict, truth: 
     total_input_tokens = 0
     total_output_tokens = 0
     stage_cost_usd = 0.0
+    harness_error_count = 0
     with (output / "results.jsonl").open("w", encoding="utf-8") as stream:
         for result in results:
             job = EpisodeJob(**result["job"])
             # IDs are generated by build_jobs, never derived from model/variant strings.
             if not job.episode_id.isascii() or not job.episode_id.isdecimal():
                 raise ValueError("Invalid episode ID")
-            trajectory = trajectory_from_dict(result["trajectory"])
-            with (episodes / f"{job.episode_id}.json").open("x", encoding="utf-8") as log:
-                json.dump(asdict(trajectory), log, indent=2, allow_nan=False)
-            verdict = audit_fn(deepcopy(trajectory), deepcopy(rubric), deepcopy(truth))
-            refusals = result.get("refusals", [])
-            aborted_on_refusals = result.get("aborted_on_refusals", False)
-            record = build_record(
-                job, trajectory, verdict, truth,
-                refusals=refusals, aborted_on_refusals=aborted_on_refusals, extra=result,
-            )
+            if "harness_error" in result:
+                record = build_harness_error_record(job, result["harness_error"], result)
+                harness_error_count += 1
+            else:
+                trajectory = trajectory_from_dict(result["trajectory"])
+                with (episodes / f"{job.episode_id}.json").open("x", encoding="utf-8") as log:
+                    json.dump(asdict(trajectory), log, indent=2, allow_nan=False)
+                verdict = audit_fn(deepcopy(trajectory), deepcopy(rubric), deepcopy(truth))
+                refusals = result.get("refusals", [])
+                aborted_on_refusals = result.get("aborted_on_refusals", False)
+                record = build_record(
+                    job, trajectory, verdict, truth,
+                    refusals=refusals, aborted_on_refusals=aborted_on_refusals, extra=result,
+                )
             stream.write(json.dumps(record, allow_nan=False) + "\n")
             stream.flush()
             records.append(record)
@@ -697,19 +864,24 @@ def collect_results(results: Iterable[dict], output: Path, rubric: dict, truth: 
         ),
         "limit_usd": spend_limit_usd,
         "estimated": any(
-            record.get("sampling", {}).get("client") == "dry-run" for record in records
+            (record.get("sampling") or {}).get("client") == "dry-run" for record in records
         ),
     }
     (output / "spend.json").write_text(
         json.dumps(spend, indent=2, allow_nan=False) + "\n", encoding="utf-8",
     )
+    if harness_error_count:
+        print(f"{harness_error_count} episode(s) HARNESS_ERROR", file=sys.stderr)
     return summary
 
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--variants", nargs="+", required=True)
-    parser.add_argument("--models", nargs="+", required=True)
+    parser.add_argument(
+        "--agents", nargs="+", choices=("llm", "random", "ucb"), default=["llm"],
+    )
+    parser.add_argument("--variants", nargs="+")
+    parser.add_argument("--models", nargs="+")
     parser.add_argument("--seeds", nargs="+", type=int, required=True)
     parser.add_argument("--n", type=int, default=1, help="Repeats per variant/model/seed combination")
     mode = parser.add_mutually_exclusive_group()
@@ -727,7 +899,10 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--truth", type=Path)
     parser.add_argument("--output", type=Path, required=True, help="New directory for this batch")
     parser.add_argument("--env-factory", default="runner.factories:make_env")
-    parser.add_argument("--agent-factory", default="runner.factories:make_agent")
+    parser.add_argument(
+        "--agent-factory", default="runner.factories:make_agent",
+        help="LLM-only factory; scripted agents use runner.factories:make_scripted_agent",
+    )
     parser.add_argument("--audit", default="auditor.audit:audit")
     parser.add_argument("--max-turns", type=int, default=100)
     parser.add_argument("--max-containers", type=int, default=32)
@@ -735,7 +910,25 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--pip-package", action="append", default=[], help="Additional remote dependency")
     parser.add_argument("--secret", action="append", default=[], help="Modal Secret name for model credentials")
     args = parser.parse_args(argv)
-    jobs = build_jobs(args.variants, args.models, args.seeds, args.n, scenario=args.scenario)
+    if len(args.agents) != len(set(args.agents)):
+        parser.error("--agents must not contain duplicates")
+    has_llm = "llm" in args.agents
+    if not has_llm and (args.variants is not None or args.models is not None):
+        parser.error("--variants and --models are only valid with --agents llm")
+    variants = args.variants or []
+    models = args.models or []
+    if has_llm:
+        missing = [
+            flag for flag, value in (("--variants", variants), ("--models", models))
+            if not value
+        ]
+        if missing:
+            parser.error(
+                f"{', '.join(missing)} required when --agents includes llm"
+            )
+    jobs = build_jobs(
+        variants, models, args.seeds, args.n, scenario=args.scenario, agents=args.agents,
+    )
     if min(args.max_turns, args.max_containers, args.timeout) < 1:
         parser.error("Turn, container and timeout limits must be positive")
     if not 0.0 <= args.temperature <= 1.0:
@@ -751,15 +944,17 @@ def main(argv: list[str] | None = None) -> None:
     except (FileNotFoundError, ValueError) as exc:
         parser.error(str(exc))
     budget = checked_env.state.budget_remaining
-    if (args.usd_per_mtok_in is None) != (args.usd_per_mtok_out is None):
+    if has_llm and (args.usd_per_mtok_in is None) != (args.usd_per_mtok_out is None):
         parser.error("Both --usd-per-mtok-in and --usd-per-mtok-out must be provided together")
-    try:
-        for model in args.models:
-            price_for(model, args.usd_per_mtok_in, args.usd_per_mtok_out)
-    except ValueError as exc:
-        parser.error(str(exc))
-    for reference in (args.env_factory, args.agent_factory):
-        resolve(reference)
+    if has_llm:
+        try:
+            for model in models:
+                price_for(model, args.usd_per_mtok_in, args.usd_per_mtok_out)
+        except ValueError as exc:
+            parser.error(str(exc))
+    resolve(args.env_factory)
+    if has_llm:
+        resolve(args.agent_factory)
     audit_fn = resolve(args.audit)
     bundle = scenario_dir(args.scenario)
     rubric_path = args.rubric or bundle / "auditor" / "rubric.json"
@@ -803,7 +998,8 @@ def main(argv: list[str] | None = None) -> None:
             secrets = ["falsifylab-keys", *args.secret]
             print(
                 f"LIVE PLAN: episodes={len(jobs)} scenario={args.scenario} "
-                f"variants={','.join(args.variants)} model={','.join(args.models)} "
+                f"agents={','.join(args.agents)} "
+                f"variants={','.join(variants)} model={','.join(models)} "
                 f"temperature={args.temperature} secrets={','.join(secrets)} "
                 f"spend_limit=${args.max_spend_usd:.2f}"
             )
@@ -819,8 +1015,10 @@ def main(argv: list[str] | None = None) -> None:
             image = modal.Image.debian_slim(python_version="3.12")
             image = image.pip_install(*packages, *args.pip_package)
             modules = {"contract", "env", "runner", "agents"}
-            modules.update(ref.split(":")[0].split(".")[0]
-                           for ref in (args.env_factory, args.agent_factory))
+            references = [args.env_factory]
+            if has_llm:
+                references.append(args.agent_factory)
+            modules.update(ref.split(":")[0].split(".")[0] for ref in references)
             image = image.add_local_python_source(*sorted(modules))
             for local_path, remote_path in worker_bundle_files(args.scenario):
                 image = image.add_local_file(local_path, remote_path)
@@ -840,8 +1038,10 @@ def main(argv: list[str] | None = None) -> None:
                         "max_turns": args.max_turns,
                         "client_spec": client_spec,
                     },
-                    order_outputs=False,
+                    order_outputs=True,
+                    return_exceptions=True,
                 )
+                results = _ordered_worker_results(jobs, results)
                 summary = collect_results(
                     results, args.output, rubric, truth, audit_fn,
                     spend_limit_usd=args.max_spend_usd,
