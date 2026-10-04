@@ -46,7 +46,9 @@ Reply with one JSON object and nothing else:
 def parse_reply(text: str) -> tuple[Any, float | None]:
     """First JSON object in the reply -> (answer, confidence). (None, None) if
     nothing parses; the caller scores that as a missing answer."""
-    decoder = json.JSONDecoder()
+    # strict=False: a long prose answer often carries literal newlines inside
+    # its strings, which is a formatting slip and not a wrong answer.
+    decoder = json.JSONDecoder(strict=False)
     for i, ch in enumerate(text):
         if ch != "{":
             continue
@@ -84,11 +86,14 @@ def run_cold_curriculum(
                 hypothesis=curriculum.hypothesis, order=spec.order, n=n,
                 title=spec.title, answer_format=spec.answer_format)}],
             tools=[], max_tokens=model_config.max_tokens, effort=model_config.effort)
-        answer, conf = parse_reply(_blocks_to_text(response.content))
+        reply = _blocks_to_text(response.content)
+        answer, conf = parse_reply(reply)
         entry.answer, entry.confidence = answer, conf
         if answer is None:
             result = {"score": 0.0, "max": 1.0,
-                      "details": {"error": "no parseable answer in the reply"}}
+                      "details": {"error": "no parseable answer in the reply",
+                                    "stop_reason": getattr(response, "stop_reason", None),
+                                    "raw_reply": reply[:6000]}}
         else:
             result = score_answer(spec, answer, backend=backend)
         entry.record_score(result)

@@ -93,6 +93,11 @@ def test_parse_reply_takes_the_first_object_with_an_answer():
     assert parse_reply('{"answer": [1], "confidence": 3}') == ([1], None)
 
 
+def test_parse_reply_tolerates_a_literal_newline_inside_a_string():
+    text = '{"confidence": 0.6, "answer": {"reasoning": "line one\nline two"}}'
+    assert parse_reply(text) == ({"reasoning": "line one\nline two"}, 0.6)
+
+
 def test_the_cold_arm_scores_with_the_real_scorers_and_sees_no_task_text(tmp_path):
     reply = NS(content=[NS(type="text", text=json.dumps(
         {"confidence": 0.5, "answer": {"ranking": ["a", "b", "c"]}}))], usage=None)
