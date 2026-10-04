@@ -523,7 +523,8 @@ def _plot_raw_vs_clean(path: Path, rows: list[dict], stamp: dict) -> None:
     axes = figure.subplots()
     figure.subplots_adjust(left=0.09, right=0.98, bottom=0.22, top=0.88)
     colors = _variant_colors({row["variant"] for row in rows})
-    for row, x in _jittered_raw_points(rows):
+    annotation_offsets = (6, 18, -12, 30, -24)
+    for index, (row, x) in enumerate(_jittered_raw_points(rows)):
         rate = row["clean_success_rate"]
         score = row["raw_score_mean"]
         low, high = row["clean_success_ci95"]
@@ -544,9 +545,11 @@ def _plot_raw_vs_clean(path: Path, rows: list[dict], stamp: dict) -> None:
         axes.annotate(
             f"{row['scenario']}/{row['model']}",
             (x, score),
-            xytext=(4, 4),
+            xytext=(-4 if x > 0.82 else 4, annotation_offsets[index % len(annotation_offsets)]),
             textcoords="offset points",
             fontsize=8,
+            ha="right" if x > 0.82 else "left",
+            annotation_clip=False,
         )
     axes.set_title("Raw audited score vs clean success", fontsize=14)
     axes.set_xlabel("Clean success rate (horizontal 95% Wilson CI)", fontsize=10)
@@ -736,6 +739,7 @@ def _plot_validation(
         colLabels=pattern_headers,
         cellLoc="center",
         bbox=[0.01, 0.02, 0.98, 0.9],
+        colWidths=[0.22, 0.17, 0.15, 0.10, 0.24, 0.12],
     )
     pattern_table.auto_set_font_size(False)
     pattern_table.set_fontsize(9)
