@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import platform
 import traceback
 from dataclasses import dataclass
 from pathlib import Path
@@ -77,6 +78,7 @@ def run_curriculum(
         "hypothesis": curriculum.hypothesis,
         "hypothesis_id": curriculum.hypothesis_id,
         "backend": backend,
+        "host_platform": platform.platform(),
         "use_lessons": use_lessons,
         "loop_model": model_config.loop_model,
         "capstone_model": model_config.capstone_model,

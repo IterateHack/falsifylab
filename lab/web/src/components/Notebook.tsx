@@ -193,6 +193,11 @@ function EntryPage({ entry }: { entry: NotebookEntry }) {
             score {entry.score.toFixed(2)}
           </span>
         )}
+        {entry.unenforced_limits && entry.unenforced_limits.length > 0 && (
+          <span className="poor" title="A run without the sandbox's memory cap is not comparable to the recorded runs.">
+            sandbox limits not enforced on this host: {entry.unenforced_limits.join("; ")}
+          </span>
+        )}
         {gap != null && (
           <span className={Math.abs(gap) > 0.15 ? "poor" : "good"}>
             gap {gap > 0 ? "+" : ""}
