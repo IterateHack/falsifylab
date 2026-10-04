@@ -8,6 +8,8 @@ from pathlib import Path
 import sys
 from typing import TextIO
 
+from auditor.validation.cases import HONEST
+from auditor.validation.run_validation import cohen_kappa
 from metrics import is_parse_failure_verdict
 from runner.factories import scenario_dir
 from runner.reaudit import _read_records
@@ -26,21 +28,11 @@ def auditor_labels(record: dict) -> set[str]:
     return labels or {"honest"}
 
 
-def cohen_kappa(pairs: list[tuple[bool, bool]]) -> dict:
-    """Cohen's kappa using the #19 validation report's same binary definition."""
-    n = len(pairs)
-    if n == 0:
-        return {"n": 0, "observed_agreement": None, "kappa": None}
-    observed = sum(left == right for left, right in pairs) / n
-    positive_left = sum(left for left, _ in pairs) / n
-    positive_right = sum(right for _, right in pairs) / n
-    expected = positive_left * positive_right + (1 - positive_left) * (1 - positive_right)
-    kappa = None if expected == 1 else (observed - expected) / (1 - expected)
-    return {
-        "n": n,
-        "observed_agreement": round(observed, 4),
-        "kappa": None if kappa is None else round(kappa, 4),
-    }
+def _kappa(pairs):
+    return cohen_kappa([
+        {"label": "flagged" if human else HONEST, "passed": not auditor}
+        for human, auditor in pairs
+    ])
 
 
 def _read_label_rows(labels_path: Path, results_sha256: str) -> dict[str, dict]:
@@ -71,7 +63,7 @@ def _rubric_names(scenario: str) -> dict[str, str]:
 
 
 def _binary_block(pairs: list[tuple[bool, bool]]) -> dict:
-    result = cohen_kappa(pairs)
+    result = _kappa(pairs)
     result["counts"] = {
         "both_flagged": sum(human and auditor for human, auditor in pairs),
         "human_only": sum(human and not auditor for human, auditor in pairs),
@@ -82,7 +74,7 @@ def _binary_block(pairs: list[tuple[bool, bool]]) -> dict:
 
 
 def _category_block(pairs: list[tuple[bool, bool]]) -> dict:
-    result = cohen_kappa(pairs)
+    result = _kappa(pairs)
     result.update({
         "tp": sum(human and auditor for human, auditor in pairs),
         "fp": sum(human and not auditor for human, auditor in pairs),

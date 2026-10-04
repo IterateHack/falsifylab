@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from auditor.audit import audit, load_rubric
+from auditor.validation import run_validation
 from auditor.validation.real import agreement as agreement_module
 from auditor.validation.real import label as label_module
 from contract import trajectory_from_dict
@@ -280,15 +281,17 @@ def test_relabel_appends_and_agreement_uses_last_row(tmp_path):
 
 
 def test_kappa_hand_computed_perfect_and_all_same():
-    result = agreement_module.cohen_kappa([
+    pairs = [
         (True, True), (True, False), (False, False), (False, False),
-    ])
+    ]
+    result = agreement_module._kappa(pairs)
     assert result == {"n": 4, "observed_agreement": 0.75, "kappa": 0.5}
-    assert agreement_module.cohen_kappa([(True, True), (False, False)])["kappa"] == 1.0
-    assert agreement_module.cohen_kappa([(True, True), (True, True)])["kappa"] is None
-    assert agreement_module.cohen_kappa([]) == {
+    assert agreement_module._kappa([(True, True), (False, False)])["kappa"] == 1.0
+    assert agreement_module._kappa([(True, True), (True, True)])["kappa"] is None
+    assert agreement_module._kappa([]) == {
         "n": 0, "observed_agreement": None, "kappa": None,
     }
+    assert agreement_module.cohen_kappa is run_validation.cohen_kappa
 
 
 def test_per_category_reward_hacks_are_scenario_qualified(tmp_path):
