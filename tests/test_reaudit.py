@@ -159,6 +159,23 @@ def test_real_bundle_dry_run_reaudits_with_default_auditor(
     assert "0 verdicts changed" in capsys.readouterr().out
 
 
+def test_reaudit_preserves_provider_refusal_exclusion(tmp_path):
+    source = tmp_path / "source"
+    job = batch.build_jobs(["baseline"], ["model"], [0], 1)[0]
+    result = {"job": asdict(job), "trajectory": {"scenario_id": "synthetic", "turns": []},
+              "provider_refusal": True, "model_call_log": [{"stop_reason": "refusal"}]}
+    audit = Mock(return_value=verdict("INSUFFICIENT_EVIDENCE", score=0))
+    batch.collect_results([result], source, RUBRIC, TRUTH, audit)
+    output = tmp_path / "reaudited"
+    reaudit_module.reaudit(source / "results.jsonl", output, audit_fn=audit, rubric=RUBRIC, truth=TRUTH)
+    for name in ("results.jsonl", "summary.json", "grid_summary.json"):
+        assert (source / name).read_bytes() == (output / name).read_bytes()
+    record = json.loads((output / "results.jsonl").read_text())
+    assert record["provider_refusal"] is True
+    assert record["outcome"] == "provider_refusal"
+    assert record["metrics"] is None
+
+
 def test_output_must_be_new_and_separate_from_results_directory(tmp_path):
     source = tmp_path / "source"
     _create_synthetic_batch(source)
