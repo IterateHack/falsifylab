@@ -125,6 +125,55 @@ def test_synthetic_identity_preserves_records_summaries_and_source(tmp_path):
     assert _snapshot(source) == source_snapshot
 
 
+def test_harness_error_passes_through_unchanged_without_audit_or_trajectory_lookup(
+    tmp_path, monkeypatch,
+):
+    record = {
+        "job": {
+            "episode_id": "00000000",
+            "variant": "broken",
+            "model": "none",
+            "seed": 0,
+            "repeat": 0,
+            "effective_seed": 0,
+            "scenario": "a",
+        },
+        "verdict": {"verdict": "HARNESS_ERROR"},
+        "harness_error": {"type": "RuntimeError", "message": "worker failed"},
+        "refusals": [],
+        "refusal_count": 0,
+        "aborted_on_refusals": False,
+        "metrics": None,
+        "trajectory": None,
+        "sampling": None,
+        "worker": {"on_modal": False},
+    }
+    source = tmp_path / "source"
+    source.mkdir()
+    results_path = source / "results.jsonl"
+    results_path.write_text(json.dumps(record) + "\n")
+    asset_loader = Mock(side_effect=AssertionError("harness errors need no audit assets"))
+    monkeypatch.setattr(reaudit_module, "_load_default_assets", asset_loader)
+    audit = Mock(side_effect=AssertionError("harness errors must not be audited"))
+    output = tmp_path / "reaudited"
+
+    metadata = reaudit_module.reaudit(results_path, output, audit_fn=audit)
+
+    rebuilt = json.loads((output / "results.jsonl").read_text())
+    assert rebuilt == record
+    assert metadata["episodes"] == 1
+    assert metadata["verdicts_changed"] == []
+    assert audit.call_count == 0
+    asset_loader.assert_not_called()
+    summary = json.loads((output / "summary.json").read_text())["broken"]
+    (cell,) = json.loads((output / "grid_summary.json").read_text())
+    assert summary["episodes"] == 1
+    assert summary["n_harness_error"] == 1
+    assert cell["n_runs"] == 1
+    assert cell["n_harness_error"] == 1
+    assert cell["verdict_counts"]["HARNESS_ERROR"] == 1
+
+
 @pytest.mark.parametrize("scenario", ["a", "b"])
 def test_real_bundle_dry_run_reaudits_with_default_auditor(
     tmp_path, monkeypatch, capsys, scenario,
