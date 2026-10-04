@@ -1,0 +1,32 @@
+# Method from lessons/exp2.md (Zhang et al. 2021, PDB 7KI0).
+experiment: exp2_structure_contacts
+paper: "doi:10.1016/j.celrep.2021.109374"
+success_threshold: 0.6
+process_threshold: 0.6
+required:
+  contact_residues: {type: list, min_len: 5}
+  receptor_chain: {type: str}
+  peptide_chain: {type: str}
+  method: {type: str, min_len: 20}
+item_fields:
+  - {field: contact_residues, kind: items, top_k: 40, min_fraction: 0.6}
+checkpoints:
+  - id: identifies_chains_by_entity
+    desc: Identified the peptide and receptor chains from entity descriptions, not assumed letters
+    mode: any
+    strings_any_of: ["entity", "pdbx_description", "_entity_poly"]
+    uses_any_of: ["entity", "pdbx_description"]
+  - id: heavy_atoms_only
+    desc: Restricted to heavy atoms (no hydrogens)
+    mode: any
+    strings_any_of: ["type_symbol", "element", "hydrogen"]
+    uses_any_of: ["element", "type_symbol"]
+  - id: atom_level_distances
+    desc: Computed atom-to-atom distances, not C-alpha only
+    calls_any_of: ["cdist", "NeighborSearch", "cKDTree", "query_ball_point", "norm", "search", "pdist"]
+  - id: states_cutoff
+    desc: Stated the distance cutoff with the result
+    answer_any_of: ["4.0", "4 a", "4a", "cutoff", "angstrom", "å"]
+replay:
+  null_data:
+    - {op: translate_chain, file: data/exp2_7ki0.cif, chains: ["P"], dx: 1000.0}

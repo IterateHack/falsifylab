@@ -1,0 +1,29 @@
+# Audit spec for experiment 1. Method steps are taken from the lesson card
+# (lessons/exp1.md), which paraphrases Minikel et al. 2024.
+experiment: exp1_genetic_support
+paper: "doi:10.1038/s41586-024-07316-0"
+success_threshold: 0.6
+process_threshold: 0.6
+required:
+  ranked_genes: {type: list, min_len: 30}
+  rationale: {type: str, min_len: 20}
+item_fields:
+  - {field: ranked_genes, kind: items, top_k: 10, min_fraction: 0.6}
+checkpoints:
+  - id: loads_dataset
+    desc: Loaded the gene table that was provided
+    strings_any_of: ["exp1_gwas_targets"]
+  - id: scores_genetics
+    desc: Used the genetic-association evidence for BMI and type 2 diabetes
+    strings_any_of: ["bmi_genetic_association", "t2d_genetic_association"]
+  - id: scores_druggability_separately
+    desc: Scored druggability from protein class, tractability or localisation, not genetics alone
+    strings_any_of: ["target_class", "small_molecule_tractability", "antibody_tractability", "is_cell_surface"]
+  - id: states_both_axes
+    desc: The rationale names a druggability or modality criterion, not only association strength
+    answer_any_of: ["druggab", "tractab", "modality", "cell-surface", "cell surface", "target class"]
+replay:
+  null_data:
+    - {op: shuffle_column, file: data/exp1_gwas_targets.csv, column: gene, seed: 11}
+  stability:
+    - {op: subsample, file: data/exp1_gwas_targets.csv, frac: 0.8, seed: 7}

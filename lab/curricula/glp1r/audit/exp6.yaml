@@ -1,0 +1,27 @@
+# Reasoning experiment: limited coverage. Method from lessons/exp6.md (Wharton et
+# al. 2025, ATTAIN-1). The sandbox is empty by design.
+experiment: exp6_capstone
+paper: "doi:10.1056/NEJMoa2511774"
+success_threshold: 0.6
+process_threshold: 0.6
+required:
+  verdict: {type: str, min_len: 10}
+  per_claim: {type: dict, min_len: 3}
+  not_established: {type: str, min_len: 10}
+  would_change_my_mind: {type: str, min_len: 10}
+checkpoints:
+  - id: retrieves_earned_lessons
+    desc: Retrieved the lesson cards earned so far
+    event: read_lessons_called
+  - id: applies_earlier_lessons
+    desc: Named earlier experiments in the lessons-applied section
+    section_any_of: {section: lessons_applied, any_of: ["exp1", "exp2", "exp3", "exp4", "exp5", "experiment 1", "experiment 2", "experiment 5"]}
+  - id: names_evidence_types
+    desc: Named the type of evidence behind each claim (genetics, structure, pharmacology, trial)
+    answer_any_of: ["genetic", "structur", "pharmacolog", "trial", "phase 3", "attain"]
+  - id: carries_species_caveat
+    desc: Carried the species caveat into the verdict
+    answer_any_of: ["species", "rodent", "ortholog", "mouse"]
+  - id: discloses_prior_knowledge
+    desc: Said how much of the verdict was already known rather than shown
+    section_any_of: {section: prior_knowledge_claimed, any_of: ["prior", "knew", "known", "recall", "memory", "training", "already"]}
