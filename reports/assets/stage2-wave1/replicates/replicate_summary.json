@@ -1,12 +1,12 @@
 {
   "stamp": {
-    "git_sha": "1f44b07",
-    "git_dirty": false,
+    "git_sha": "6c10edc-dirty",
+    "git_dirty": true,
     "models": [
       "claude-sonnet-5-5"
     ],
     "sampling": [
-      "T=None client=live max_tokens=2048"
+      "T=omitted client=live max_tokens=2048"
     ],
     "source": "runs/stage2-wave1/a (results SHA: a880033ba3a5ad7f516165a25a9d8d28e7706698); runs/stage2-wave1/b (results SHA: a880033ba3a5ad7f516165a25a9d8d28e7706698)",
     "reaudit": null,

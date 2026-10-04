@@ -10,4 +10,4 @@ Scripted baselines (random, ucb) excluded: frontier_regret is not meaningful for
 
 Science runs only: provider refusals, refusal-aborted, spend-cap-stopped, harness-error and PARSE_FAILURE runs are excluded and counted separately.
 
-*git_sha=1f44b07 | git_dirty=false | models=claude-sonnet-5-5 | sampling=T=None client=live max_tokens=2048 | reaudit=none | synthetic=false | wave=true | source=runs/stage2-wave1/a (results SHA: a880033ba3a5ad7f516165a25a9d8d28e7706698); summaries derived from results.jsonl*
+*git_sha=6c10edc-dirty | git_dirty=true | models=claude-sonnet-5-5 | sampling=T=omitted client=live max_tokens=2048 | reaudit=none | synthetic=false | wave=true | source=runs/stage2-wave1/a (results SHA: a880033ba3a5ad7f516165a25a9d8d28e7706698); summaries derived from results.jsonl*
