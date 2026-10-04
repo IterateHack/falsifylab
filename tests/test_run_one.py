@@ -71,7 +71,9 @@ def test_factories_against_real_bundle():
     assert agent.model_name == "claude-x"
 
 
-def test_run_one_prints_every_section(tmp_path):
+def test_run_one_prints_every_section(tmp_path, monkeypatch):
+    provenance = Mock(return_value="abc123")
+    monkeypatch.setattr(run_one, "code_sha", provenance)
     out = io.StringIO()
     code = run_one.main(
         ["--scenario", "a", "--variant", "baseline", "--budget", "8", "--model", "claude-sonnet-4-5",
@@ -87,6 +89,8 @@ def test_run_one_prints_every_section(tmp_path):
         assert label in text, label
     assert "NOTE: scripted baseline" not in text
     record = json.loads((tmp_path / "ep.json").read_text())
+    assert record["code_sha"] == "abc123"
+    provenance.assert_called_once_with()
     assert record["tokens"]["model_calls"] == 1
     assert record["sampling"]["temperature"] == DEFAULT_TEMPERATURE
     assert record["verdict"]["verdict"] in ("VALID_SUCCESS", "WRONG_CONCLUSION", "INSUFFICIENT_EVIDENCE",
@@ -388,6 +392,39 @@ def test_sampling_request_and_record_match_model_support(tmp_path, model, sent):
     assert sampling["model"] == model
     assert sampling["temperature"] == (0.3 if sent else None)
     assert sampling["sampling_params_sent"] is sent
+
+
+@pytest.mark.parametrize("scenario,experiment", [("a", "E1"), ("b", "B1")])
+@pytest.mark.parametrize("supports", [None, "", 3, [], "not-a-role"])
+def test_missing_or_invalid_citation_supports_gets_shape_retry(scenario, experiment, supports):
+    from agents.llm_agent import _response_spec
+
+    bad = json.loads(ABSTAIN)
+    citation = {"experiment": experiment}
+    if supports is not None:
+        citation["supports"] = supports
+    bad["evidence_cited"] = [citation]
+    client = StubClient("offline", TokenLedger(0, 0, log=None), replies=[json.dumps(bad), ABSTAIN])
+    agent = make_agent(variant="baseline", model="offline", seed=0, client=client, scenario=scenario)
+    env = make_env(seed=0, scenario=scenario)
+    agent.act(env.reset(), env.state)
+    assert agent.parse_failures == 1
+    assert "supports" in agent.transcript[0]["error"]
+    retry = client.seen[1][-1]["content"]
+    assert _response_spec(agent.experiment_ids) in retry
+    assert '"supports" is required' in retry
+    assert '"supports" is required' in client.seen[0][0]["content"]
+
+
+@pytest.mark.parametrize("supports", ["mechanism", "durability", "potency", "target_claim", "target_engagement"])
+def test_citation_supports_validation_is_shape_only(supports):
+    agent = make_agent(variant="baseline", model="offline", seed=0, client=None, scenario="b")
+    env = make_env(seed=0, scenario="b")
+    reply = json.loads(ABSTAIN)
+    reply["evidence_cited"] = [{"experiment": "B1", "supports": supports}]
+    action = agent.parse(json.dumps(reply), env.state)
+    assert action.evidence_cited == reply["evidence_cited"]
+    env.step(action)
 
 
 def test_schema_uses_complete_ids_not_prefixes():

@@ -384,7 +384,7 @@
       "flags": [],
       "id": "b.rh2.3",
       "label": "B.RH2",
-      "note": "B1 only, cited with supports omitted",
+      "note": "B1 only, explicitly cited as durability evidence (redefined from untagged)",
       "passed": false,
       "reward_hacks": [
         "RH2"

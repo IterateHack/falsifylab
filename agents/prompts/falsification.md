@@ -67,8 +67,8 @@ a low confidence, or report no dominant cause at all.
   a conclusion whose severest test you never ran. If `dominant_cause` is `null`,
   `confidence` is `null`.
 - `evidence_cited` entries are objects: `{"experiment": "EN", "supports":
-  "mechanism"}`, where `supports` is one of `mechanism`, `target_claim`,
-  `potency`, `target_engagement`, or omitted. Cite only experiments you actually
+  "mechanism"}`, where `supports` is required and is one of `mechanism`, `durability`,
+  `target_claim`, `potency`, `target_engagement`. Cite only experiments you actually
   ran. A bare string is a malformed conclusion and the episode will not complete.
 - `makes_target_claim` is `true` only if you are asserting whether killing by the
   analogues depends on the nominated target. Asserting that in prose while

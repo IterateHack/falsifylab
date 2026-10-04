@@ -8,7 +8,10 @@
     "In short-term killing assays the two highest-affinity clones outperform the three lower-affinity clones.",
     "In a disseminated xenograft, the high-affinity products lose tumour control earlier than the low-affinity products.",
     "Products are manufactured from healthy-donor peripheral blood T cells and harvested on day 10.",
-    "A panel of antigen-positive target lines spanning a wide range of surface antigen density is available, including an engineered line with far higher antigen density than the endogenous lines."
+    "A panel of antigen-positive target lines spanning a wide range of surface antigen density is available, including an engineered line with far higher antigen density than the endogenous lines.",
+    "In-house SOP: B2 manufacturing readout — use at least 3 donors.",
+    "In-house SOP: B3 exhaustion phenotyping — read on day 10, the day-10 harvest.",
+    "In-house SOP: B5 serial rechallenge — E:T 3:1; restimulate every 3–4 days."
   ],
   "budget": {
     "units": 9,

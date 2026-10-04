@@ -91,7 +91,9 @@ def _create_synthetic_batch(output: Path) -> list[dict]:
             "model_call_log": [],
             "worker": {"on_modal": False},
         })
-    batch.collect_results(results, output, RUBRIC, TRUTH, _identity_audit)
+    batch.collect_results(
+        results, output, RUBRIC, TRUTH, _identity_audit, code_sha="old-code-sha",
+    )
     return results
 
 
@@ -103,7 +105,9 @@ def _snapshot(directory: Path) -> dict:
     }
 
 
-def test_synthetic_identity_preserves_records_summaries_and_source(tmp_path):
+def test_synthetic_identity_preserves_records_summaries_and_source(tmp_path, monkeypatch):
+    provenance = Mock(return_value="new-code-sha")
+    monkeypatch.setattr(reaudit_module, "code_sha", provenance)
     source = tmp_path / "source"
     _create_synthetic_batch(source)
     results_path = source / "results.jsonl"
@@ -117,16 +121,30 @@ def test_synthetic_identity_preserves_records_summaries_and_source(tmp_path):
         results_path, output, audit_fn=_identity_audit, rubric=RUBRIC, truth=TRUTH,
     )
 
-    assert (output / "results.jsonl").read_bytes() == original_results
+    source_records = [json.loads(line) for line in original_results.splitlines()]
+    output_records = [
+        json.loads(line) for line in (output / "results.jsonl").read_text().splitlines()
+    ]
+    assert len(output_records) == len(source_records)
+    for source_record, output_record in zip(source_records, output_records):
+        assert output_record["code_sha"] == "new-code-sha"
+        assert output_record["source_code_sha"] == source_record.get("code_sha")
+        assert {
+            key: value for key, value in output_record.items()
+            if key not in ("code_sha", "source_code_sha")
+        } == {key: value for key, value in source_record.items() if key != "code_sha"}
     assert (output / "summary.json").read_bytes() == original_summary
     assert (output / "grid_summary.json").read_bytes() == original_grid
     assert metadata["verdicts_changed"] == []
+    assert metadata["code_sha"] == "new-code-sha"
+    provenance.assert_called_once_with()
     assert json.loads((output / "reaudit.json").read_text()) == metadata
     assert _snapshot(source) == source_snapshot
 
 
-def test_harness_error_passes_through_unchanged_without_audit_or_trajectory_lookup(
-    tmp_path, monkeypatch,
+@pytest.mark.parametrize("source_code_sha", ["old-code-sha", None])
+def test_harness_error_passes_through_with_provenance_without_audit_or_trajectory_lookup(
+    tmp_path, monkeypatch, source_code_sha,
 ):
     record = {
         "job": {
@@ -148,20 +166,29 @@ def test_harness_error_passes_through_unchanged_without_audit_or_trajectory_look
         "sampling": None,
         "worker": {"on_modal": False},
     }
+    if source_code_sha is not None:
+        record["code_sha"] = source_code_sha
     source = tmp_path / "source"
     source.mkdir()
     results_path = source / "results.jsonl"
     results_path.write_text(json.dumps(record) + "\n")
     asset_loader = Mock(side_effect=AssertionError("harness errors need no audit assets"))
     monkeypatch.setattr(reaudit_module, "_load_default_assets", asset_loader)
+    provenance = Mock(return_value="new-code-sha")
+    monkeypatch.setattr(reaudit_module, "code_sha", provenance)
     audit = Mock(side_effect=AssertionError("harness errors must not be audited"))
     output = tmp_path / "reaudited"
 
     metadata = reaudit_module.reaudit(results_path, output, audit_fn=audit)
 
     rebuilt = json.loads((output / "results.jsonl").read_text())
-    assert rebuilt == record
+    assert rebuilt == {
+        **record,
+        "code_sha": "new-code-sha",
+        "source_code_sha": source_code_sha,
+    }
     assert metadata["episodes"] == 1
+    assert metadata["code_sha"] == "new-code-sha"
     assert metadata["verdicts_changed"] == []
     assert audit.call_count == 0
     asset_loader.assert_not_called()
@@ -172,6 +199,7 @@ def test_harness_error_passes_through_unchanged_without_audit_or_trajectory_look
     assert cell["n_runs"] == 1
     assert cell["n_harness_error"] == 1
     assert cell["verdict_counts"]["HARNESS_ERROR"] == 1
+    provenance.assert_called_once_with()
 
 
 @pytest.mark.parametrize("scenario", ["a", "b"])
@@ -208,7 +236,8 @@ def test_real_bundle_dry_run_reaudits_with_default_auditor(
     assert "0 verdicts changed" in capsys.readouterr().out
 
 
-def test_reaudit_preserves_provider_refusal_exclusion(tmp_path):
+def test_reaudit_preserves_provider_refusal_exclusion(tmp_path, monkeypatch):
+    monkeypatch.setattr(reaudit_module, "code_sha", Mock(return_value="new-code-sha"))
     source = tmp_path / "source"
     job = batch.build_jobs(["baseline"], ["model"], [0], 1)[0]
     result = {"job": asdict(job), "trajectory": {"scenario_id": "synthetic", "turns": []},
@@ -217,9 +246,16 @@ def test_reaudit_preserves_provider_refusal_exclusion(tmp_path):
     batch.collect_results([result], source, RUBRIC, TRUTH, audit)
     output = tmp_path / "reaudited"
     reaudit_module.reaudit(source / "results.jsonl", output, audit_fn=audit, rubric=RUBRIC, truth=TRUTH)
-    for name in ("results.jsonl", "summary.json", "grid_summary.json"):
+    for name in ("summary.json", "grid_summary.json"):
         assert (source / name).read_bytes() == (output / name).read_bytes()
+    source_record = json.loads((source / "results.jsonl").read_text())
     record = json.loads((output / "results.jsonl").read_text())
+    assert record["code_sha"] == "new-code-sha"
+    assert record["source_code_sha"] == source_record.get("code_sha")
+    assert {
+        key: value for key, value in record.items()
+        if key not in ("code_sha", "source_code_sha")
+    } == {key: value for key, value in source_record.items() if key != "code_sha"}
     assert record["provider_refusal"] is True
     assert record["outcome"] == "provider_refusal"
     assert record["metrics"] is None

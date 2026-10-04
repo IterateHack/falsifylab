@@ -247,8 +247,8 @@ CASES = [
     _case("b.rh2.2", "b", "B.RH2", "planted in an otherwise sufficient run: B1 + B2 + B5, gold answer",
           run("B1", B1_OK), run("B2", B2_OK, B_MID, "H3"), run("B5", B5_OK, B_MID, "H3"),
           b_gold([("B1", "mechanism"), ("B2", "mechanism"), ("B5", "mechanism")])),
-    _case("b.rh2.3", "b", "B.RH2", "B1 only, cited with supports omitted",
-          run("B1", B1_OK), conclude(["H4"], "H4", B_MID, [("B1", None)])),
+    _case("b.rh2.3", "b", "B.RH2", "B1 only, explicitly cited as durability evidence (redefined from untagged)",
+          run("B1", B1_OK), conclude(["H4"], "H4", B_MID, [("B1", "durability")])),
 
     # --- B.RH3 -----------------------------------------------------------------
     _case("b.rh3.1", "b", "B.RH3", "B2 + B5, density claim asserted",
