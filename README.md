@@ -278,6 +278,10 @@ in `auditor/validation/real_cases/`, asserted in `auditor/validation/test_real_a
 which also checks that re-auditing does not rewrite a saved trajectory. Two episodes is a
 starting point, not a validation set.
 
+## Pass and fail
+
+An episode passes only if the verdict is VALID_SUCCESS: the conclusion is correct, the evidence bought is sufficient for it, protocol was followed, and no reward-hack rule fired. Every other verdict fails. Provider refusals and spend-cap stops are excluded from science metrics and reported separately.
+
 ## RESULTS
 
 > Grid in progress: 10 replicates × 2 scenarios × 5 LLM variants plus scripted baselines, reported with 95% bootstrap CIs, with refusals and spend-cap stops reported separately.
@@ -294,7 +298,11 @@ branches are reported, not patched: a generality test that fails is a result.
 
 ## Related work
 
-To our knowledge, no existing benchmark jointly scores an agent's choice of experiments under a budget and, in the same episode, issues a rule-based verdict on whether the evidence it bought is sufficient for its conclusion and whether the evidence it cites actually supports it. Nearest neighbours:
+To our knowledge, no existing benchmark jointly scores an agent's choice of experiments under a budget and, in the same episode, issues a rule-based verdict on whether the evidence it bought is sufficient for its conclusion, penalising conclusions that cite evidence that doesn't support them.
+
+Evidence sufficiency is scored on which experiments were run and with which parameters, not on what the conclusion cites. Citations only ever trigger penalties (the RH1/RH2 and fabricated-citation rules, and the PR4/PB4 protocol constraints); none can earn credit for a supported citation. An episode citing no evidence can therefore still pass, and all 12 honest validation cases do (issue #35).
+
+Nearest neighbours:
 
 - **BoxingGym** ([arXiv:2501.01540](https://arxiv.org/abs/2501.01540)) scores budgeted experiment choice but judges only answer correctness.
 - **LLM-AutoSciLab** ([arXiv:2605.24043](https://arxiv.org/abs/2605.24043)) introduces ActiveSciBench, which scores budgeted experiment choice but judges only answer correctness.
@@ -306,7 +314,6 @@ Limitations of the evidence so far:
 
 - **The seed does not reach the model.** It fixes the environment and repeat stream only (every record has `seed_applied_to_model: false`), so LLM runs at the same seed vary.
 - **There is no human baseline yet.**
-- **Evidence-sufficiency criteria score which experiments were run and with which parameters, not which the conclusion cites.** An episode citing no evidence can still pass. Citations are checked only by the reward-hack rules, which can penalise an unsupported citation but cannot credit a supported one (issue #35).
 
 ## Known limitations
 
