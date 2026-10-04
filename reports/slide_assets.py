@@ -801,7 +801,7 @@ def _plot_cost_of_pass(path: Path, rows: list[dict], stamp: dict) -> None:
     axes.set_xlabel("Clean success rate (horizontal 95% Wilson CI)", fontsize=10)
     axes.set_ylabel("Cost of pass (budget units)", fontsize=10)
     axes.set_xlim(-0.02, 1.02)
-    axes.set_ylim(0, 1.1 * max(
+    axes.set_ylim(bottom=0, top=1.1 * max(
         (row["cost_of_pass"] for row in plotted_rows), default=1,
     ))
     axes.tick_params(axis="both", labelsize=9)
