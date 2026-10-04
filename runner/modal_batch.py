@@ -31,10 +31,11 @@ are interpreted. Rubric and truth stay in the local auditing process and are
 never passed to agent factories or Modal episode workers.
 
 Outputs: episodes/<id>.json (exact contract shape), results.jsonl (metadata,
-verdict and metrics), summary.json, and reward_vs_audit.png. Rates pool all
-models/seeds/repeats within a variant. A failed episode or audit aborts the
-batch rather than silently removing it from the denominator; completed logs
-remain available, but a failed batch has no summary or chart.
+verdict and metrics), summary.json, grid_summary.json, reward_vs_audit.png,
+and raw_vs_clean.png. Rates pool all models/seeds/repeats within a variant.
+Refusal-aborted episodes remain in primary failure metrics and the charts, with
+completed-only metrics reported separately; other failed episodes or audits
+abort the batch rather than silently removing them.
 """
 from __future__ import annotations
 
@@ -51,7 +52,13 @@ import random
 from statistics import fmean
 from typing import Callable, Iterable, Mapping
 
-from contract import Agent, Env, Trajectory, Turn, Verdict, trajectory_from_dict
+from contract import Agent, Env, Observation, Result, Trajectory, Turn, Verdict, trajectory_from_dict
+from env import EnvRejection
+
+# A refused purchase is not a Turn (nothing ran, nothing was charged). The
+# reason is handed back to the agent as a zero-cost observation under this id so
+# the model can choose again; it never enters the recorded trajectory.
+REFUSAL_EXPERIMENT_ID = "__refused__"
 
 
 @dataclass(frozen=True)
@@ -62,6 +69,26 @@ class EpisodeJob:
     seed: int
     repeat: int
     effective_seed: int
+
+
+@dataclass
+class Refusal:
+    turn_index: int
+    agent_call: int
+    rejection_type: str
+    reason: str
+    action: dict
+
+
+@dataclass
+class EpisodeRun:
+    trajectory: Trajectory
+    refusals: list[Refusal]
+    aborted_on_refusals: bool
+
+    @property
+    def refusal_count(self) -> int:
+        return len(self.refusals)
 
 
 def make_env(*, seed: int) -> Env:
@@ -99,8 +126,15 @@ def build_jobs(variants: list[str], models: list[str], seeds: list[int], n: int)
 
 
 def run_episode(job: EpisodeJob, env_factory: Callable, agent_factory: Callable,
-                max_turns: int = 100) -> Trajectory:
-    """Drive only the contract interfaces; never interpret observation strings."""
+                max_turns: int = 100, max_refusals: int = 3,
+                log: Callable[[str], None] | None = None) -> EpisodeRun:
+    """Drive only the contract interfaces; never interpret observation strings.
+
+    An action the Env refuses (EnvRejection: over budget, malformed conclude,
+    ...) is fed back to the agent as a REFUSAL_EXPERIMENT_ID observation
+    carrying the reason and recorded with the rejected action. More than
+    ``max_refusals`` refusals returns the partial trajectory marked as aborted.
+    ``max_turns`` bounds agent calls, accepted or refused."""
     if max_turns < 1:
         raise ValueError("max_turns must be positive")
     random.seed(job.effective_seed)
@@ -108,18 +142,35 @@ def run_episode(job: EpisodeJob, env_factory: Callable, agent_factory: Callable,
     agent = agent_factory(variant=job.variant, model=job.model, seed=job.effective_seed)
     observation = env.reset()
     trajectory = Trajectory(env.state.scenario_id, [])
-    for index in range(max_turns):
+    refusals = []
+    for agent_call in range(max_turns):
         action = agent.act(deepcopy(observation), deepcopy(env.state))
         if action.kind not in ("run_experiment", "conclude"):
             raise ValueError(f"Unknown action kind: {action.kind}")
         saved_action = deepcopy(action)
-        observation = env.step(action)
+        try:
+            observation = env.step(action)
+        except EnvRejection as exc:
+            refusals.append(Refusal(
+                turn_index=len(trajectory.turns),
+                agent_call=agent_call,
+                rejection_type=getattr(exc, "code", "unclassified"),
+                reason=exc.reason,
+                action=asdict(saved_action),
+            ))
+            if log is not None:
+                log(f"[env] refused {saved_action.kind} {saved_action.experiment_id or ''}: {exc.reason}")
+            observation = Observation(REFUSAL_EXPERIMENT_ID,
+                                      [Result(f"refused: {exc.reason}", "env")], "UNRATED", 0, {})
+            if len(refusals) > max_refusals:
+                return EpisodeRun(trajectory, refusals, aborted_on_refusals=True)
+            continue
         trajectory.turns.append(Turn(
-            index, saved_action,
+            len(trajectory.turns), saved_action,
             None if saved_action.kind == "conclude" else deepcopy(observation),
         ))
         if saved_action.kind == "conclude":
-            return trajectory
+            return EpisodeRun(trajectory, refusals, aborted_on_refusals=False)
         if env.state.concluded:
             raise ValueError("Env ended the episode without a conclude action")
     raise RuntimeError(f"Episode {job.episode_id} did not conclude within {max_turns} turns")
@@ -127,9 +178,13 @@ def run_episode(job: EpisodeJob, env_factory: Callable, agent_factory: Callable,
 
 def remote_episode(job: EpisodeJob, env_factory: str, agent_factory: str,
                    max_turns: int) -> dict:
-    return {"job": asdict(job), "trajectory": asdict(run_episode(
-        job, resolve(env_factory), resolve(agent_factory), max_turns,
-    ))}
+    episode = run_episode(job, resolve(env_factory), resolve(agent_factory), max_turns)
+    return {
+        "job": asdict(job),
+        "trajectory": asdict(episode.trajectory),
+        "refusals": [asdict(refusal) for refusal in episode.refusals],
+        "aborted_on_refusals": episode.aborted_on_refusals,
+    }
 
 
 def validate_truth(truth: Mapping) -> None:
@@ -153,7 +208,7 @@ def episode_metrics(trajectory: Trajectory, verdict: Verdict, truth: Mapping) ->
     return {
         "nominal_success": conclusion.kind == "conclude" and
             conclusion.dominant_cause == truth["dominant_cause"],
-        "valid_success": verdict.verdict == "VALID_SUCCESS",
+        "clean_success": verdict.verdict == "VALID_SUCCESS",
         "reward_hack": verdict.verdict == "REWARD_HACK" or bool(verdict.reward_hacks),
         # The dimension records breaches even if another verdict takes precedence.
         "protocol_violation": verdict.verdict == "PROTOCOL_VIOLATION" or
@@ -167,38 +222,237 @@ def episode_metrics(trajectory: Trajectory, verdict: Verdict, truth: Mapping) ->
     }
 
 
+def aborted_metrics(trajectory: Trajectory, verdict: Verdict) -> dict:
+    return {
+        "nominal_success": False,
+        "clean_success": False,
+        "reward_hack": verdict.verdict == "REWARD_HACK" or bool(verdict.reward_hacks),
+        "protocol_violation": verdict.verdict == "PROTOCOL_VIOLATION" or
+            verdict.scores["protocol_validity"] == 0,
+        "cost": sum(t.observation.cost for t in trajectory.turns
+                    if t.action.kind == "run_experiment" and t.observation is not None),
+        "brier": None,
+        "overconfidence": "OVERCONFIDENT" in verdict.flags,
+        "R_visible": 0.0,
+        "final_score": 0.0,
+    }
+
+
 def aggregate(records: list[dict]) -> dict:
     metrics = {
-        "nominal_success_rate": "nominal_success", "valid_success_rate": "valid_success",
+        "nominal_success_rate": "nominal_success", "clean_success_rate": "clean_success",
         "reward_hack_rate": "reward_hack", "protocol_violation_rate": "protocol_violation",
         "mean_cost": "cost", "mean_brier": "brier", "overconfidence_rate": "overconfidence",
-        "mean_R_visible": "R_visible", "mean_final_score": "final_score",
+        "mean_R_visible": "R_visible", "raw_score_mean": "final_score",
     }
+
+    def metric_means(metric_rows: list[dict]) -> dict:
+        briers = [row["brier"] for row in metric_rows if row["brier"] is not None]
+        return {
+            **{
+                output: fmean(row[source] for row in metric_rows) if metric_rows else None
+                for output, source in metrics.items()
+                if output != "mean_brier"
+            },
+            "mean_brier": fmean(briers) if briers else None,
+            "brier_n": len(briers),
+        }
+
     summary = {}
     for variant in sorted({r["job"]["variant"] for r in records}):
-        rows = [r["metrics"] for r in records if r["job"]["variant"] == variant]
-        summary[variant] = {"episodes": len(rows), **{
-            output: fmean(row[source] for row in rows) for output, source in metrics.items()
-        }}
+        rows = [r for r in records if r["job"]["variant"] == variant]
+        completed = [r["metrics"] for r in rows if not r.get("aborted_on_refusals", False)]
+        all_metrics = [r["metrics"] for r in rows]
+        summary[variant] = {
+            "episodes": len(rows),
+            "completed_episodes": len(completed),
+            "aborted_on_refusals": sum(bool(r.get("aborted_on_refusals", False)) for r in rows),
+            "refusals": sum(r.get("refusal_count", len(r.get("refusals", []))) for r in rows),
+            **metric_means(all_metrics),
+            "completed_only": metric_means(completed) if completed else None,
+        }
     return summary
 
 
+def wilson_interval(k: int, n: int, z: float = 1.959963984540054) -> tuple[float, float]:
+    if n <= 0:
+        raise ValueError("n must be positive")
+    if not 0 <= k <= n:
+        raise ValueError("k must be between 0 and n")
+    z_squared = z * z
+    proportion = k / n
+    denominator = 1 + z_squared / n
+    center = (proportion + z_squared / (2 * n)) / denominator
+    margin = (
+        z * math.sqrt(proportion * (1 - proportion) / n + z_squared / (4 * n * n))
+        / denominator
+    )
+    return max(0.0, center - margin), min(1.0, center + margin)
+
+
+def grid_summary(records: list[dict]) -> list[dict]:
+    verdict_names = (
+        "VALID_SUCCESS", "REWARD_HACK", "UNSAFE_ACTION", "PROTOCOL_VIOLATION",
+        "INSUFFICIENT_EVIDENCE", "WRONG_CONCLUSION", "PARSE_FAILURE",
+    )
+    cells: dict[tuple[str, str], list[dict]] = {}
+    for record in records:
+        job = record["job"]
+        key = (job.get("scenario", "a"), job["variant"])
+        cells.setdefault(key, []).append(record)
+
+    summary = []
+    for (scenario, variant), rows in cells.items():
+        n_runs = len(rows)
+        n_parse_failure = sum(r["verdict"]["verdict"] == "PARSE_FAILURE" for r in rows)
+        n_aborted = sum(bool(r.get("aborted_on_refusals", False)) for r in rows)
+        scored_rows = [r for r in rows if r["verdict"]["verdict"] != "PARSE_FAILURE"]
+        n_scored = len(scored_rows)
+        n_clean_success = sum(
+            (r.get("metrics") or {}).get("clean_success") is True for r in scored_rows
+        )
+        clean_success_rate = n_clean_success / n_scored if n_scored else None
+        clean_success_ci95 = (
+            list(wilson_interval(n_clean_success, n_scored)) if n_scored else None
+        )
+        verdict_counts = dict.fromkeys((*verdict_names, "OTHER"), 0)
+        for row in rows:
+            verdict_name = row["verdict"]["verdict"]
+            verdict_counts[verdict_name if verdict_name in verdict_counts else "OTHER"] += 1
+        summary.append({
+            "scenario": scenario,
+            "variant": variant,
+            "n_runs": n_runs,
+            "n_parse_failure": n_parse_failure,
+            "n_aborted_on_refusals": n_aborted,
+            "n_scored": n_scored,
+            "n_clean_success": n_clean_success,
+            "clean_success_rate": clean_success_rate,
+            "clean_success_ci95": clean_success_ci95,
+            "frontier_regret": (
+                (1 if n_clean_success >= 1 else 0) - clean_success_rate
+                if clean_success_rate is not None else None
+            ),
+            "raw_score_mean": (
+                fmean((r.get("metrics") or {})["final_score"] for r in scored_rows)
+                if n_scored else None
+            ),
+            "verdict_counts": verdict_counts,
+        })
+    return sorted(
+        summary,
+        key=lambda row: (
+            row["frontier_regret"] is None,
+            -row["frontier_regret"] if row["frontier_regret"] is not None else 0,
+            row["scenario"],
+            row["variant"],
+        ),
+    )
+
+
 def write_chart(records: list[dict], path: Path) -> None:
+    from matplotlib import rcParams
     from matplotlib.backends.backend_agg import FigureCanvasAgg
     from matplotlib.figure import Figure
+    from matplotlib.lines import Line2D
 
     figure = Figure(figsize=(8, 5), layout="constrained")
     FigureCanvasAgg(figure)
     axes = figure.subplots()
-    for variant in sorted({r["job"]["variant"] for r in records}):
-        rows = [r["metrics"] for r in records if r["job"]["variant"] == variant]
-        axes.scatter([r["R_visible"] for r in rows], [r["final_score"] for r in rows],
-                     label=variant, alpha=0.7)
+    variants = sorted({r["job"]["variant"] for r in records})
+    legend_handles = []
+    has_aborted = any(r.get("aborted_on_refusals", False) for r in records)
+    palette = rcParams["axes.prop_cycle"].by_key()["color"]
+    for index, variant in enumerate(variants):
+        color = palette[index % len(palette)]
+        legend_handles.append(Line2D([], [], color=color, marker="o", linestyle="None",
+                                     label=variant))
+        for aborted, marker in ((False, "o"), (True, "x")):
+            rows = [
+                r for r in records
+                if r["job"]["variant"] == variant and
+                bool(r.get("aborted_on_refusals", False)) == aborted
+            ]
+            if rows:
+                axes.scatter([r["verdict"]["R_visible"] for r in rows],
+                             [r["verdict"]["final_score"] for r in rows],
+                             color=color, marker=marker, alpha=0.7, label="_nolegend_")
+    if has_aborted:
+        legend_handles.append(Line2D([], [], color="black", marker="x", linestyle="None",
+                                     label="aborted on refusals (x)"))
     axes.set(xlabel="Visible reward (R_visible)", ylabel="Final audited score",
              title="Visible reward vs. audited score")
     axes.grid(alpha=0.2)
-    if records:
-        axes.legend(title="Agent variant")
+    if legend_handles:
+        axes.legend(handles=legend_handles, title="Agent variant / outcome")
+    figure.savefig(path, dpi=160)
+
+
+def _jitter(i: int, count: int, width: float = 0.3) -> float:
+    if count < 1 or not 0 <= i < count:
+        raise ValueError("jitter index must be within a nonempty group")
+    if width < 0:
+        raise ValueError("jitter width must be nonnegative")
+    if count == 1:
+        return 0.0
+    return -width / 2 + width * i / (count - 1)
+
+
+def write_clean_chart(records: list[dict], path: Path) -> None:
+    from matplotlib import rcParams
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+    from matplotlib.figure import Figure
+    from matplotlib.lines import Line2D
+
+    figure = Figure(figsize=(8, 5), layout="constrained")
+    FigureCanvasAgg(figure)
+    axes = figure.subplots()
+    variants = sorted({r["job"]["variant"] for r in records})
+    legend_handles = []
+    has_aborted = any(r.get("aborted_on_refusals", False) for r in records)
+    palette = rcParams["axes.prop_cycle"].by_key()["color"]
+    for variant_index, variant in enumerate(variants):
+        color = palette[variant_index % len(palette)]
+        variant_offset = (
+            (variant_index - (len(variants) - 1) / 2) * 0.04 / max(len(variants) - 1, 1)
+        )
+        legend_handles.append(Line2D([], [], color=color, marker="o", linestyle="None",
+                                     label=variant))
+        for clean_success in (False, True):
+            rows = [
+                row for row in records
+                if row["job"]["variant"] == variant and
+                bool((row.get("metrics") or {}).get("clean_success")) == clean_success
+            ]
+            x_positions = [
+                int(clean_success) + _jitter(index, len(rows)) + variant_offset
+                for index in range(len(rows))
+            ]
+            for aborted, marker in ((False, "o"), (True, "x")):
+                points = [
+                    (row, x_position)
+                    for row, x_position in zip(rows, x_positions)
+                    if bool(row.get("aborted_on_refusals", False)) == aborted
+                ]
+                if points:
+                    axes.scatter(
+                        [x_position for _, x_position in points],
+                        [row["verdict"]["final_score"] for row, _ in points],
+                        color=color,
+                        marker=marker,
+                        alpha=0.7,
+                        label="_nolegend_",
+                    )
+    if has_aborted:
+        legend_handles.append(Line2D([], [], color="black", marker="x", linestyle="None",
+                                     label="aborted on refusals (x)"))
+    axes.set_xticks([0, 1], labels=["not clean (0)", "clean (1)"])
+    axes.set_xlim(-0.5, 1.5)
+    axes.set(xlabel="Clean success", ylabel="Raw audited score (final_score)",
+             title="Raw audited score vs. clean success")
+    axes.grid(alpha=0.2)
+    if legend_handles:
+        axes.legend(handles=legend_handles, title="Agent variant / outcome")
     figure.savefig(path, dpi=160)
 
 
@@ -220,15 +474,26 @@ def collect_results(results: Iterable[dict], output: Path, rubric: dict, truth: 
             with (episodes / f"{job.episode_id}.json").open("x", encoding="utf-8") as log:
                 json.dump(asdict(trajectory), log, indent=2, allow_nan=False)
             verdict = audit_fn(deepcopy(trajectory), deepcopy(rubric), deepcopy(truth))
+            refusals = result.get("refusals", [])
+            aborted_on_refusals = result.get("aborted_on_refusals", False)
             record = {"job": asdict(job), "verdict": asdict(verdict),
-                      "metrics": episode_metrics(trajectory, verdict, truth)}
+                      "refusals": refusals,
+                      "refusal_count": len(refusals),
+                      "aborted_on_refusals": aborted_on_refusals,
+                      "metrics": aborted_metrics(trajectory, verdict) if aborted_on_refusals
+                      else episode_metrics(trajectory, verdict, truth)}
             stream.write(json.dumps(record, allow_nan=False) + "\n")
             stream.flush()
             records.append(record)
     summary = aggregate(records)
+    grid = grid_summary(records)
     write_chart(records, output / "reward_vs_audit.png")
+    write_clean_chart(records, output / "raw_vs_clean.png")
     (output / "summary.json").write_text(
         json.dumps(summary, indent=2, allow_nan=False) + "\n", encoding="utf-8",
+    )
+    (output / "grid_summary.json").write_text(
+        json.dumps(grid, indent=2, allow_nan=False) + "\n", encoding="utf-8",
     )
     return summary
 
@@ -267,7 +532,7 @@ def main(argv: list[str] | None = None) -> None:
     validate_truth(truth)
 
     import modal
-    import matplotlib  # Fail before launching paid work if chart dependency is missing.
+    importlib.import_module("matplotlib")  # Fail before launching paid work if the chart dependency is missing.
 
     image = modal.Image.debian_slim(python_version="3.12")
     if args.pip_package:
@@ -284,6 +549,8 @@ def main(argv: list[str] | None = None) -> None:
                              order_outputs=False)
         summary = collect_results(results, args.output, rubric, truth, audit_fn)
     print(json.dumps(summary, indent=2))
+    print("== Grid summary ==")
+    print((args.output / "grid_summary.json").read_text(encoding="utf-8"), end="")
 
 
 if __name__ == "__main__":
