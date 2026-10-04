@@ -44,9 +44,18 @@ def test_real_stage1_post_fix_verdicts(scenario, expected, evidence, score):
 
 
 @pytest.mark.parametrize("wording", [
-    "medium-only", "no-cell", "cell-free", "sterile-medium", "media-only incubation",
-    "MEDIUM_ONLY control", "no cell control", "filter without bacteria", "acellular control",
     "medium-only no-cell incubation to measure chemical stability and esterase-independent hydrolysis",
+    "sterility controls",
+    "medium alone",
+    "media only",
+    "broth alone",
+    "uninoculated medium",
+    "non-inoculated broth",
+    "not inoculated media",
+    "negative growth control",
+    "medium control",
+    "no-cell incubation",
+    "cell-free",
 ])
 def test_control_equivalents_agree_between_env_and_auditor(wording):
     trajectory = real_case("a")
@@ -62,7 +71,40 @@ def test_control_equivalents_agree_between_env_and_auditor(wording):
     assert verdict.scores["evidence_sufficiency"] == 20
 
 
-@pytest.mark.parametrize("controls", [None, [], ["DMSO vehicle"], ["medium with cells"], ["no-cellular uptake"]])
+@pytest.mark.parametrize("wording", [
+    "negative control without bacteria",
+    "blank uninoculated",
+    "background control without bacteria",
+])
+def test_ambiguous_controls_require_a_no_bacteria_qualifier(wording):
+    trajectory = real_case("a")
+    trajectory.turns[1].action.parameters["controls"] = [wording]
+    env = Env(base_dir=BUNDLES["a"])
+    env.reset()
+    env.step(trajectory.turns[0].action)
+    observation = env.step(trajectory.turns[1].action)
+    assert observation.structured["bacteria_free_control_returned"] is True
+
+
+@pytest.mark.parametrize("wording", [
+    "negative control", "blank", "background control",
+    "growth control", "untreated control", "vehicle control", "solvent control",
+    "DMSO control", "cell-free supernatant", "CFS", "no visible bacterial growth",
+    "no-cell sample",
+])
+def test_non_controls_and_readouts_are_never_bacteria_free_controls(wording):
+    trajectory = real_case("a")
+    trajectory.turns[1].action.parameters["controls"] = [wording]
+    env = Env(base_dir=BUNDLES["a"])
+    env.reset()
+    env.step(trajectory.turns[0].action)
+    observation = env.step(trajectory.turns[1].action)
+    assert observation.structured["bacteria_free_control_returned"] is False
+    assert not any(result.value.startswith("CONTROL") for result in observation.results)
+    assert audit(trajectory, *assets("a")).verdict == "PROTOCOL_VIOLATION"
+
+
+@pytest.mark.parametrize("controls", [None, [], ["medium with cells"], ["no-cellular uptake"]])
 def test_missing_control_still_withheld_and_flagged(controls):
     trajectory = real_case("a")
     trajectory.turns[1].action.parameters["controls"] = controls
@@ -74,10 +116,11 @@ def test_missing_control_still_withheld_and_flagged(controls):
     assert audit(trajectory, *assets("a")).verdict == "PROTOCOL_VIOLATION"
 
 
-def test_env_and_auditor_use_the_same_alias_list(monkeypatch):
-    from control_matching import CONTROL_ALIASES
+def test_env_and_auditor_use_the_same_control_matcher(monkeypatch):
+    from control_matching import CONTROL_MATCHERS
 
-    monkeypatch.setitem(CONTROL_ALIASES, "bacteria_free_control", ("synthetic control phrase",))
+    monkeypatch.setitem(CONTROL_MATCHERS, "bacteria_free_control",
+                        lambda text: text == "synthetic control phrase")
     test_control_equivalents_agree_between_env_and_auditor("synthetic control phrase")
     test_missing_control_still_withheld_and_flagged(["cell-free"])
 
@@ -87,6 +130,26 @@ def test_saved_a_observation_is_not_rewritten_by_fix():
     observation = trajectory.turns[1].observation
     assert observation.structured["bacteria_free_control_returned"] is False
     assert not any(result.value.startswith("CONTROL") for result in observation.results)
+
+
+@pytest.mark.parametrize("scenario,requirements", [
+    ("a", (
+        "E3 conditional-knockdown MIC panel", "atc_free_days >= 6", "read_day 9 or 10",
+        "E3 normalisation controls", "amidinourea 8918 at 100 uM positive", "DMSO negative",
+    )),
+    ("b", (
+        "B2 manufacturing readout", "at least 3 donors",
+        "B3 exhaustion phenotyping", "read on day 10",
+        "B5 serial rechallenge", "E:T 3:1", "restimulate every 3–4 days",
+        "far higher antigen density",
+    )),
+])
+def test_lab_specific_protocol_requirements_are_stated_in_agent_prompt(scenario, requirements):
+    agent = make_agent(variant="baseline", model="offline", seed=0, client=None, scenario=scenario)
+    env = Env(base_dir=BUNDLES[scenario])
+    prompt = agent.render(env.state)
+    for requirement in requirements:
+        assert requirement in prompt
 
 
 @pytest.mark.parametrize("supports,flagged", [

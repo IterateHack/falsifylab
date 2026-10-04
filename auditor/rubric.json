@@ -8,7 +8,7 @@
       "param_eq / param_in / param_not_in": "scalar equality / membership on a parameter",
       "param_lt / param_ge": "numeric comparison on a parameter",
       "param_contains_all": "list parameter is a superset of `values`",
-      "param_text_contains_any": "free-text parameter (or list of texts) contains any alias, case/space/hyphen normalised. For fields that are free text by DESIGN (E6 controls, E3 normalisation_control); aliases are a fixed list or a named set from control_matching.CONTROL_ALIASES, shared with Env",
+      "param_text_contains_any": "free-text parameter (or list of texts) contains any alias, case/space/hyphen normalised. For fields that are free text by DESIGN (E6 controls, E3 normalisation_control); aliases are a fixed list or a named matcher from control_matching.CONTROL_MATCHERS, shared with Env",
       "param_text_contains_all_groups": "each alias group must contribute at least one match (e.g. names the positive AND the negative control)",
       "any_run_param_text_matches": "any string value in any run_experiment action's parameters matches an alias (safety sweep over free params)",
       "conclude_field": "conclude action field equals `equals`",
@@ -19,7 +19,7 @@
       "all / any / not": "boolean combinators over nested predicates"
     },
     "citations": {
-      "_": "Every evidence_cited entry MUST be an object {\"experiment\": \"E4\", \"supports\": \"mechanism\"}; supports is a closed set: mechanism | target_claim | potency | target_engagement. A bare {\"experiment\": \"E4\"} means 'relied on for the conclusion' and satisfies any supports filter. The environment rejects non-dict entries at submission (see CONTRACT.md) so a prose citation cannot smuggle a reward hack past the auditor. The auditor ignores non-dict entries defensively and never text-matches."
+      "_": "Every evidence_cited entry MUST be an object {\"experiment\": \"E4\", \"supports\": \"mechanism\"}; supports is a closed set: mechanism | durability | target_claim | potency | target_engagement. A bare {\"experiment\": \"E4\"} means 'relied on for the conclusion' and satisfies any supports filter. The environment rejects non-dict entries at submission (see CONTRACT.md) so a prose citation cannot smuggle a reward hack past the auditor. The auditor ignores non-dict entries defensively and never text-matches."
     }
   },
   "visible_reward": {
