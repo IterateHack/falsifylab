@@ -85,12 +85,13 @@ def test_compare_detects_changed_verdict_score_and_confounded_readout():
 
     assert cells[0]["status"] == "verdict changed; score changed; confounded"
     assert cells[0]["fired_removed"] == ["PR4"]
-    assert cells[0]["fired_added"] == []
+    assert cells[0]["fired_added"] is None
     assert cells[0]["n_verdict_changed"] == 1
     assert cells[0]["n_score_changed"] == 1
     assert cells[0]["n_confounded"] == 1
     assert episodes[0]["observation_withheld"] is True
     assert episodes[0]["confounded"] is True
+    assert episodes[0]["fired_after"] == []
 
 
 def test_withheld_readout_is_not_confounded_when_fixed_matcher_still_rejects_it():
@@ -155,6 +156,8 @@ def test_non_science_verdict_is_counted_but_not_emitted(tmp_path):
     assert refusal_only[0]["status"] == "n=0 (1 provider refusal)"
     assert cells[0]["n_science"] == 1
     assert cells[0]["n_provider_refusal"] == 1
+    assert cells[0]["fired_removed"] is None
+    assert cells[0]["fired_added"] is None
     assert episodes[0]["verdict_before"] is None
     assert episodes[0]["verdict_after"] is None
 
@@ -177,12 +180,24 @@ def test_non_science_verdict_is_counted_but_not_emitted(tmp_path):
     slide_assets._write_csv(
         episode_csv_path,
         list(matcher_fix.EPISODE_HEADERS),
-        episodes,
+        matcher_fix._episode_csv_rows(episodes),
         _stamp(),
     )
-    assert "INSUFFICIENT_EVIDENCE" not in markdown_path.read_text(encoding="utf-8")
+    markdown_text = markdown_path.read_text(encoding="utf-8")
+    cell_csv_rows = list(
+        csv.DictReader(cell_csv_path.read_text(encoding="utf-8").splitlines())
+    )
+    episode_csv_rows = list(
+        csv.DictReader(episode_csv_path.read_text(encoding="utf-8").splitlines())
+    )
+    assert "INSUFFICIENT_EVIDENCE" not in markdown_text
     assert "INSUFFICIENT_EVIDENCE" not in cell_csv_path.read_text(encoding="utf-8")
     assert "INSUFFICIENT_EVIDENCE" not in episode_csv_path.read_text(encoding="utf-8")
+    assert "[]" not in markdown_text
+    assert cell_csv_rows[0]["fired_removed"] == ""
+    assert cell_csv_rows[0]["fired_added"] == ""
+    assert all(row["fired_before"] == "" for row in episode_csv_rows)
+    assert all(row["fired_after"] == "" for row in episode_csv_rows)
 
 
 @pytest.mark.parametrize("mismatch", ["missing", "extra", "job"])
@@ -229,7 +244,10 @@ def test_scripted_variants_are_dropped_and_named_in_the_footnote():
     assert cells == []
     assert episodes == []
     assert matcher_fix._scripted_footnote([scripted_variant]) == (
-        f"* Scripted variants excluded entirely: {scripted_variant}."
+        f"Scripted variants excluded entirely: {scripted_variant}."
+    )
+    assert matcher_fix._scripted_footnote([]) == (
+        "No scripted variants were present to exclude."
     )
 
 
@@ -361,3 +379,12 @@ def test_cli_reaudits_in_clean_worktree_and_writes_all_assets(tmp_path, monkeypa
         and "stamp" in entry
         for entry in manifest["assets"]
     )
+    markdown_text = (
+        output_dir / "matcher_fix_comparison.md"
+    ).read_text(encoding="utf-8")
+    assert (
+        f"{matcher_fix.CONFOUND_CAPTION}\n\n"
+        f"{matcher_fix.EXCLUSION_CAPTION}\n\nBefore:"
+    ) in markdown_text
+    assert "No scripted variants were present to exclude." in markdown_text
+    assert "* No scripted variants" not in markdown_text

@@ -314,8 +314,8 @@ def compare_records(
                 fmean(row["final_score_after"] for row in science_episodes)
                 if n_science else None
             ),
-            "fired_removed": sorted(fired_removed),
-            "fired_added": sorted(fired_added),
+            "fired_removed": sorted(fired_removed) or None,
+            "fired_added": sorted(fired_added) or None,
             "n_verdict_changed": n_verdict_changed,
             "n_score_changed": n_score_changed,
             "n_confounded": n_confounded,
@@ -499,8 +499,19 @@ def _excluded_scripted_variants(records_by_label: dict[str, list[dict]]) -> list
 
 def _scripted_footnote(variants: list[str]) -> str:
     if variants:
-        return "* Scripted variants excluded entirely: " + ", ".join(variants) + "."
-    return "* No scripted variants were present to exclude."
+        return "Scripted variants excluded entirely: " + ", ".join(variants) + "."
+    return "No scripted variants were present to exclude."
+
+
+def _episode_csv_rows(episode_rows: list[dict]) -> list[dict]:
+    return [
+        {
+            **row,
+            "fired_before": row["fired_before"] or None,
+            "fired_after": row["fired_after"] or None,
+        }
+        for row in episode_rows
+    ]
 
 
 def _results_sha(records: list[dict]) -> str:
@@ -618,7 +629,7 @@ def _plot_comparison(
         ):
             color = _VERDICT_COLORS.get(dominant, "#6b7280")
             axes.add_patch(FancyBboxPatch(
-                (x, y - 0.27), 0.235, 0.54,
+                (x, y - 0.31), 0.235, 0.62,
                 boxstyle="round,pad=0.012",
                 facecolor=color,
                 edgecolor="black" if is_after and changed else color,
@@ -750,11 +761,11 @@ def generate_comparison(
         cell_rows,
         stamp,
         footnote=_scripted_footnote(excluded_scripted),
-        extra_sections=captions,
+        extra_sections=["\n\n".join(captions)],
     )
     slide_assets._write_csv(csv_path, list(CELL_HEADERS), cell_rows, stamp)
     slide_assets._write_csv(
-        episodes_path, list(EPISODE_HEADERS), episode_rows, stamp,
+        episodes_path, list(EPISODE_HEADERS), _episode_csv_rows(episode_rows), stamp,
     )
     _plot_comparison(png_path, cell_rows, stamp, full_sha, captions)
 
