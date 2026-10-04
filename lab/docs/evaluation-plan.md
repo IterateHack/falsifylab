@@ -2,12 +2,25 @@
 
 > **Handoff note (read first).**
 > - Paths below are relative to the lab tree root (`engine/`, `curricula/`, `evals/`, `docs/`). On `origin/main` this tree lives under `lab/`, so prefix every path with `lab/` (for example `lab/engine/agent.py`). The root instrument (`agent/`, `auditor/`, `runner/`, `CONTRACT.md`) is a separate instrument with its own protocol. Do not share code with it or merge the two claims.
-> - The lab tree was imported into `main` under `lab/` by PR #37 (history kept). The WRN curriculum was removed from it in the PR that added this file. The `lab/curricula/glp1r/` curriculum is the only one.
+> - The lab tree was imported into `main` under `lab/` by PR #37 (history kept). A second curriculum (WRN) once shipped with it and was removed before this plan; it is absent at `main`, and no doc should describe it as a current capability. `lab/curricula/glp1r/` is the lab's only curriculum.
 > - Line numbers refer to `cfaabf6` and may have shifted. Locate by function name if they have.
 > - Verified at `cfaabf6`: the engine passes every earned lesson card to later experiments (`engine/agent.py`, `available = earned_lessons`), so any comparison run before the relevant-lessons fix is not comparable to later results.
-> - The 0.95 cold GLP-1R capstone score is reported in open PR #43; reproduce it in this tree before citing it. Open PR #38 (BLAS thread pinning in `lab/sandbox/`) should merge before work that touches the sandbox. Issue #44 (scorer alias bug) concerned the WRN scorer, which no longer exists, but the alias-spelling regression-test rule in this plan still applies to every name-matching scorer.
+> - The 0.95 cold GLP-1R capstone score is reported in open PR #43; reproduce it in this tree before citing it. Open PR #38 (BLAS thread pinning in `lab/sandbox/`) should merge before work that touches the sandbox. Issue #44 (a scorer rejecting correct answers written differently from the key) was found in the WRN scorer before that curriculum was removed. It is evidence of a verifier bug, not a current lab capability, and the alias-spelling regression-test rule in this plan still applies to every name-matching scorer.
 
-This plan is hypothesis-agnostic. The engine and the protocol work for whichever single hypothesis the active curriculum (`curricula/<id>/`) defines. Facts about the current GLP-1R curriculum are confined to the appendix, so the plan can merge into a branch with a different hypothesis.
+## Scope
+
+The project has one scientific hypothesis: scenario A, the PptT / *M. tuberculosis*
+programme - why an optimisation campaign produced the most potent PptT inhibitor
+reported and no antibacterial. Scenario B (CAR-T binder affinity versus
+durability) is a second biology used to test whether the auditor's rules hold
+outside the hypothesis they were written for, not a second claim.
+
+This lab is a separate instrument with its own engine, scorers and verdict
+implementation, and no code integration with the root auditor. Its curriculum is
+GLP-1R. That is an implementation choice, not a second scientific hypothesis, and
+no result from the lab is offered as evidence about the PptT question.
+
+This is the evaluation plan for the lab. The root instrument has its own protocol. The engine and the protocol here work for whichever single curriculum (`curricula/<id>/`) is active; facts about the GLP-1R curriculum are confined to the appendix.
 
 ## Context
 A supervisor asked: (1) how do we know the agent improves, from what baseline, by how much? (2) how do we know it isn't overfit to its training data?
@@ -20,7 +33,7 @@ State of the engine:
 - Rubric scorers are phrase-match, so they can reward vocabulary.
 
 ## Claim (narrow, defensible)
-"Given a curriculum of worked lessons, the agent scores and calibrates better on **held-out experiments of the same hypothesis** than the same agent without it, and than the same agent with content-free filler." This is learning-from-curriculum with transfer to unseen problems inside one hypothesis, not weight training. Transfer across hypotheses is out of scope: one hypothesis at a time. Agent-written lessons are a possible later arm.
+"Given a curriculum of worked lessons, the agent scores and calibrates better on **held-out experiments of the same curriculum** than the same agent without it, and than the same agent with content-free filler." This is learning-from-curriculum with transfer to unseen problems inside one curriculum, not weight training. Transfer across curricula is out of scope: one curriculum at a time. Agent-written lessons are a possible later arm.
 
 ## Arms (same model, settings and tools unless stated)
 | Arm | What the agent gets | Purpose |
@@ -34,7 +47,7 @@ State of the engine:
 
 Report each arm's score against A-cold, not only against A0. A cold score measured elsewhere must be reproduced in this repo before it is cited.
 
-## Splits (within the one hypothesis)
+## Splits (within the one curriculum)
 Experiments are split by **instance**: new datasets, structures, entities or assays that test the same skill as a dev experiment but whose answers cannot be recalled from the dev material.
 - **Dev:** the current experiments. Lessons and rubrics may be iterated here.
 - **Validation:** a few extra instances, used to calibrate rubric thresholds and fix scorer bugs. May be touched.
@@ -88,10 +101,10 @@ Do not estimate it. Run one full curriculum at current settings, record the cost
 
 ## Open items
 - Who authors the validation and test instances.
-- How many test instances the active hypothesis can support, and whether each has a derivable ground truth.
+- How many test instances the active curriculum can support, and whether each has a derivable ground truth.
 - Keep this evaluation protocol separate from any other instrument's protocol in the README, so the two aren't merged into one claim.
 
-## Appendix: GLP-1R curriculum (current branch only)
+## Appendix: the GLP-1R curriculum
 - Six experiments. The first lessons-vs-no-lessons pair is n=1 per arm and predates the relevance fix: +0.109 on lesson-dependent experiments, +0.071 on independent ones, so inconclusive.
 - Exp1 gets no lessons in either arm, and its +0.14 gap is run-to-run noise.
 - Exps 2 and 3 sit at ceiling in both arms. The capstone (exp6) scored 0.79 in the no-lessons run, which may be below the cold score.
