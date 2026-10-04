@@ -6,11 +6,11 @@
     --agent random|ucb runs a zero-model-call scripted baseline (no API key needed).
 
 Reads ANTHROPIC_API_KEY from the environment. Prints the full trajectory, the
-model transcript or decision log, the audit (four dimension scores,
-applicable_max_evidence, R_visible, final_score, verdict, flags,
-epistemic_flags, reward hacks) and the episode's token usage with its estimated
-cost. Every model call is logged to stderr with the cumulative spend; the run
-stops with a clear message if the estimate passes --max-spend-usd (default $20).
+model transcript, the audit (four dimension scores, applicable_max_evidence,
+R_visible, final_score, verdict, flags, epistemic_flags, reward hacks) and the
+episode's token usage with its estimated cost. Every model call is logged to
+stderr with the cumulative spend; the run stops with a clear message if the
+estimate passes --max-spend-usd (default $20).
 """
 from __future__ import annotations
 
