@@ -1,0 +1,586 @@
+{
+  "assets": [
+    {
+      "path": "a/clean_success_ci.png",
+      "stamp": {
+        "git_sha": "4cee893",
+        "git_dirty": false,
+        "models": [
+          "claude-sonnet-5-5"
+        ],
+        "sampling": [
+          "T=omitted client=live max_tokens=2048"
+        ],
+        "source": "runs/stage2-wave1/a (results SHA: a880033ba3a5ad7f516165a25a9d8d28e7706698); summaries derived from results.jsonl",
+        "reaudit": null,
+        "synthetic": false,
+        "wave": true
+      },
+      "source_files": [
+        "runs/stage2-wave1/a/results.jsonl"
+      ],
+      "summaries": "derived from results.jsonl (runner.modal_batch.aggregate/grid_summary)"
+    },
+    {
+      "path": "a/clean_success_ci.csv",
+      "stamp": {
+        "git_sha": "4cee893",
+        "git_dirty": false,
+        "models": [
+          "claude-sonnet-5-5"
+        ],
+        "sampling": [
+          "T=omitted client=live max_tokens=2048"
+        ],
+        "source": "runs/stage2-wave1/a (results SHA: a880033ba3a5ad7f516165a25a9d8d28e7706698); summaries derived from results.jsonl",
+        "reaudit": null,
+        "synthetic": false,
+        "wave": true
+      },
+      "source_files": [
+        "runs/stage2-wave1/a/results.jsonl"
+      ],
+      "summaries": "derived from results.jsonl (runner.modal_batch.aggregate/grid_summary)"
+    },
+    {
+      "path": "a/clean_success_ci.md",
+      "stamp": {
+        "git_sha": "4cee893",
+        "git_dirty": false,
+        "models": [
+          "claude-sonnet-5-5"
+        ],
+        "sampling": [
+          "T=omitted client=live max_tokens=2048"
+        ],
+        "source": "runs/stage2-wave1/a (results SHA: a880033ba3a5ad7f516165a25a9d8d28e7706698); summaries derived from results.jsonl",
+        "reaudit": null,
+        "synthetic": false,
+        "wave": true
+      },
+      "source_files": [
+        "runs/stage2-wave1/a/results.jsonl"
+      ],
+      "summaries": "derived from results.jsonl (runner.modal_batch.aggregate/grid_summary)"
+    },
+    {
+      "path": "a/raw_vs_clean.png",
+      "stamp": {
+        "git_sha": "4cee893",
+        "git_dirty": false,
+        "models": [
+          "claude-sonnet-5-5"
+        ],
+        "sampling": [
+          "T=omitted client=live max_tokens=2048"
+        ],
+        "source": "runs/stage2-wave1/a (results SHA: a880033ba3a5ad7f516165a25a9d8d28e7706698); summaries derived from results.jsonl",
+        "reaudit": null,
+        "synthetic": false,
+        "wave": true
+      },
+      "source_files": [
+        "runs/stage2-wave1/a/results.jsonl"
+      ],
+      "summaries": "derived from results.jsonl (runner.modal_batch.aggregate/grid_summary)"
+    },
+    {
+      "path": "a/cost_of_pass.png",
+      "stamp": {
+        "git_sha": "4cee893",
+        "git_dirty": false,
+        "models": [
+          "claude-sonnet-5-5"
+        ],
+        "sampling": [
+          "T=omitted client=live max_tokens=2048"
+        ],
+        "source": "runs/stage2-wave1/a (results SHA: a880033ba3a5ad7f516165a25a9d8d28e7706698); summaries derived from results.jsonl",
+        "reaudit": null,
+        "synthetic": false,
+        "wave": true
+      },
+      "source_files": [
+        "runs/stage2-wave1/a/results.jsonl"
+      ],
+      "summaries": "derived from results.jsonl (runner.modal_batch.aggregate/grid_summary)"
+    },
+    {
+      "path": "a/frontier_regret_top3.md",
+      "stamp": {
+        "git_sha": "4cee893",
+        "git_dirty": false,
+        "models": [
+          "claude-sonnet-5-5"
+        ],
+        "sampling": [
+          "T=omitted client=live max_tokens=2048"
+        ],
+        "source": "runs/stage2-wave1/a (results SHA: a880033ba3a5ad7f516165a25a9d8d28e7706698); summaries derived from results.jsonl",
+        "reaudit": null,
+        "synthetic": false,
+        "wave": true
+      },
+      "source_files": [
+        "runs/stage2-wave1/a/results.jsonl"
+      ],
+      "summaries": "derived from results.jsonl (runner.modal_batch.aggregate/grid_summary)"
+    },
+    {
+      "path": "a/frontier_regret_top3.csv",
+      "stamp": {
+        "git_sha": "4cee893",
+        "git_dirty": false,
+        "models": [
+          "claude-sonnet-5-5"
+        ],
+        "sampling": [
+          "T=omitted client=live max_tokens=2048"
+        ],
+        "source": "runs/stage2-wave1/a (results SHA: a880033ba3a5ad7f516165a25a9d8d28e7706698); summaries derived from results.jsonl",
+        "reaudit": null,
+        "synthetic": false,
+        "wave": true
+      },
+      "source_files": [
+        "runs/stage2-wave1/a/results.jsonl"
+      ],
+      "summaries": "derived from results.jsonl (runner.modal_batch.aggregate/grid_summary)"
+    },
+    {
+      "path": "a/frontier_regret_top3.png",
+      "stamp": {
+        "git_sha": "4cee893",
+        "git_dirty": false,
+        "models": [
+          "claude-sonnet-5-5"
+        ],
+        "sampling": [
+          "T=omitted client=live max_tokens=2048"
+        ],
+        "source": "runs/stage2-wave1/a (results SHA: a880033ba3a5ad7f516165a25a9d8d28e7706698); summaries derived from results.jsonl",
+        "reaudit": null,
+        "synthetic": false,
+        "wave": true
+      },
+      "source_files": [
+        "runs/stage2-wave1/a/results.jsonl"
+      ],
+      "summaries": "derived from results.jsonl (runner.modal_batch.aggregate/grid_summary)"
+    },
+    {
+      "path": "a/experiment_selection.png",
+      "stamp": {
+        "git_sha": "4cee893",
+        "git_dirty": false,
+        "models": [
+          "claude-sonnet-5-5"
+        ],
+        "sampling": [
+          "T=omitted client=live max_tokens=2048"
+        ],
+        "source": "runs/stage2-wave1/a (results SHA: a880033ba3a5ad7f516165a25a9d8d28e7706698); summaries derived from results.jsonl",
+        "reaudit": null,
+        "synthetic": false,
+        "wave": true
+      },
+      "source_files": [
+        "runs/stage2-wave1/a/results.jsonl",
+        "/home/ubuntu/repos/falsifylab/agent/briefing.json",
+        "/home/ubuntu/repos/falsifylab/auditor/rubric.json"
+      ],
+      "summaries": "derived from results.jsonl (runner.modal_batch.aggregate/grid_summary)"
+    },
+    {
+      "path": "a/experiment_selection.md",
+      "stamp": {
+        "git_sha": "4cee893",
+        "git_dirty": false,
+        "models": [
+          "claude-sonnet-5-5"
+        ],
+        "sampling": [
+          "T=omitted client=live max_tokens=2048"
+        ],
+        "source": "runs/stage2-wave1/a (results SHA: a880033ba3a5ad7f516165a25a9d8d28e7706698); summaries derived from results.jsonl",
+        "reaudit": null,
+        "synthetic": false,
+        "wave": true
+      },
+      "source_files": [
+        "runs/stage2-wave1/a/results.jsonl",
+        "/home/ubuntu/repos/falsifylab/agent/briefing.json",
+        "/home/ubuntu/repos/falsifylab/auditor/rubric.json"
+      ],
+      "summaries": "derived from results.jsonl (runner.modal_batch.aggregate/grid_summary)"
+    },
+    {
+      "path": "a/experiment_selection.csv",
+      "stamp": {
+        "git_sha": "4cee893",
+        "git_dirty": false,
+        "models": [
+          "claude-sonnet-5-5"
+        ],
+        "sampling": [
+          "T=omitted client=live max_tokens=2048"
+        ],
+        "source": "runs/stage2-wave1/a (results SHA: a880033ba3a5ad7f516165a25a9d8d28e7706698); summaries derived from results.jsonl",
+        "reaudit": null,
+        "synthetic": false,
+        "wave": true
+      },
+      "source_files": [
+        "runs/stage2-wave1/a/results.jsonl",
+        "/home/ubuntu/repos/falsifylab/agent/briefing.json",
+        "/home/ubuntu/repos/falsifylab/auditor/rubric.json"
+      ],
+      "summaries": "derived from results.jsonl (runner.modal_batch.aggregate/grid_summary)"
+    },
+    {
+      "path": "b/clean_success_ci.png",
+      "stamp": {
+        "git_sha": "4cee893",
+        "git_dirty": false,
+        "models": [
+          "claude-sonnet-5-5"
+        ],
+        "sampling": [
+          "T=omitted client=live max_tokens=2048"
+        ],
+        "source": "runs/stage2-wave1/b (results SHA: a880033ba3a5ad7f516165a25a9d8d28e7706698); summaries derived from results.jsonl",
+        "reaudit": null,
+        "synthetic": false,
+        "wave": true
+      },
+      "source_files": [
+        "runs/stage2-wave1/b/results.jsonl"
+      ],
+      "summaries": "derived from results.jsonl (runner.modal_batch.aggregate/grid_summary)"
+    },
+    {
+      "path": "b/clean_success_ci.csv",
+      "stamp": {
+        "git_sha": "4cee893",
+        "git_dirty": false,
+        "models": [
+          "claude-sonnet-5-5"
+        ],
+        "sampling": [
+          "T=omitted client=live max_tokens=2048"
+        ],
+        "source": "runs/stage2-wave1/b (results SHA: a880033ba3a5ad7f516165a25a9d8d28e7706698); summaries derived from results.jsonl",
+        "reaudit": null,
+        "synthetic": false,
+        "wave": true
+      },
+      "source_files": [
+        "runs/stage2-wave1/b/results.jsonl"
+      ],
+      "summaries": "derived from results.jsonl (runner.modal_batch.aggregate/grid_summary)"
+    },
+    {
+      "path": "b/clean_success_ci.md",
+      "stamp": {
+        "git_sha": "4cee893",
+        "git_dirty": false,
+        "models": [
+          "claude-sonnet-5-5"
+        ],
+        "sampling": [
+          "T=omitted client=live max_tokens=2048"
+        ],
+        "source": "runs/stage2-wave1/b (results SHA: a880033ba3a5ad7f516165a25a9d8d28e7706698); summaries derived from results.jsonl",
+        "reaudit": null,
+        "synthetic": false,
+        "wave": true
+      },
+      "source_files": [
+        "runs/stage2-wave1/b/results.jsonl"
+      ],
+      "summaries": "derived from results.jsonl (runner.modal_batch.aggregate/grid_summary)"
+    },
+    {
+      "path": "b/raw_vs_clean.png",
+      "stamp": {
+        "git_sha": "4cee893",
+        "git_dirty": false,
+        "models": [
+          "claude-sonnet-5-5"
+        ],
+        "sampling": [
+          "T=omitted client=live max_tokens=2048"
+        ],
+        "source": "runs/stage2-wave1/b (results SHA: a880033ba3a5ad7f516165a25a9d8d28e7706698); summaries derived from results.jsonl",
+        "reaudit": null,
+        "synthetic": false,
+        "wave": true
+      },
+      "source_files": [
+        "runs/stage2-wave1/b/results.jsonl"
+      ],
+      "summaries": "derived from results.jsonl (runner.modal_batch.aggregate/grid_summary)"
+    },
+    {
+      "path": "b/cost_of_pass.png",
+      "stamp": {
+        "git_sha": "4cee893",
+        "git_dirty": false,
+        "models": [
+          "claude-sonnet-5-5"
+        ],
+        "sampling": [
+          "T=omitted client=live max_tokens=2048"
+        ],
+        "source": "runs/stage2-wave1/b (results SHA: a880033ba3a5ad7f516165a25a9d8d28e7706698); summaries derived from results.jsonl",
+        "reaudit": null,
+        "synthetic": false,
+        "wave": true
+      },
+      "source_files": [
+        "runs/stage2-wave1/b/results.jsonl"
+      ],
+      "summaries": "derived from results.jsonl (runner.modal_batch.aggregate/grid_summary)"
+    },
+    {
+      "path": "b/frontier_regret_top3.md",
+      "stamp": {
+        "git_sha": "4cee893",
+        "git_dirty": false,
+        "models": [
+          "claude-sonnet-5-5"
+        ],
+        "sampling": [
+          "T=omitted client=live max_tokens=2048"
+        ],
+        "source": "runs/stage2-wave1/b (results SHA: a880033ba3a5ad7f516165a25a9d8d28e7706698); summaries derived from results.jsonl",
+        "reaudit": null,
+        "synthetic": false,
+        "wave": true
+      },
+      "source_files": [
+        "runs/stage2-wave1/b/results.jsonl"
+      ],
+      "summaries": "derived from results.jsonl (runner.modal_batch.aggregate/grid_summary)"
+    },
+    {
+      "path": "b/frontier_regret_top3.csv",
+      "stamp": {
+        "git_sha": "4cee893",
+        "git_dirty": false,
+        "models": [
+          "claude-sonnet-5-5"
+        ],
+        "sampling": [
+          "T=omitted client=live max_tokens=2048"
+        ],
+        "source": "runs/stage2-wave1/b (results SHA: a880033ba3a5ad7f516165a25a9d8d28e7706698); summaries derived from results.jsonl",
+        "reaudit": null,
+        "synthetic": false,
+        "wave": true
+      },
+      "source_files": [
+        "runs/stage2-wave1/b/results.jsonl"
+      ],
+      "summaries": "derived from results.jsonl (runner.modal_batch.aggregate/grid_summary)"
+    },
+    {
+      "path": "b/frontier_regret_top3.png",
+      "stamp": {
+        "git_sha": "4cee893",
+        "git_dirty": false,
+        "models": [
+          "claude-sonnet-5-5"
+        ],
+        "sampling": [
+          "T=omitted client=live max_tokens=2048"
+        ],
+        "source": "runs/stage2-wave1/b (results SHA: a880033ba3a5ad7f516165a25a9d8d28e7706698); summaries derived from results.jsonl",
+        "reaudit": null,
+        "synthetic": false,
+        "wave": true
+      },
+      "source_files": [
+        "runs/stage2-wave1/b/results.jsonl"
+      ],
+      "summaries": "derived from results.jsonl (runner.modal_batch.aggregate/grid_summary)"
+    },
+    {
+      "path": "b/experiment_selection.png",
+      "stamp": {
+        "git_sha": "4cee893",
+        "git_dirty": false,
+        "models": [
+          "claude-sonnet-5-5"
+        ],
+        "sampling": [
+          "T=omitted client=live max_tokens=2048"
+        ],
+        "source": "runs/stage2-wave1/b (results SHA: a880033ba3a5ad7f516165a25a9d8d28e7706698); summaries derived from results.jsonl",
+        "reaudit": null,
+        "synthetic": false,
+        "wave": true
+      },
+      "source_files": [
+        "runs/stage2-wave1/b/results.jsonl",
+        "/home/ubuntu/repos/falsifylab/scenarios/b_cd5_affinity/agent/briefing.json",
+        "/home/ubuntu/repos/falsifylab/scenarios/b_cd5_affinity/auditor/rubric.json"
+      ],
+      "summaries": "derived from results.jsonl (runner.modal_batch.aggregate/grid_summary)"
+    },
+    {
+      "path": "b/experiment_selection.md",
+      "stamp": {
+        "git_sha": "4cee893",
+        "git_dirty": false,
+        "models": [
+          "claude-sonnet-5-5"
+        ],
+        "sampling": [
+          "T=omitted client=live max_tokens=2048"
+        ],
+        "source": "runs/stage2-wave1/b (results SHA: a880033ba3a5ad7f516165a25a9d8d28e7706698); summaries derived from results.jsonl",
+        "reaudit": null,
+        "synthetic": false,
+        "wave": true
+      },
+      "source_files": [
+        "runs/stage2-wave1/b/results.jsonl",
+        "/home/ubuntu/repos/falsifylab/scenarios/b_cd5_affinity/agent/briefing.json",
+        "/home/ubuntu/repos/falsifylab/scenarios/b_cd5_affinity/auditor/rubric.json"
+      ],
+      "summaries": "derived from results.jsonl (runner.modal_batch.aggregate/grid_summary)"
+    },
+    {
+      "path": "b/experiment_selection.csv",
+      "stamp": {
+        "git_sha": "4cee893",
+        "git_dirty": false,
+        "models": [
+          "claude-sonnet-5-5"
+        ],
+        "sampling": [
+          "T=omitted client=live max_tokens=2048"
+        ],
+        "source": "runs/stage2-wave1/b (results SHA: a880033ba3a5ad7f516165a25a9d8d28e7706698); summaries derived from results.jsonl",
+        "reaudit": null,
+        "synthetic": false,
+        "wave": true
+      },
+      "source_files": [
+        "runs/stage2-wave1/b/results.jsonl",
+        "/home/ubuntu/repos/falsifylab/scenarios/b_cd5_affinity/agent/briefing.json",
+        "/home/ubuntu/repos/falsifylab/scenarios/b_cd5_affinity/auditor/rubric.json"
+      ],
+      "summaries": "derived from results.jsonl (runner.modal_batch.aggregate/grid_summary)"
+    },
+    {
+      "path": "replicates/replicate_summary.json",
+      "stamp": {
+        "git_sha": "4cee893",
+        "git_dirty": false,
+        "models": [
+          "claude-sonnet-5-5"
+        ],
+        "sampling": [
+          "T=omitted client=live max_tokens=2048"
+        ],
+        "source": "runs/stage2-wave1/a (results SHA: a880033ba3a5ad7f516165a25a9d8d28e7706698); runs/stage2-wave1/b (results SHA: a880033ba3a5ad7f516165a25a9d8d28e7706698)",
+        "reaudit": null,
+        "synthetic": false,
+        "wave": true
+      },
+      "source_files": [
+        "runs/stage2-wave1/a/results.jsonl",
+        "runs/stage2-wave1/b/results.jsonl"
+      ]
+    },
+    {
+      "path": "replicates/replicate_summary.csv",
+      "stamp": {
+        "git_sha": "4cee893",
+        "git_dirty": false,
+        "models": [
+          "claude-sonnet-5-5"
+        ],
+        "sampling": [
+          "T=omitted client=live max_tokens=2048"
+        ],
+        "source": "runs/stage2-wave1/a (results SHA: a880033ba3a5ad7f516165a25a9d8d28e7706698); runs/stage2-wave1/b (results SHA: a880033ba3a5ad7f516165a25a9d8d28e7706698)",
+        "reaudit": null,
+        "synthetic": false,
+        "wave": true
+      },
+      "source_files": [
+        "runs/stage2-wave1/a/results.jsonl",
+        "runs/stage2-wave1/b/results.jsonl"
+      ]
+    },
+    {
+      "path": "replicates/replicate_summary.md",
+      "stamp": {
+        "git_sha": "4cee893",
+        "git_dirty": false,
+        "models": [
+          "claude-sonnet-5-5"
+        ],
+        "sampling": [
+          "T=omitted client=live max_tokens=2048"
+        ],
+        "source": "runs/stage2-wave1/a (results SHA: a880033ba3a5ad7f516165a25a9d8d28e7706698); runs/stage2-wave1/b (results SHA: a880033ba3a5ad7f516165a25a9d8d28e7706698)",
+        "reaudit": null,
+        "synthetic": false,
+        "wave": true
+      },
+      "source_files": [
+        "runs/stage2-wave1/a/results.jsonl",
+        "runs/stage2-wave1/b/results.jsonl"
+      ]
+    },
+    {
+      "path": "auditor_validation.md",
+      "stamp": {
+        "git_sha": "4cee893",
+        "git_dirty": false,
+        "models": "none (scripted validation cases)",
+        "sampling": "n/a",
+        "source": "/home/ubuntu/repos/falsifylab/auditor/validation/REPORT.md (last commit: 12c29ce)",
+        "reaudit": null,
+        "synthetic": false
+      },
+      "source_files": [
+        "/home/ubuntu/repos/falsifylab/auditor/validation/REPORT.md"
+      ]
+    },
+    {
+      "path": "auditor_validation.csv",
+      "stamp": {
+        "git_sha": "4cee893",
+        "git_dirty": false,
+        "models": "none (scripted validation cases)",
+        "sampling": "n/a",
+        "source": "/home/ubuntu/repos/falsifylab/auditor/validation/REPORT.md (last commit: 12c29ce)",
+        "reaudit": null,
+        "synthetic": false
+      },
+      "source_files": [
+        "/home/ubuntu/repos/falsifylab/auditor/validation/REPORT.md"
+      ]
+    },
+    {
+      "path": "auditor_validation.png",
+      "stamp": {
+        "git_sha": "4cee893",
+        "git_dirty": false,
+        "models": "none (scripted validation cases)",
+        "sampling": "n/a",
+        "source": "/home/ubuntu/repos/falsifylab/auditor/validation/REPORT.md (last commit: 12c29ce)",
+        "reaudit": null,
+        "synthetic": false
+      },
+      "source_files": [
+        "/home/ubuntu/repos/falsifylab/auditor/validation/REPORT.md"
+      ]
+    }
+  ]
+}
