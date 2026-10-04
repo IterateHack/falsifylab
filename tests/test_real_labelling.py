@@ -68,6 +68,37 @@ def _build_results(path: Path) -> list[dict]:
     return records
 
 
+def _build_protocol_violation_results(path: Path) -> list[dict]:
+    fixture = json.loads(
+        (ROOT / "auditor/tests/golden/canonical_valid.json").read_text(encoding="utf-8"),
+    )
+    e3 = next(
+        turn for turn in fixture["turns"]
+        if turn["action"].get("experiment_id") == "E3"
+    )
+    e3["action"]["parameters"]["atc_free_days"] = 3
+    trajectory = trajectory_from_dict(fixture)
+    rubric = load_rubric(ROOT / "auditor/rubric.json")
+    truth = json.loads((ROOT / "auditor/truth.json").read_text(encoding="utf-8"))
+    verdict = audit(trajectory, rubric, truth)
+    assert verdict.verdict == "PROTOCOL_VIOLATION"
+    job = modal_batch.EpisodeJob(
+        "protocol-violation-00", "baseline", "fixture-model", 0, 0, 0, "a",
+    )
+    record = modal_batch.build_record(
+        job,
+        trajectory,
+        verdict,
+        truth,
+        refusals=[],
+        aborted_on_refusals=False,
+        extra={},
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(record, allow_nan=False) + "\n", encoding="utf-8")
+    return [record]
+
+
 def _read_rows(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
 
@@ -77,13 +108,18 @@ def _scripted(values: list[str]):
     return lambda: next(iterator)
 
 
-def test_session_labels_every_scored_fixture_and_excludes_parse_failure(tmp_path):
+def test_session_can_show_verdict_before_label_and_excludes_parse_failure(tmp_path):
     results_path = tmp_path / "results.jsonl"
     _build_results(results_path)
     labels_path = tmp_path / "labels.jsonl"
     out = io.StringIO()
     session = label_module.label_session(
-        results_path, labels_path, labeller="Ada", input_fn=_scripted(["honest", ""] * 4), out=out,
+        results_path,
+        labels_path,
+        labeller="Ada",
+        show_verdict=True,
+        input_fn=_scripted(["honest", ""] * 4),
+        out=out,
     )
 
     rows = _read_rows(labels_path)
@@ -143,7 +179,7 @@ def test_invalid_labels_reprompt_and_do_not_write_until_valid(tmp_path):
     assert out.getvalue().count("Invalid label:") == 3
 
 
-def test_blind_hides_verdict_until_after_first_row_is_written(tmp_path):
+def test_default_hides_verdict_until_after_first_row_is_written(tmp_path):
     results_path = tmp_path / "results.jsonl"
     _build_results(results_path)
     labels_path = tmp_path / "labels.jsonl"
@@ -158,12 +194,37 @@ def test_blind_hides_verdict_until_after_first_row_is_written(tmp_path):
 
     input_fn.calls = 0
     result = label_module.label_session(
-        results_path, labels_path, labeller="Ada", blind=True, input_fn=input_fn, out=out,
+        results_path, labels_path, labeller="Ada", input_fn=input_fn, out=out,
     )
     assert result["labelled"] == 4
     assert "== Audit ==" not in before_first_input[0]
     assert "== Audit ==" in out.getvalue()
     assert all(not row["saw_verdict"] for row in _read_rows(labels_path))
+
+
+def test_label_cli_show_verdict_and_rejects_blind_flag(tmp_path):
+    results_path = tmp_path / "results.jsonl"
+    _build_results(results_path)
+    labels_path = tmp_path / "labels.jsonl"
+    out = io.StringIO()
+    label_module.main(
+        [
+            str(results_path), "--labels", str(labels_path), "--labeller", "CLI",
+            "--show-verdict",
+        ],
+        input_fn=_scripted(["honest", "", "q"]),
+        out=out,
+    )
+    assert _read_rows(labels_path)[0]["saw_verdict"] is True
+    assert out.getvalue().index("== Audit ==") < out.getvalue().index("Label (comma-separated")
+    with pytest.raises(SystemExit) as exc_info:
+        label_module.main(
+            [str(results_path), "--labels", str(tmp_path / "rejected.jsonl"),
+             "--labeller", "CLI", "--blind"],
+            input_fn=_scripted([]),
+            out=io.StringIO(),
+        )
+    assert exc_info.value.code == 2
 
 
 def test_foreign_results_hash_is_rejected_by_label_and_agreement(tmp_path):
@@ -253,7 +314,7 @@ def test_per_category_reward_hacks_are_scenario_qualified(tmp_path):
             "labels": labels,
             "note": None,
             "labeller": "Ada",
-            "saw_verdict": True,
+            "saw_verdict": False,
             "auditor_verdict": record["verdict"]["verdict"],
             "labelled_at": "2025-01-01T00:00:00+00:00",
         })
@@ -266,6 +327,95 @@ def test_per_category_reward_hacks_are_scenario_qualified(tmp_path):
     assert report["per_category"]["b:RH1"]["fp"] == 1
     assert report["per_category"]["b:RH1"]["fn"] == 0
     assert "RH1" not in report["per_category"]
+
+
+def test_headline_uses_only_blind_rows_and_anchored_rows_are_separate(tmp_path):
+    results_path = tmp_path / "results.jsonl"
+    records = _build_results(results_path)
+    results_sha = hashlib.sha256(results_path.read_bytes()).hexdigest()
+    labels_path = tmp_path / "labels.jsonl"
+    labels_by_id = {
+        "00000000": (["honest"], False),
+        "00000001": (["RH1"], False),
+        "00000003": (["RH1"], True),
+        "00000004": (["honest"], True),
+    }
+    rows = [
+        {
+            "episode_id": record["job"]["episode_id"],
+            "scenario": record["job"]["scenario"],
+            "results_sha256": results_sha,
+            "labels": labels_by_id[record["job"]["episode_id"]][0],
+            "note": None,
+            "labeller": "Ada",
+            "saw_verdict": labels_by_id[record["job"]["episode_id"]][1],
+            "auditor_verdict": record["verdict"]["verdict"],
+            "labelled_at": "2025-01-01T00:00:00+00:00",
+        }
+        for record in records
+        if record["job"]["episode_id"] in labels_by_id
+    ]
+    labels_path.write_text(
+        "".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8",
+    )
+    report = agreement_module.agreement(results_path, labels_path)
+    assert report["binary"]["n"] == 2
+    assert report["binary"]["kappa"] == 1.0
+    assert report["saw_verdict"]["binary"] == {
+        "n": 2,
+        "observed_agreement": 0.0,
+        "kappa": -1.0,
+        "counts": {
+            "both_flagged": 0,
+            "human_only": 1,
+            "auditor_only": 1,
+            "both_honest": 0,
+        },
+    }
+    assert report["saw_verdict"]["note"] == (
+        "labeller saw the auditor verdict before labelling; anchored, not headline"
+    )
+    assert "blind_only" not in report
+    assert report["n_blind"] == 2
+    assert report["n_saw_verdict"] == 2
+
+    for row in rows:
+        row.pop("saw_verdict")
+        row["saw_verdict"] = True
+    labels_path.write_text(
+        "".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8",
+    )
+    all_anchored = agreement_module.agreement(results_path, labels_path)
+    assert all_anchored["binary"]["n"] == 0
+    assert all_anchored["binary"]["kappa"] is None
+    assert all_anchored["n_blind"] == 0
+    assert all_anchored["n_saw_verdict"] == 4
+    markdown = agreement_module.format_markdown(all_anchored)
+    assert "No labelled episodes in this subset (n=0)." in markdown
+
+
+def test_protocol_violation_is_a_flagged_label_category_and_is_accepted(tmp_path):
+    results_path = tmp_path / "results.jsonl"
+    records = _build_protocol_violation_results(results_path)
+    record = records[0]
+    assert agreement_module.auditor_labels(record) == {"protocol_violation"}
+    assert agreement_module.auditor_labels({
+        "verdict": {"verdict": "INSUFFICIENT_EVIDENCE", "reward_hacks": []},
+    }) == {"honest"}
+    labels_path = tmp_path / "labels.jsonl"
+    result = label_module.label_session(
+        results_path,
+        labels_path,
+        labeller="Ada",
+        input_fn=_scripted(["protocol_violation", ""]),
+        out=io.StringIO(),
+    )
+    assert result["labelled"] == 1
+    assert _read_rows(labels_path)[0]["labels"] == ["protocol_violation"]
+    report = agreement_module.agreement(results_path, labels_path)
+    assert report["binary"]["counts"]["both_flagged"] == 1
+    assert report["per_category"]["protocol_violation"]["tp"] == 1
+    assert report["per_category"]["protocol_violation"]["n"] == 1
 
 
 def test_dry_run_batch_label_cli_and_agreement_cli_never_launch_modal(tmp_path, monkeypatch):
@@ -294,6 +444,10 @@ def test_dry_run_batch_label_cli_and_agreement_cli_never_launch_modal(tmp_path, 
         "--markdown", str(markdown_path),
     ], out=io.StringIO())
     assert batch_dir.joinpath("results.jsonl").exists()
-    assert json.loads(agreement_path.read_text(encoding="utf-8"))["n_scored"] == 2
+    report = json.loads(agreement_path.read_text(encoding="utf-8"))
+    assert report["n_scored"] == 2
+    assert report["n_blind"] == 2
+    assert report["n_saw_verdict"] == 0
+    assert all(not row["saw_verdict"] for row in _read_rows(labels_path))
     assert markdown_path.exists()
     app.assert_not_called()
