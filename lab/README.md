@@ -1,7 +1,7 @@
 # FalsifyLab
 
 A virtual laboratory where an AI scientist works through a curriculum of
-experiments testing one biological hypothesis. For each experiment it gets **one
+experiments on real data. For each experiment it gets **one
 attempt**: it writes its prediction and a numeric confidence *before* any data
 tool unlocks, runs real analysis in an isolated sandbox, is scored by a
 deterministic scorer it cannot reach, and is then taught the correct approach
@@ -13,10 +13,24 @@ wrong, and why I was confident anyway"*.
 
 ![the lab](docs/scene.png)
 
-## The hypothesis
+## Scope
 
-**H1: GLP-1R is a genetically supported, druggable obesity target, and oral
-non-peptide agonism is feasible.**
+The project has one scientific hypothesis: scenario A, the PptT / *M. tuberculosis*
+programme - why an optimisation campaign produced the most potent PptT inhibitor
+reported and no antibacterial. Scenario B (CAR-T binder affinity versus
+durability) is a second biology used to test whether the auditor's rules hold
+outside the hypothesis they were written for, not a second claim.
+
+This lab is a separate instrument with its own engine, scorers and verdict
+implementation, and no code integration with the root auditor. Its curriculum is
+GLP-1R. That is an implementation choice, not a second scientific hypothesis, and
+no result from the lab is offered as evidence about the PptT question.
+
+## The curriculum: GLP-1R
+
+The six experiments build an evidence-weighted case for one claim about GLP-1R: it
+is a genetically supported, druggable obesity target, and oral non-peptide
+agonism is feasible.
 
 | # | Experiment | Agent task | Scored on | Needs lessons from |
 |---|---|---|---|---|
@@ -25,11 +39,11 @@ non-peptide agonism is feasible.**
 | 3 | Peptide engineering | Rank nine analogues by duration, explain why | Duration-class ordering + mechanism rubric | 2 |
 | 4 | Potency | Fit dose-response curves, rank by consensus EC50 | Fit error in log units + rank correlation | 3 |
 | 5 | Small-molecule feasibility | Choose an assay model, predict whether a non-peptide agonist works | Rubric, with a penalty for the rodent trap | 2, 4 |
-| 6 | Capstone | An evidence-weighted verdict on H1 | Rubric against the ATTAIN-1 phase 3 result | 1-5 |
+| 6 | Capstone | An evidence-weighted verdict on the claim | Rubric against the ATTAIN-1 phase 3 result | 1-5 |
 
 The curriculum is a config folder, not code: the engine reads specs, scorers,
-ground truth and lesson cards from `curricula/<id>/`, so a new hypothesis is a
-new folder.
+ground truth and lesson cards from `curricula/<id>/`, so a different curriculum is a
+different folder.
 
 ## Quick start
 
@@ -220,8 +234,8 @@ the experiments the cards were written from.
 engine/       event log, specs, agent loop, tool gating, scoring, audit, replay, notebook, CLI
 evals/        the audit eval suite: scripted agents with known right verdicts
 sandbox/      Executor contract; local and Modal backends
-curricula/    one folder per hypothesis: specs, scorers, ground truth, lessons, audit specs, fetch
-              glp1r/ the six-experiment GLP-1R curriculum (H1)
+curricula/    one folder per curriculum: specs, scorers, ground truth, lessons, audit specs, fetch
+              glp1r/ the six-experiment GLP-1R curriculum, the lab's only one
 api/          FastAPI (replay + SSE) and the Modal deployment
 web/          Vite + React pixel lab and notebook overlay
 art/          generates every spritesheet with Pillow

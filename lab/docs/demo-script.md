@@ -19,7 +19,7 @@ a prediction *before* it can look at the data, gets scored by something it can't
 reach, and then gets taught - and where you can see whether the teaching stuck."
 
 **2. The lab (15s).**
-Six experiments along the bench, testing one hypothesis: GLP-1R as an obesity
+Six experiments along the bench, building a case about GLP-1R as an obesity
 target, ending in whether an oral non-peptide agonist is feasible. Real data -
 Open Targets, the PDB, ChEMBL, UniProt - fetched from primary sources.
 
@@ -66,7 +66,7 @@ scored was whether the verdict was properly structured."
 **7. Close (15s).**
 "Agent code runs in Modal Sandboxes, with the scorer in a separate sandbox so the
 ground truth is somewhere the agent can't reach. The curriculum is a config
-folder, so the engine is hypothesis-agnostic. And the whole curriculum can be
+folder, so the engine does not depend on the curriculum. And the whole curriculum can be
 built by Devin - one session per experiment, with twelve acceptance criteria and
 a human reviewing every PR."
 
