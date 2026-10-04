@@ -9,6 +9,7 @@
     "Whole-cell MIC90 against wild-type H37Rv is >100 uM.",
     "The lead compound is a licensed human therapeutic acting on an unrelated human enzyme.",
     "A library of analogues of the lead compound is available to you.",
+    "PptT target vulnerability and compound occupancy are stipulated as adequate; the hypothesis set is complete as given.",
     "In-house SOP: E3 conditional-knockdown MIC panel — atc_free_days >= 6 and read_day 9 or 10.",
     "In-house SOP: E3 normalisation controls — amidinourea 8918 at 100 uM positive and DMSO negative."
   ],

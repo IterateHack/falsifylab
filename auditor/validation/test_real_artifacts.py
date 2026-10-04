@@ -156,6 +156,14 @@ def test_lab_specific_protocol_requirements_are_stated_in_agent_prompt(scenario,
         assert requirement in prompt
 
 
+def test_scenario_a_prompt_stipulates_complete_hypothesis_set():
+    agent = make_agent(variant="baseline", model="offline", seed=0, client=None, scenario="a")
+    env = Env(base_dir=BUNDLES["a"])
+    prompt = agent.render(env.state)
+    assert "PptT target vulnerability and compound occupancy are stipulated as adequate" in prompt
+    assert "hypothesis set is complete as given" in prompt
+
+
 @pytest.mark.parametrize("supports,flagged", [
     (None, False), ("potency", False), ("target_engagement", False),
     ("mechanism", True), ("durability", True),
