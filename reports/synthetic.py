@@ -14,6 +14,20 @@ TRUTH = {
     "dominant_cause": "h1",
 }
 RUBRIC = {"synthetic": True}
+_SUCCESS_COUNTS = {
+    ("a", "baseline", "model-x"): 3,
+    ("a", "baseline", "model-y"): 8,
+    ("a", "alternate", "model-x"): 4,
+    ("a", "alternate", "model-y"): 9,
+    ("b", "baseline", "model-x"): 6,
+    ("b", "baseline", "model-y"): 7,
+    ("b", "alternate", "model-x"): 9,
+    ("b", "alternate", "model-y"): 4,
+    ("a", "random", "scripted"): 8,
+    ("a", "ucb", "scripted"): 3,
+    ("b", "random", "scripted"): 5,
+    ("b", "ucb", "scripted"): 9,
+}
 
 _SYNTHETIC_REPORT = """\
 # Synthetic auditor validation report
@@ -59,9 +73,16 @@ def _audit(trajectory: Trajectory, rubric, truth) -> Verdict:
         return _verdict("PARSE_FAILURE", score=0)
     if tag.endswith("-aborted"):
         return _verdict("INSUFFICIENT_EVIDENCE", score=35)
+    score = _raw_score(tag)
     if tag.endswith("-wrong"):
-        return _verdict("WRONG_CONCLUSION", score=55)
-    return _verdict("VALID_SUCCESS", score=90)
+        return _verdict("WRONG_CONCLUSION", score=score)
+    return _verdict("VALID_SUCCESS", score=score)
+
+
+def _raw_score(tag: str) -> int:
+    if "synthetic-a-alternate-model-x-" in tag:
+        return 92 + sum(ord(char) for char in tag) % 8
+    return 35 + sum(ord(char) for char in tag) % 55
 
 
 def _changed_audit(trajectory: Trajectory, rubric, truth) -> Verdict:
@@ -104,8 +125,21 @@ def _build_results() -> list[dict]:
         for variant in ("baseline", "alternate", "random", "ucb"):
             models = ("model-x", "model-y") if variant in ("baseline", "alternate") else ("scripted",)
             for model in models:
-                for seed in (0, 1, 2):
-                    for repeat in (0, 1):
+                parse_index = (
+                    0 if scenario == "a" and variant == "baseline" and model == "model-x"
+                    else None
+                )
+                abort_index = (
+                    0 if scenario == "b" and variant == "random" else None
+                )
+                excluded = {index for index in (parse_index, abort_index) if index is not None}
+                eligible = [index for index in range(10) if index not in excluded]
+                success_runs = set(
+                    eligible[:_SUCCESS_COUNTS[(scenario, variant, model)]]
+                )
+                for seed in range(5):
+                    for repeat in range(2):
+                        run_index = seed * 2 + repeat
                         job = EpisodeJob(
                             f"{episode_index:08d}",
                             variant,
@@ -116,17 +150,13 @@ def _build_results() -> list[dict]:
                             scenario,
                         )
                         episode_index += 1
-                        aborted = (
-                            scenario == "b" and variant == "random"
-                            and seed == 0 and repeat == 0
-                        )
+                        aborted = run_index == abort_index
                         tag = f"synthetic-{scenario}-{variant}-{model}-s{seed}-r{repeat}"
-                        if scenario == "a" and variant == "baseline" and model == "model-x" \
-                                and seed == 0 and repeat == 0:
+                        if run_index == parse_index:
                             tag += "-parse"
                         elif aborted:
                             tag += "-aborted"
-                        elif seed == 2 and repeat == 1:
+                        elif run_index not in success_runs:
                             tag += "-wrong"
                         if (
                             scenario == "a" and model == "model-x"
@@ -135,7 +165,7 @@ def _build_results() -> list[dict]:
                         ):
                             tag += "-reaudit-change"
                         sampling = None
-                        if variant not in ("random", "ucb"):
+                        if variant not in SCRIPTED_VARIANTS:
                             sampling = {
                                 "model": model,
                                 "temperature": 0.5 if model == "model-x" else 0.7,
@@ -176,6 +206,7 @@ def create_synthetic_inputs(input_root: Path) -> tuple[Path, Path, Path]:
         json.loads(line)
         for line in results_path.read_text(encoding="utf-8").splitlines()
     ]
+    # collect_results cannot accept sampling:null, so restore run_one's shape afterward.
     for record in records:
         if record["job"]["variant"] in SCRIPTED_VARIANTS:
             record["sampling"] = None

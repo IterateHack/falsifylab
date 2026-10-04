@@ -2,6 +2,7 @@
 import csv
 import json
 from pathlib import Path
+import subprocess
 from unittest.mock import Mock
 
 import pytest
@@ -140,6 +141,176 @@ def test_stamp_reflects_models_sampling_and_missing_sampling(tmp_path):
     assert no_sampling_stamp["sampling"] == []
 
 
+def test_figure_stamp_wraps_inside_figure_bounds():
+    stamp = _stamp()
+    stamp["source"] = "synthetic/" + "a-long-source-directory/" * 25 + "results.jsonl"
+    stamp["reaudit"] = "re-audit of " + "a-long-source-directory/" * 15 + "source.jsonl"
+    figure = slide_assets._figure(stamp)
+    artist = slide_assets._add_stamp_text(figure, stamp)
+    figure.canvas.draw()
+
+    extent = artist.get_window_extent()
+    bounds = figure.bbox
+    assert artist.get_fontsize() >= 6
+    assert len(artist.get_text().splitlines()) <= 3
+    assert "reaudit=" in artist.get_text()
+    assert extent.x0 >= bounds.x0
+    assert extent.y0 >= bounds.y0
+    assert extent.x1 <= bounds.x1
+    assert extent.y1 <= bounds.y1
+
+
+def test_generate_assets_stamps_clean_repo_before_writing_inside_it(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "--quiet", str(repo)], check=True)
+    report_path = repo / "REPORT.md"
+    report_path.write_text(_REPORT, encoding="utf-8")
+    subprocess.run(
+        [
+            "git", "-C", str(repo), "-c", "user.name=Test",
+            "-c", "user.email=test@example.com", "add", "REPORT.md",
+        ],
+        check=True,
+    )
+    subprocess.run(
+        [
+            "git", "-C", str(repo), "-c", "user.name=Test",
+            "-c", "user.email=test@example.com", "commit", "-m", "Add report",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    batch_dir, _, _ = create_synthetic_inputs(tmp_path / "inputs")
+
+    assets = slide_assets.generate_assets(
+        [batch_dir],
+        report_path,
+        repo / "slides",
+        repo_root=repo,
+    )
+    assert all(entry["stamp"]["git_dirty"] is False for entry in assets)
+    assert all("-dirty" not in entry["stamp"]["git_sha"] for entry in assets)
+
+
+def test_number_formatting_is_display_only(tmp_path):
+    row = {
+        "clean_success_rate": 5 / 6,
+        "clean_success_ci95": [0.4371234567, 0.9701234567],
+        "best-of-n minus mean": 0.1234567,
+        "recall": "100%",
+        "false-alarm rate": "25%",
+    }
+    headers = list(row)
+    markdown = "\n".join(slide_assets._markdown_table(headers, [row]))
+    assert "0.833" in markdown
+    assert "[0.437, 0.970]" in markdown
+    assert "0.123" in markdown
+    assert "1.000" in markdown
+    assert "0.250" in markdown
+
+    csv_path = tmp_path / "numbers.csv"
+    slide_assets._write_csv(csv_path, headers, [row], _stamp())
+    csv_row = next(csv.DictReader(csv_path.open(encoding="utf-8")))
+    assert csv_row["clean_success_rate"] == str(5 / 6)
+    assert csv_row["clean_success_ci95"] == json.dumps(
+        row["clean_success_ci95"], separators=(",", ":"),
+    )
+    assert csv_row["best-of-n minus mean"] == str(row["best-of-n minus mean"])
+
+
+def test_synthetic_success_and_raw_score_metrics_have_semantic_spread(tmp_path):
+    batch_dir, _, _ = create_synthetic_inputs(tmp_path / "inputs")
+    records = _load_records(batch_dir)
+    grid_rows = json.loads((batch_dir / "grid_summary.json").read_text(encoding="utf-8"))
+    clean_rows = slide_assets._clean_success_rows(records, grid_rows)
+    score_rows = slide_assets._cell_score_rows(records, clean_rows)
+
+    rates = [row["clean_success_rate"] for row in clean_rows]
+    assert min(rates) <= 0.35
+    assert max(rates) >= 0.85
+    assert max(rates) - min(rates) >= 0.5
+    assert len({row["raw_score_mean"] for row in score_rows}) >= 8
+    high_raw_low_success = next(
+        row for row in score_rows
+        if row["scenario"] == "a"
+        and row["model"] == "model-x"
+        and row["variant"] == "alternate"
+    )
+    assert high_raw_low_success["clean_success_rate"] < 0.5
+    assert high_raw_low_success["raw_score_mean"] > 90
+
+
+def test_raw_vs_clean_jitters_duplicates_and_labels_every_point(tmp_path, monkeypatch):
+    rows = [
+        {
+            "scenario": "a",
+            "model": "model-x",
+            "variant": variant,
+            "clean_success_rate": 0.5,
+            "clean_success_ci95": [0.2, 0.8],
+            "raw_score_mean": 80.0,
+        }
+        for variant in ("baseline", "alternate")
+    ]
+    positions = []
+    labels = []
+    limits = []
+    original_errorbar = Axes.errorbar
+    original_annotate = Axes.annotate
+    original_set_ylim = Axes.set_ylim
+
+    def capture_errorbar(self, *args, **kwargs):
+        positions.append(float(args[0]))
+        return original_errorbar(self, *args, **kwargs)
+
+    def capture_annotate(self, text, *args, **kwargs):
+        labels.append(text)
+        return original_annotate(self, text, *args, **kwargs)
+
+    def capture_set_ylim(self, *args, **kwargs):
+        limits.append(args[:2])
+        return original_set_ylim(self, *args, **kwargs)
+
+    monkeypatch.setattr(Axes, "errorbar", capture_errorbar)
+    monkeypatch.setattr(Axes, "annotate", capture_annotate)
+    monkeypatch.setattr(Axes, "set_ylim", capture_set_ylim)
+    slide_assets._plot_raw_vs_clean(tmp_path / "raw.png", rows, _stamp())
+
+    assert len(set(positions)) == 2
+    assert labels == ["a/model-x", "a/model-x"]
+    assert (0, 100) in limits
+    boundary_rows = [
+        {
+            **rows[0],
+            "variant": variant,
+            "clean_success_rate": 1.0,
+            "clean_success_ci95": [0.7, 1.0],
+        }
+        for variant in ("baseline", "alternate")
+    ]
+    assert len({x for _, x in slide_assets._jittered_raw_points(boundary_rows)}) == 2
+
+
+def test_validation_figure_title_is_updated(tmp_path, monkeypatch):
+    from matplotlib.figure import Figure
+
+    titles = []
+    original_suptitle = Figure.suptitle
+
+    def capture_suptitle(self, title, *args, **kwargs):
+        titles.append(title)
+        return original_suptitle(self, title, *args, **kwargs)
+
+    monkeypatch.setattr(Figure, "suptitle", capture_suptitle)
+    report_path = tmp_path / "REPORT.md"
+    report_path.write_text(_REPORT, encoding="utf-8")
+    patterns, kappas = slide_assets.parse_validation_report(report_path)
+    slide_assets._plot_validation(tmp_path / "validation.png", patterns, kappas, _stamp())
+    assert titles == ["Auditor recall and false alarms"]
+
+
 def test_scripted_rows_are_marked_in_tables_and_chart_labels(tmp_path, monkeypatch):
     batch_dir, _, _ = create_synthetic_inputs(tmp_path / "inputs")
     labels = []
@@ -170,8 +341,15 @@ def test_scripted_rows_are_marked_in_tables_and_chart_labels(tmp_path, monkeypat
     markdown = (output_root / "synthetic_batch" / "clean_success_ci.md").read_text(
         encoding="utf-8",
     )
-    assert "conclusion_metrics_meaningful" in markdown
-    assert "scripted baseline:" in markdown
+    assert "conclusion metrics meaningful" in markdown
+    assert "no †" in markdown
+    assert (
+        "† scripted baseline: beliefs, dominant cause and confidence are random; "
+        "compare experiment selection only (mean_cost)." in markdown
+    )
+    assert ". Not meaningful: " in markdown
+    assert "not_meaningful" not in markdown
+    assert "| note |" not in markdown
     assert any(
         label == "random (scripted; conclusion metrics not meaningful)"
         for label in labels

@@ -8,6 +8,7 @@ from collections import defaultdict
 from pathlib import Path
 import subprocess
 from statistics import fmean
+import textwrap
 
 from runner.modal_batch import (
     GRID_CONCLUSION_FIELDS,
@@ -83,10 +84,11 @@ def _sampling_summary(records: list[dict]) -> list[str]:
 
 
 def build_batch_stamp(
-    batch_dir: Path, records: list[dict], summary: dict, *, repo_root: Path = REPO_ROOT,
+    batch_dir: Path, records: list[dict], summary: dict, *,
+    repo_root: Path = REPO_ROOT, git_stamp: tuple[str, bool] | None = None,
 ) -> dict:
     batch_dir = Path(batch_dir)
-    git_sha, dirty = _git_stamp(Path(repo_root))
+    git_sha, dirty = git_stamp or _git_stamp(Path(repo_root))
     code_shas = _code_shas(records) | _code_shas(summary)
     results_sha = ", ".join(sorted(code_shas)) if code_shas else "not recorded"
     reaudit_path = batch_dir / "reaudit.json"
@@ -135,9 +137,10 @@ def _last_touching_commit(path: Path, repo_root: Path) -> str:
 
 def build_validation_stamp(
     report_path: Path, *, synthetic: bool = False, repo_root: Path = REPO_ROOT,
+    git_stamp: tuple[str, bool] | None = None,
 ) -> dict:
     report_path = Path(report_path)
-    git_sha, dirty = _git_stamp(Path(repo_root))
+    git_sha, dirty = git_stamp or _git_stamp(Path(repo_root))
     commit = _last_touching_commit(report_path, Path(repo_root))
     return {
         "git_sha": git_sha,
@@ -161,9 +164,9 @@ def _stamp_line(stamp: dict) -> str:
         f"git_dirty={str(stamp['git_dirty']).lower()}",
         f"models={render(stamp['models'])}",
         f"sampling={render(stamp['sampling'])}",
-        f"source={stamp['source']}",
         f"reaudit={render(stamp['reaudit'])}",
         f"synthetic={str(stamp['synthetic']).lower()}",
+        f"source={stamp['source']}",
     ]
     prefix = "SYNTHETIC DATA — " if stamp["synthetic"] else ""
     return prefix + " | ".join(parts)
@@ -179,13 +182,35 @@ def _cell_text(value) -> str:
     return str(value)
 
 
+def _display_cell(header: str, value) -> str:
+    if value is None:
+        return "—"
+    if header == "clean_success_ci95":
+        return f"[{float(value[0]):.3f}, {float(value[1]):.3f}]"
+    rate_headers = {
+        "clean_success_rate", "best-of-n minus mean", "frontier_regret",
+        "recall", "false-alarm rate", "observed agreement",
+    }
+    if header in rate_headers:
+        try:
+            number = float(value[:-1]) / 100 if isinstance(value, str) and value.endswith("%") \
+                else float(value)
+        except (TypeError, ValueError):
+            return _cell_text(value)
+        return f"{number:.3f}"
+    return _cell_text(value)
+
+
 def _markdown_table(headers: list[str], rows: list[dict]) -> list[str]:
     lines = [
         "| " + " | ".join(headers) + " |",
         "| " + " | ".join("---" for _ in headers) + " |",
     ]
     for row in rows:
-        cells = [_cell_text(row.get(header)).replace("|", r"\|").replace("\n", " ") for header in headers]
+        cells = [
+            _display_cell(header, row.get(header)).replace("|", r"\|").replace("\n", " ")
+            for header in headers
+        ]
         lines.append("| " + " | ".join(cells) + " |")
     return lines
 
@@ -334,10 +359,46 @@ def _figure(stamp: dict):
     return figure
 
 
-def _save_figure(figure, path: Path, stamp: dict) -> None:
-    figure.text(
-        0.01, 0.012, _stamp_line(stamp), fontsize=4.5, ha="left", va="bottom",
+def _add_stamp_text(figure, stamp: dict):
+    font_size = 6
+    max_width = max(
+        48,
+        int((figure.get_figwidth() - 0.2) * 72 / (font_size * 0.58)),
     )
+    artist = None
+    for width in range(max_width, 39, -12):
+        wrapped = textwrap.fill(
+            _stamp_line(stamp),
+            width=width,
+            max_lines=3,
+            placeholder="…",
+        )
+        if artist is not None:
+            artist.remove()
+        artist = figure.text(
+            0.01,
+            0.012,
+            wrapped,
+            fontsize=font_size,
+            ha="left",
+            va="bottom",
+            linespacing=1.1,
+        )
+        figure.canvas.draw()
+        extent = artist.get_window_extent()
+        bounds = figure.bbox
+        if (
+            extent.x0 >= bounds.x0
+            and extent.y0 >= bounds.y0
+            and extent.x1 <= bounds.x1
+            and extent.y1 <= bounds.y1
+        ):
+            return artist
+    raise ValueError("Could not fit the figure stamp within the canvas")
+
+
+def _save_figure(figure, path: Path, stamp: dict) -> None:
+    _add_stamp_text(figure, stamp)
     figure.savefig(path, dpi=200, format="png")
 
 
@@ -358,17 +419,47 @@ def _dedupe_legend(axes) -> None:
         if label and label != "_nolegend_":
             unique.setdefault(label, handle)
     if unique:
-        axes.legend(unique.values(), unique.keys(), fontsize=6, loc="best")
+        axes.legend(unique.values(), unique.keys(), fontsize=9, loc="best")
 
 
 def _plot_clean_success(path: Path, rows: list[dict], stamp: dict) -> None:
     figure = _figure(stamp)
     axes = figure.subplots()
-    figure.subplots_adjust(bottom=0.28)
+    figure.subplots_adjust(left=0.08, right=0.98, bottom=0.25, top=0.88)
     colors = _variant_colors({row["variant"] for row in rows})
-    tick_labels = []
-    for index, row in enumerate(rows):
-        tick_labels.append(f"{row['scenario']}\n{row['model']}\n{row['variant']}")
+    sorted_rows = sorted(
+        rows, key=lambda row: (row["scenario"], row["model"], row["variant"]),
+    )
+    x_positions = {}
+    scenario_centers = {}
+    separators = []
+    cursor = 0
+    previous_last = None
+    for scenario in sorted({row["scenario"] for row in sorted_rows}):
+        scenario_rows = [row for row in sorted_rows if row["scenario"] == scenario]
+        positions = list(range(cursor, cursor + len(scenario_rows)))
+        if previous_last is not None:
+            separators.append((previous_last + positions[0]) / 2)
+        for row, position in zip(scenario_rows, positions):
+            x_positions[(row["model"], row["scenario"], row["variant"])] = position
+        scenario_centers[scenario] = sum(positions) / len(positions)
+        previous_last = positions[-1]
+        cursor += len(scenario_rows) + 1
+
+    for separator in separators:
+        axes.axvline(separator, color="#c9c9c9", linewidth=1, zorder=0)
+    for scenario, center in scenario_centers.items():
+        axes.text(
+            center,
+            -0.2,
+            f"Scenario {scenario}",
+            transform=axes.get_xaxis_transform(),
+            ha="center",
+            va="top",
+            fontsize=10,
+        )
+    for row in sorted_rows:
+        index = x_positions[(row["model"], row["scenario"], row["variant"])]
         if row["clean_success_rate"] is None:
             continue
         low, high = row["clean_success_ci95"]
@@ -386,30 +477,60 @@ def _plot_clean_success(path: Path, rows: list[dict], stamp: dict) -> None:
             capsize=3,
             label=_variant_label(row["variant"]),
         )
-    axes.set_title("Clean success rate with 95% Wilson intervals")
-    axes.set_ylabel("Clean success rate")
+    axes.set_title("Clean success rate with 95% Wilson intervals", fontsize=14)
+    axes.set_ylabel("Clean success rate", fontsize=10)
     axes.set_ylim(-0.05, 1.05)
-    axes.set_xticks(range(len(tick_labels)), tick_labels, fontsize=6)
+    axes.set_xlim(-0.6, cursor - 1.4)
+    axes.set_xticks(
+        [x_positions[(row["model"], row["scenario"], row["variant"])] for row in sorted_rows],
+        [f"{row['model']}\n{row['variant']}" for row in sorted_rows],
+        fontsize=9,
+    )
+    from matplotlib.ticker import FormatStrFormatter
+
+    axes.yaxis.set_major_formatter(FormatStrFormatter("%.3f"))
     axes.grid(axis="y", alpha=0.25)
     _dedupe_legend(axes)
     _save_figure(figure, path, stamp)
 
 
+def _jittered_raw_points(rows: list[dict]) -> list[tuple[dict, float]]:
+    grouped = defaultdict(list)
+    for row in sorted(
+        rows, key=lambda item: (item["scenario"], item["model"], item["variant"]),
+    ):
+        rate = row["clean_success_rate"]
+        score = row["raw_score_mean"]
+        if rate is not None and score is not None:
+            grouped[(rate, score)].append(row)
+    points = []
+    for (rate, score), duplicates in grouped.items():
+        ci = duplicates[0]["clean_success_ci95"]
+        lower_spread = min(0.025, max(0.0, (rate - ci[0]) * 0.75))
+        upper_spread = min(0.025, max(0.0, (ci[1] - rate) * 0.75))
+        for index, row in enumerate(duplicates):
+            offset = (
+                0.0 if len(duplicates) == 1
+                else -lower_spread
+                + (lower_spread + upper_spread) * index / (len(duplicates) - 1)
+            )
+            points.append((row, rate + offset))
+    return points
+
+
 def _plot_raw_vs_clean(path: Path, rows: list[dict], stamp: dict) -> None:
     figure = _figure(stamp)
     axes = figure.subplots()
-    figure.subplots_adjust(bottom=0.25)
+    figure.subplots_adjust(left=0.09, right=0.98, bottom=0.22, top=0.88)
     colors = _variant_colors({row["variant"] for row in rows})
-    for row in rows:
+    for row, x in _jittered_raw_points(rows):
         rate = row["clean_success_rate"]
         score = row["raw_score_mean"]
-        if rate is None or score is None:
-            continue
         low, high = row["clean_success_ci95"]
         scripted = row["variant"] in SCRIPTED_VARIANTS
         color = "#888888" if scripted else colors[row["variant"]]
         axes.errorbar(
-            rate,
+            x,
             score,
             xerr=[[rate - low], [high - rate]],
             fmt="o",
@@ -420,9 +541,22 @@ def _plot_raw_vs_clean(path: Path, rows: list[dict], stamp: dict) -> None:
             capsize=3,
             label=_variant_label(row["variant"]),
         )
-    axes.set_title("Raw audited score vs clean success")
-    axes.set_xlabel("Clean success rate (horizontal 95% Wilson CI)")
-    axes.set_ylabel("Raw audited score mean")
+        axes.annotate(
+            f"{row['scenario']}/{row['model']}",
+            (x, score),
+            xytext=(4, 4),
+            textcoords="offset points",
+            fontsize=8,
+        )
+    axes.set_title("Raw audited score vs clean success", fontsize=14)
+    axes.set_xlabel("Clean success rate (horizontal 95% Wilson CI)", fontsize=10)
+    axes.set_ylabel("Raw audited score mean", fontsize=10)
+    axes.set_xlim(0, 1)
+    axes.set_ylim(0, 100)
+    axes.tick_params(axis="both", labelsize=9)
+    from matplotlib.ticker import FormatStrFormatter
+
+    axes.xaxis.set_major_formatter(FormatStrFormatter("%.3f"))
     axes.grid(alpha=0.25)
     _dedupe_legend(axes)
     _save_figure(figure, path, stamp)
@@ -465,20 +599,26 @@ def _plot_table(
     figure = _figure(stamp)
     axes = figure.subplots()
     axes.axis("off")
-    axes.set_title(title, pad=14)
-    body = [[_cell_text(row.get(header)) for header in headers] for row in rows]
+    axes.set_title(title, pad=8, fontsize=14)
+    body = [
+        [_display_cell(header, row.get(header)) for header in headers]
+        for row in rows
+    ]
     table = axes.table(
         cellText=body or [["—"] * len(headers)],
         colLabels=headers,
-        loc="center",
         cellLoc="center",
+        bbox=[0.01, 0.04, 0.98, 0.88],
     )
     table.auto_set_font_size(False)
-    table.set_fontsize(7)
-    table.scale(1, 1.5)
-    figure.subplots_adjust(bottom=0.15, top=0.9)
+    table.set_fontsize(9)
+    figure.subplots_adjust(left=0.03, right=0.97, bottom=0.24, top=0.86)
     if footnote:
-        figure.text(0.02, 0.07, footnote, fontsize=6, ha="left", va="center")
+        width = int((figure.get_figwidth() - 0.3) * 72 / (9 * 0.58))
+        figure.text(
+            0.02, 0.14, textwrap.fill(footnote, width=width),
+            fontsize=9, ha="left", va="center",
+        )
     _save_figure(figure, path, stamp)
 
 
@@ -581,35 +721,42 @@ def _plot_validation(
     pattern_axes, kappa_axes = figure.subplots(
         2, 1, gridspec_kw={"height_ratios": [3, 1]},
     )
+    figure.suptitle("Auditor recall and false alarms", fontsize=14, y=0.985)
     pattern_axes.axis("off")
-    pattern_axes.set_title("Per-pattern recall and false-positive rate")
+    pattern_axes.set_title("Per-pattern recall and false-positive rate", fontsize=12, pad=3)
     pattern_headers = [
         "pattern", "provenance", "detected/planted", "recall",
         "false alarms (FP / honest)", "false-alarm rate",
     ]
     pattern_table = pattern_axes.table(
-        cellText=[[_cell_text(row.get(header)) for header in pattern_headers] for row in patterns],
+        cellText=[
+            [_display_cell(header, row.get(header)) for header in pattern_headers]
+            for row in patterns
+        ],
         colLabels=pattern_headers,
-        loc="center",
         cellLoc="center",
+        bbox=[0.01, 0.02, 0.98, 0.9],
     )
     pattern_table.auto_set_font_size(False)
-    pattern_table.set_fontsize(5.5)
-    pattern_table.scale(1, 1.25)
+    pattern_table.set_fontsize(9)
 
     kappa_axes.axis("off")
-    kappa_axes.set_title("Cohen's kappa")
+    kappa_axes.set_title("Cohen's kappa", fontsize=12, pad=3)
     kappa_headers = ["subset", "n", "observed agreement", "kappa"]
     kappa_table = kappa_axes.table(
-        cellText=[[_cell_text(row.get(header)) for header in kappa_headers] for row in kappa_rows],
+        cellText=[
+            [_display_cell(header, row.get(header)) for header in kappa_headers]
+            for row in kappa_rows
+        ],
         colLabels=kappa_headers,
-        loc="center",
         cellLoc="center",
+        bbox=[0.01, 0.02, 0.98, 0.9],
     )
     kappa_table.auto_set_font_size(False)
-    kappa_table.set_fontsize(6)
-    kappa_table.scale(1, 1.2)
-    figure.subplots_adjust(bottom=0.14, top=0.94, hspace=0.35)
+    kappa_table.set_fontsize(9)
+    figure.subplots_adjust(
+        left=0.04, right=0.96, bottom=0.2, top=0.9, hspace=0.12,
+    )
     _save_figure(figure, path, stamp)
 
 
@@ -621,7 +768,10 @@ def _asset_entry(path: Path, output_root: Path, stamp: dict, source_files: list[
     }
 
 
-def generate_batch_assets(batch_dir: Path, output_dir: Path, output_root: Path) -> list[dict]:
+def generate_batch_assets(
+    batch_dir: Path, output_dir: Path, output_root: Path, *,
+    git_stamp: tuple[str, bool] | None = None, repo_root: Path = REPO_ROOT,
+) -> list[dict]:
     batch_dir = Path(batch_dir)
     output_dir = Path(output_dir)
     output_root = Path(output_root)
@@ -630,7 +780,9 @@ def generate_batch_assets(batch_dir: Path, output_dir: Path, output_root: Path) 
     grid_rows = json.loads((batch_dir / "grid_summary.json").read_text(encoding="utf-8"))
     clean_rows = _clean_success_rows(records, grid_rows)
     score_rows = _cell_score_rows(records, clean_rows)
-    stamp = build_batch_stamp(batch_dir, records, summary)
+    stamp = build_batch_stamp(
+        batch_dir, records, summary, repo_root=repo_root, git_stamp=git_stamp,
+    )
     output_dir.mkdir(parents=True, exist_ok=False)
     source_files = [
         batch_dir / "results.jsonl",
@@ -649,7 +801,38 @@ def generate_batch_assets(batch_dir: Path, output_dir: Path, output_root: Path) 
     ci_md = output_dir / "clean_success_ci.md"
     ci_png = output_dir / "clean_success_ci.png"
     _write_csv(ci_csv, ci_headers, clean_rows, stamp)
-    _write_markdown(ci_md, "Clean success rate with Wilson intervals", ci_headers, clean_rows, stamp)
+    ci_md_headers = [
+        "model", "scenario", "variant", "n_runs", "n_parse_failure", "n_scored",
+        "n_clean_success", "clean_success_rate", "clean_success_ci95",
+        "conclusion metrics meaningful",
+    ]
+    ci_md_rows = [
+        {
+            **{
+                header: row[header]
+                for header in ci_md_headers
+                if header in row
+            },
+            "conclusion metrics meaningful": (
+                "yes" if row["conclusion_metrics_meaningful"] else "no †"
+            ),
+        }
+        for row in clean_rows
+    ]
+    scripted_note = scripted_label(GRID_CONCLUSION_FIELDS)
+    scripted_details = scripted_note["note"].removeprefix("scripted baseline: ")
+    ci_footnote = (
+        f"† scripted baseline: {scripted_details}. Not meaningful: "
+        f"{', '.join(scripted_note['not_meaningful'])}"
+    )
+    _write_markdown(
+        ci_md,
+        "Clean success rate with Wilson intervals",
+        ci_md_headers,
+        ci_md_rows,
+        stamp,
+        footnote=ci_footnote,
+    )
     _plot_clean_success(ci_png, clean_rows, stamp)
 
     raw_png = output_dir / "raw_vs_clean.png"
@@ -687,11 +870,17 @@ def generate_batch_assets(batch_dir: Path, output_dir: Path, output_root: Path) 
 
 def generate_validation_assets(
     report_path: Path, output_root: Path, *, synthetic: bool = False,
+    git_stamp: tuple[str, bool] | None = None, repo_root: Path = REPO_ROOT,
 ) -> list[dict]:
     report_path = Path(report_path)
     output_root = Path(output_root)
     patterns, kappa_rows = parse_validation_report(report_path)
-    stamp = build_validation_stamp(report_path, synthetic=synthetic)
+    stamp = build_validation_stamp(
+        report_path,
+        synthetic=synthetic,
+        repo_root=repo_root,
+        git_stamp=git_stamp,
+    )
     md_path = output_root / "auditor_validation.md"
     csv_path = output_root / "auditor_validation.csv"
     png_path = output_root / "auditor_validation.png"
@@ -712,20 +901,33 @@ def generate_validation_assets(
 
 def generate_assets(
     batch_dirs: list[Path], validation_path: Path, output_root: Path, *,
-    synthetic_validation: bool = False,
+    synthetic_validation: bool = False, repo_root: Path = REPO_ROOT,
+    git_stamp: tuple[str, bool] | None = None,
 ) -> list[dict]:
     output_root = Path(output_root)
     labels = [Path(batch_dir).name for batch_dir in batch_dirs]
     if len(labels) != len(set(labels)):
         raise ValueError("Batch directory names must be unique for output labels")
+    if git_stamp is None:
+        git_stamp = _git_stamp(Path(repo_root))
     assets = []
     for batch_dir, label in zip(batch_dirs, labels):
         assets.extend(
-            generate_batch_assets(batch_dir, output_root / label, output_root)
+            generate_batch_assets(
+                batch_dir,
+                output_root / label,
+                output_root,
+                git_stamp=git_stamp,
+                repo_root=repo_root,
+            )
         )
     assets.extend(
         generate_validation_assets(
-            validation_path, output_root, synthetic=synthetic_validation,
+            validation_path,
+            output_root,
+            synthetic=synthetic_validation,
+            git_stamp=git_stamp,
+            repo_root=repo_root,
         )
     )
     (output_root / "manifest.json").write_text(
@@ -761,6 +963,7 @@ def main(argv: list[str] | None = None) -> None:
     if args.output.exists():
         parser.error("Output directory already exists; choose a new directory")
     try:
+        git_stamp = _git_stamp(REPO_ROOT)
         args.output.mkdir(parents=True, exist_ok=False)
         if args.synthetic:
             from reports.synthetic import create_synthetic_inputs
@@ -777,6 +980,7 @@ def main(argv: list[str] | None = None) -> None:
             validation_path,
             args.output,
             synthetic_validation=args.synthetic,
+            git_stamp=git_stamp,
         )
     except (OSError, ValueError, KeyError, json.JSONDecodeError) as exc:
         parser.error(str(exc))
