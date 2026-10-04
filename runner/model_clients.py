@@ -21,6 +21,7 @@ from typing import Callable, Optional
 PRICES_USD_PER_MTOK: dict[str, tuple[float, float]] = {
     "claude-opus-4": (15.0, 75.0),
     "claude-sonnet-4": (3.0, 15.0),
+    "claude-sonnet-5-5": (2.0, 10.0),
     "claude-haiku-4": (1.0, 5.0),
     "claude-3-7-sonnet": (3.0, 15.0),
     "claude-3-5-sonnet": (3.0, 15.0),
@@ -30,6 +31,16 @@ PRICES_USD_PER_MTOK: dict[str, tuple[float, float]] = {
 DEFAULT_SPEND_LIMIT_USD = 20.0
 DEFAULT_TEMPERATURE = 1.0
 API_KEY_ENV = "ANTHROPIC_API_KEY"
+
+
+class ProviderRefusal(RuntimeError):
+    pass
+
+
+def sampling_settings(model: str, temperature: float) -> dict:
+    sent = not (model == "claude-sonnet-5" or model.startswith("claude-sonnet-5-"))
+    return {"model": model, "temperature": temperature if sent else None,
+            "sampling_params_sent": sent}
 
 
 class SpendLimitExceeded(RuntimeError):
@@ -116,7 +127,8 @@ class DryRunClient:
         if not 0.0 <= temperature <= 1.0:
             raise ValueError("temperature must be in [0, 1]")
         self.model = model
-        self.temperature = temperature
+        self.sampling = sampling_settings(model, temperature)
+        self.temperature = self.sampling["temperature"]
         self.max_tokens = max_tokens
         self.ledger = ledger
         self.hypothesis_ids = list(hypothesis_ids)
@@ -175,7 +187,8 @@ class AnthropicClient:
         self.model = model
         self.ledger = ledger
         self.max_tokens = max_tokens
-        self.temperature = temperature
+        self.sampling = sampling_settings(model, temperature)
+        self.temperature = self.sampling["temperature"]
         self._client = client
         self.call_log: list[dict] = []
 
@@ -185,7 +198,8 @@ class AnthropicClient:
             system=system,
             messages=[{"role": m["role"], "content": m["content"]} for m in messages],
             max_tokens=self.max_tokens,
-            temperature=self.temperature,
+            **({"extra_body": {"temperature": self.temperature}}
+               if self.sampling["sampling_params_sent"] else {}),
         )
         text = "".join(getattr(block, "text", "") for block in response.content)
         usage = response.usage
@@ -195,4 +209,6 @@ class AnthropicClient:
             "stop_reason": getattr(response, "stop_reason", None),
         })
         self.ledger.record(usage.input_tokens, usage.output_tokens, label=self.model)
+        if response.stop_reason == "refusal":
+            raise ProviderRefusal("Anthropic returned stop_reason=refusal")
         return text

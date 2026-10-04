@@ -28,7 +28,7 @@ from runner.factories import make_agent, make_env, make_scripted_agent, scenario
 from runner.modal_batch import EpisodeJob, run_episode
 from runner.model_clients import (
     API_KEY_ENV, DEFAULT_SPEND_LIMIT_USD, DEFAULT_TEMPERATURE, AnthropicClient, SpendLimitExceeded,
-    TokenLedger, price_for,
+    TokenLedger, price_for, sampling_settings,
 )
 
 DIMENSIONS = ("scientific_correctness", "evidence_sufficiency", "protocol_validity", "safety")
@@ -91,6 +91,11 @@ def main(argv: Optional[list[str]] = None, client_factory: Optional[Callable] = 
         ledger = TokenLedger(0.0, 0.0, limit_usd=args.max_spend_usd, log=None)
         client = None
 
+    sampling = None if args.agent != "llm" else {
+        **sampling_settings(args.model, args.temperature),
+        "max_tokens": args.max_tokens,
+        "seed_applied_to_model": False,
+    }
     agents = []
 
     def agent_factory(*, variant, model, seed):
@@ -106,13 +111,13 @@ def main(argv: Optional[list[str]] = None, client_factory: Optional[Callable] = 
         return agent
 
     if args.agent == "llm":
-        job = EpisodeJob(f"{args.seed:08d}", args.variant, args.model, args.seed, 0, args.seed)
+        job = EpisodeJob(f"{args.seed:08d}", args.variant, args.model, args.seed, 0, args.seed, args.scenario)
     else:
-        job = EpisodeJob(f"{args.seed:08d}", args.agent, "none", args.seed, 0, args.seed)
+        job = EpisodeJob(f"{args.seed:08d}", args.agent, "none", args.seed, 0, args.seed, args.scenario)
     say(f"# run_one: agent={args.agent} scenario={args.scenario} ({bundle}) "
         f"variant={args.variant} model={args.model} "
         f"seed={args.seed} budget={args.budget if args.budget is not None else 'bundle default'} "
-        f"temperature={args.temperature} max_tokens={args.max_tokens}")
+        f"temperature={sampling['temperature'] if sampling else None} max_tokens={args.max_tokens}")
     try:
         episode_run = run_episode(
             job, partial(make_env, scenario=args.scenario, budget=args.budget), agent_factory,
@@ -138,6 +143,8 @@ def main(argv: Optional[list[str]] = None, client_factory: Optional[Callable] = 
         say(format_transcript(agent.transcript))
     say(format_refusals(episode_run.refusals, episode_run.aborted_on_refusals))
     say(format_verdict(verdict, aborted_on_refusals=episode_run.aborted_on_refusals))
+    if episode_run.provider_refusal:
+        say("  NOTE: provider_refusal — partial audit retained; excluded from science metrics")
     if args.agent != "llm":
         say("  NOTE: scripted baseline — beliefs, dominant cause and confidence are random; "
             "conclusion metrics above are not meaningful. Compare experiment selection only.")
@@ -149,13 +156,10 @@ def main(argv: Optional[list[str]] = None, client_factory: Optional[Callable] = 
             "scenario_dir": str(bundle),
             "trajectory": asdict(trajectory),
             "verdict": asdict(verdict),
-            "clean_success": verdict.verdict == "VALID_SUCCESS" and not episode_run.aborted_on_refusals,
-            "sampling": None if args.agent != "llm" else {
-                "model": args.model,
-                "temperature": args.temperature,
-                "max_tokens": args.max_tokens,
-                "seed_applied_to_model": False,
-            },
+            "clean_success": verdict.verdict == "VALID_SUCCESS" and episode_run.outcome == "completed",
+            "sampling": sampling,
+            "provider_refusal": episode_run.provider_refusal,
+            "outcome": episode_run.outcome,
             "budget": {"requested": args.budget, "bundle": bundle_budget},
             "refusals": [asdict(refusal) for refusal in episode_run.refusals],
             "refusal_count": episode_run.refusal_count,
@@ -168,7 +172,7 @@ def main(argv: Optional[list[str]] = None, client_factory: Optional[Callable] = 
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(json.dumps(record, indent=2, allow_nan=False) + "\n", encoding="utf-8")
         say(f"\nwrote {args.out}")
-    return 3 if episode_run.aborted_on_refusals else 0
+    return 4 if episode_run.provider_refusal else 3 if episode_run.aborted_on_refusals else 0
 
 
 def format_trajectory(trajectory: Trajectory) -> str:

@@ -63,7 +63,7 @@ from functools import partial
 from itertools import product
 import json
 import math
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import random
 import socket
 from statistics import fmean
@@ -72,7 +72,7 @@ from typing import Callable, Iterable, Mapping
 
 from contract import Agent, Env, Observation, Result, Trajectory, Turn, Verdict, trajectory_from_dict
 from env import EnvRejection
-from runner.model_clients import DEFAULT_TEMPERATURE, SpendLimitExceeded, price_for
+from runner.model_clients import DEFAULT_TEMPERATURE, ProviderRefusal, SpendLimitExceeded, price_for
 from runner.agents import SCRIPTED_VARIANTS
 
 CONCLUSION_METRICS = (
@@ -140,6 +140,12 @@ class EpisodeRun:
     trajectory: Trajectory
     refusals: list[Refusal]
     aborted_on_refusals: bool
+    provider_refusal: bool = False
+
+    @property
+    def outcome(self) -> str:
+        return ("provider_refusal" if self.provider_refusal else
+                "aborted_on_refusals" if self.aborted_on_refusals else "completed")
 
     @property
     def refusal_count(self) -> int:
@@ -171,7 +177,7 @@ def worker_bundle_files(scenario: str) -> list[tuple[Path, str]]:
 
     bundle = scenario_dir(scenario).resolve()
     repository = REPO_ROOT.resolve()
-    remote_bundle = Path("/root") / bundle.relative_to(repository)
+    remote_bundle = PurePosixPath("/root") / bundle.relative_to(repository)
     files = [
         (path, str(remote_bundle / "agent" / path.name))
         for path in sorted((bundle / "agent").glob("*.json"))
@@ -185,7 +191,7 @@ def worker_bundle_files(scenario: str) -> list[tuple[Path, str]]:
         str(remote_bundle / "auditor" / "expected_observations.json"),
     ))
     files.extend(
-        (path, str(Path("/root") / "agents" / "prompts" / path.name))
+        (path, str(PurePosixPath("/root") / "agents" / "prompts" / path.name))
         for path in sorted(PROMPTS_DIR.glob("*.md"))
     )
     return files
@@ -225,7 +231,12 @@ def run_episode(job: EpisodeJob, env_factory: Callable, agent_factory: Callable,
     trajectory = Trajectory(env.state.scenario_id, [])
     refusals = []
     for agent_call in range(max_turns):
-        action = agent.act(deepcopy(observation), deepcopy(env.state))
+        try:
+            action = agent.act(deepcopy(observation), deepcopy(env.state))
+        except ProviderRefusal:
+            if log is not None:
+                log("[provider] episode ended: provider_refusal")
+            return EpisodeRun(trajectory, refusals, aborted_on_refusals=False, provider_refusal=True)
         if action.kind not in ("run_experiment", "conclude"):
             raise ValueError(f"Unknown action kind: {action.kind}")
         saved_action = deepcopy(action)
@@ -286,8 +297,7 @@ def remote_episode(job: EpisodeJob, env_factory: str, agent_factory: str,
         episode = run_episode(job, env_maker, agent_maker, max_turns)
         result.update({
             "sampling": {
-                "model": client.model,
-                "temperature": client.temperature,
+                **client.sampling,
                 "max_tokens": client.max_tokens,
                 "seed_applied_to_model": False,
                 "client": client_spec["mode"],
@@ -304,6 +314,8 @@ def remote_episode(job: EpisodeJob, env_factory: str, agent_factory: str,
         "trajectory": asdict(episode.trajectory),
         "refusals": [asdict(refusal) for refusal in episode.refusals],
         "aborted_on_refusals": episode.aborted_on_refusals,
+        "provider_refusal": episode.provider_refusal,
+        "outcome": episode.outcome,
     })
     return result
 
@@ -367,6 +379,14 @@ def split_parse_failure_records(rows: list[dict]) -> tuple[list[dict], list[dict
     return split_parse_failures(rows, lambda r: is_parse_failure_verdict(r["verdict"]["verdict"]))
 
 
+def split_science_records(rows: list[dict]) -> tuple[list[dict], list[dict], list[dict]]:
+    provider_refusals = [r for r in rows if r.get("provider_refusal", False)]
+    scored, parse_failures = split_parse_failure_records(
+        [r for r in rows if not r.get("provider_refusal", False)]
+    )
+    return scored, parse_failures, provider_refusals
+
+
 def aggregate(records: list[dict]) -> dict:
     metrics = {
         "nominal_success_rate": "nominal_success", "clean_success_rate": "clean_success",
@@ -390,12 +410,15 @@ def aggregate(records: list[dict]) -> dict:
     summary = {}
     for variant in sorted({r["job"]["variant"] for r in records}):
         rows = [r for r in records if r["job"]["variant"] == variant]
-        scored, excluded = split_parse_failure_records(rows)
+        scored, excluded, provider_refusals = split_science_records(rows)
         completed = [r["metrics"] for r in scored if not r.get("aborted_on_refusals", False)]
         summary[variant] = {
             "episodes": len(rows),
             "n_parse_failure": len(excluded),
             "parse_failure_rate": len(excluded) / len(rows),
+            "n_provider_refusal": len(provider_refusals),
+            "provider_refusal_rate": len(provider_refusals) / len(rows),
+            "cells": grid_summary(rows),
             "n_scored": len(scored),
             "completed_episodes": len(completed),
             "aborted_on_refusals": sum(bool(r.get("aborted_on_refusals", False)) for r in rows),
@@ -439,7 +462,7 @@ def grid_summary(records: list[dict]) -> list[dict]:
     for (scenario, variant), rows in cells.items():
         n_runs = len(rows)
         n_aborted = sum(bool(r.get("aborted_on_refusals", False)) for r in rows)
-        scored_rows, excluded_rows = split_parse_failure_records(rows)
+        scored_rows, excluded_rows, provider_refusals = split_science_records(rows)
         n_parse_failure = len(excluded_rows)
         n_scored = len(scored_rows)
         n_clean_success = sum(
@@ -451,6 +474,8 @@ def grid_summary(records: list[dict]) -> list[dict]:
         )
         verdict_counts = dict.fromkeys((*verdict_names, "OTHER"), 0)
         for row in rows:
+            if row.get("provider_refusal", False):
+                continue
             verdict_name = row["verdict"]["verdict"]
             verdict_counts[verdict_name if verdict_name in verdict_counts else "OTHER"] += 1
         row = {
@@ -459,6 +484,8 @@ def grid_summary(records: list[dict]) -> list[dict]:
             "n_runs": n_runs,
             "n_parse_failure": n_parse_failure,
             "parse_failure_rate": n_parse_failure / n_runs,
+            "n_provider_refusal": len(provider_refusals),
+            "provider_refusal_rate": len(provider_refusals) / n_runs,
             "n_aborted_on_refusals": n_aborted,
             "n_scored": n_scored,
             "n_clean_success": n_clean_success,
@@ -494,6 +521,7 @@ def write_chart(records: list[dict], path: Path) -> None:
     from matplotlib.figure import Figure
     from matplotlib.lines import Line2D
 
+    records, _, _ = split_science_records(records)
     figure = Figure(figsize=(8, 5), layout="constrained")
     FigureCanvasAgg(figure)
     axes = figure.subplots()
@@ -545,6 +573,7 @@ def write_clean_chart(records: list[dict], path: Path) -> None:
     from matplotlib.figure import Figure
     from matplotlib.lines import Line2D
 
+    records, _, _ = split_science_records(records)
     figure = Figure(figsize=(8, 5), layout="constrained")
     FigureCanvasAgg(figure)
     axes = figure.subplots()
@@ -602,14 +631,20 @@ def write_clean_chart(records: list[dict], path: Path) -> None:
 
 def build_record(job: EpisodeJob, trajectory: Trajectory, verdict: Verdict, truth: Mapping, *,
                  refusals: list, aborted_on_refusals: bool, extra: Mapping) -> dict:
+    provider_refusal = bool(extra.get("provider_refusal", False))
     record = {
         "job": asdict(job),
         "verdict": asdict(verdict),
         "refusals": refusals,
         "refusal_count": len(refusals),
         "aborted_on_refusals": aborted_on_refusals,
-        "metrics": aborted_metrics(trajectory, verdict) if aborted_on_refusals
-        else episode_metrics(trajectory, verdict, truth),
+        "provider_refusal": provider_refusal,
+        "outcome": ("provider_refusal" if provider_refusal else
+                    "aborted_on_refusals" if aborted_on_refusals else "completed"),
+        "metrics": None if provider_refusal else (
+            aborted_metrics(trajectory, verdict) if aborted_on_refusals
+            else episode_metrics(trajectory, verdict, truth)
+        ),
         "trajectory": asdict(trajectory),
     }
     for field_name in ("sampling", "tokens", "model_call_log", "worker"):
