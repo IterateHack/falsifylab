@@ -1,7 +1,7 @@
 # Serial rechallenge protocols in the CAR-T literature (scenario B, PB1)
 
-- **Rule decision supported:** PB1 keeps B5's serial rechallenge at the source paper's in-house SOP, 3:1 effector-to-target with restimulation every 3–4 days.
-- **Within the published range:** 3–4 days sits in the modal 2–4 day window (19 of 25 papers), and 3:1 lies inside the 1:10 to 5:1 range the survey calls defensible, though no surveyed paper used exactly 3:1.
+- **Rule decision supported:** PB1 requires B5's serial rechallenge at 3:1 effector-to-target with restimulation every 3–4 days, our stated in-house convention.
+- **Within the published range, but unused:** 3:1 falls inside the range of published ratios (1:10 target excess to 10:1 effector excess), but no surveyed paper used it; 3–4 days sits in the modal 2–4 day window (19 of 25 papers).
 - **1:1 is the modal ratio** (8 of 25 papers), but PB1 still requires 3:1: expansion measured at another ratio is not comparable to the source series (PB1's `violation_effect`).
 
 Literature survey run with Paperclip (paperclip.gxl.ai). Tables and citations are as delivered; the search agent's working notes are omitted.
