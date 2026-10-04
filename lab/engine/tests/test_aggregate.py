@@ -51,6 +51,18 @@ def test_few_runs_carry_a_warning():
                                                              n_boot=200)["warning"]
 
 
+def test_a_small_comparison_says_so_on_the_result_line_and_gives_the_p_floor():
+    from engine.aggregate import render
+    rng = random.Random(4)
+    runs = _runs("a", 0.5, 0.1, 2, rng) + _runs("b", 0.9, 0.1, 3, rng)
+    res = compare_arms(runs, "a", "b", n_boot=200)
+    assert res["p_floor"] == 0.1                      # 1 / C(5, 2)
+    assert res["p_permutation"] >= res["p_floor"]
+    assert "NOT RELIABLE" in render(res)
+    big = _runs("a", 0.5, 0.1, 6, rng) + _runs("b", 0.9, 0.1, 6, rng)
+    assert "NOT RELIABLE" not in render(compare_arms(big, "a", "b", n_boot=200))
+
+
 def test_only_experiments_scored_in_every_run_are_compared():
     runs = [Run("a0", "a", {"e1": 0.5, "e2": 0.5}), Run("b0", "b", {"e1": 0.9})]
     assert compare_arms(runs, "a", "b", n_boot=100)["experiments"] == ["e1"]
@@ -98,6 +110,15 @@ def test_parse_reply_tolerates_a_literal_newline_inside_a_string():
     assert parse_reply(text) == ({"reasoning": "line one\nline two"}, 0.6)
 
 
+def test_a_tool_submission_is_preferred_and_survives_bad_prose():
+    from engine.cold import parse_submission
+    block = NS(type="tool_use", name="submit_answer",
+               input={"confidence": 0.4, "answer": {"x": [1, 2]}})
+    prose = NS(type="text", text='{"answer": [1, 2}')       # invalid JSON
+    assert parse_submission([prose, block]) == ({"x": [1, 2]}, 0.4)
+    assert parse_submission([prose]) == (None, None)
+
+
 def test_the_cold_arm_scores_with_the_real_scorers_and_sees_no_task_text(tmp_path):
     reply = NS(content=[NS(type="text", text=json.dumps(
         {"confidence": 0.5, "answer": {"ranking": ["a", "b", "c"]}}))], usage=None)
@@ -108,6 +129,6 @@ def test_the_cold_arm_scores_with_the_real_scorers_and_sees_no_task_text(tmp_pat
     assert all(e["score"] is not None for e in nb["entries"])
     assert json.loads((res.run_dir / "run_meta.json").read_text())["arm"] == "cold"
     for call in provider.calls:
-        assert call["tools"] == []
+        assert [t["name"] for t in call["tools"]] == ["submit_answer"]  # nothing else
         prompt = call["messages"][0]["content"]
         assert "data/" not in prompt            # no dataset is named

@@ -319,3 +319,12 @@ def test_unknown_filler_is_refused():
     from engine.agent import filler_cards
     with pytest.raises(ValueError):
         filler_cards([("e1", "T", "x")], "bogus")
+
+
+def test_a_notebook_with_no_stated_confidence_still_renders():
+    from engine.notebook import Notebook
+    nb = Notebook(run_id="r", hypothesis="h")
+    e = NotebookEntry(experiment_id="e1", title="T", order=1)
+    nb.entries.append(e)
+    e.record_score({"score": 0.5, "max": 1.0, "details": {}})
+    assert "n/a" in nb.to_markdown()

@@ -9,7 +9,9 @@ independent, so resampling is over runs.
 """
 from __future__ import annotations
 
+import itertools
 import json
+import math
 import random
 import statistics
 from dataclasses import dataclass
@@ -62,9 +64,24 @@ def _ci(xs: list[float], ys: list[float], rng: random.Random, n_boot: int
     return diffs[int(0.025 * n_boot)], diffs[int(0.975 * n_boot) - 1]
 
 
+EXACT_LIMIT = 20000
+
+
 def _perm_p(xs: list[float], ys: list[float], rng: random.Random, n_perm: int) -> float:
+    """Two-sided permutation p for the difference in means. Exact (every way of
+    splitting the pooled runs) when that is a few thousand splits or fewer, which
+    it is for the small groups this is used on; Monte Carlo beyond that."""
     observed = abs(_mean(ys) - _mean(xs))
     pool, k = xs + ys, len(xs)
+    if math.comb(len(pool), k) <= EXACT_LIMIT:
+        total = hits = 0
+        for idx in itertools.combinations(range(len(pool)), k):
+            chosen = set(idx)
+            a = [pool[i] for i in idx]
+            b = [pool[i] for i in range(len(pool)) if i not in chosen]
+            total += 1
+            hits += abs(_mean(b) - _mean(a)) >= observed - 1e-12
+        return hits / total
     hits = 0
     for _ in range(n_perm):
         rng.shuffle(pool)
@@ -113,6 +130,9 @@ def compare_arms(runs: list[Run], baseline: str, treatment: str, *,
         "diff": round(_mean(ys) - _mean(xs), 4),
         "ci95": [round(lo, 4), round(hi, 4)],
         "p_permutation": round(_perm_p(xs, ys, rng, n_boot), 4),
+        # The smallest p a permutation test can return: 1 / the number of ways
+        # to split the pooled runs into groups of these sizes.
+        "p_floor": round(1 / math.comb(len(a) + len(b), len(a)), 4),
         "cohens_d": None if _cohens_d(xs, ys) is None else round(_cohens_d(xs, ys), 3),
         "per_experiment": rows,
         "warning": (f"only {n_min} run(s) in the smaller arm; an interval from fewer "
@@ -140,6 +160,10 @@ def render(res: dict[str, Any]) -> str:
         f"  {res['mean_treatment']:.3f} - {res['mean_baseline']:.3f} = "
         f"{res['diff']:+.3f}   95% CI [{lo:+.3f}, {hi:+.3f}]   "
         f"permutation p = {res['p_permutation']}   Cohen's d = {res['cohens_d']}",
+        *(["  ^ NOT RELIABLE: with so few runs the interval is a resample of a "
+           "handful of numbers and the permutation p cannot go below "
+           f"{res['p_floor']}. Read the difference as a first look only."]
+          if res["warning"] else []),
         "", f"  {'experiment':36s} {'base':>6} {'treat':>6} {'diff':>7}   95% CI",
     ]
     for r in res["per_experiment"]:
