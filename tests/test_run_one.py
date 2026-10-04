@@ -71,7 +71,9 @@ def test_factories_against_real_bundle():
     assert agent.model_name == "claude-x"
 
 
-def test_run_one_prints_every_section(tmp_path):
+def test_run_one_prints_every_section(tmp_path, monkeypatch):
+    provenance = Mock(return_value="abc123")
+    monkeypatch.setattr(run_one, "code_sha", provenance)
     out = io.StringIO()
     code = run_one.main(
         ["--scenario", "a", "--variant", "baseline", "--budget", "8", "--model", "claude-sonnet-4-5",
@@ -87,6 +89,8 @@ def test_run_one_prints_every_section(tmp_path):
         assert label in text, label
     assert "NOTE: scripted baseline" not in text
     record = json.loads((tmp_path / "ep.json").read_text())
+    assert record["code_sha"] == "abc123"
+    provenance.assert_called_once_with()
     assert record["tokens"]["model_calls"] == 1
     assert record["sampling"]["temperature"] == DEFAULT_TEMPERATURE
     assert record["verdict"]["verdict"] in ("VALID_SUCCESS", "WRONG_CONCLUSION", "INSUFFICIENT_EVIDENCE",

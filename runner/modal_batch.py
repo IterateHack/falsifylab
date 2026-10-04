@@ -77,6 +77,7 @@ from contract import Agent, Env, Observation, Result, Trajectory, Turn, Verdict,
 from env import EnvRejection
 from runner.model_clients import DEFAULT_TEMPERATURE, ProviderRefusal, SpendLimitExceeded, price_for
 from runner.agents import SCRIPTED_VARIANTS
+from runner.provenance import code_sha
 
 CONCLUSION_METRICS = (
     "nominal_success_rate",
@@ -795,7 +796,8 @@ def write_summaries(records: list[dict], output: Path, *, summary_name: str = "s
 
 def collect_results(results: Iterable[dict], output: Path, rubric: dict, truth: Mapping,
                     audit_fn: Callable[[Trajectory, dict, dict], Verdict],
-                    spend_limit_usd: float | None = None) -> dict:
+                    spend_limit_usd: float | None = None, *,
+                    code_sha: str | None = None) -> dict:
     """Persist each contract episode before auditing it, then emit one summary/chart."""
     validate_truth(truth)
     output.mkdir(parents=True, exist_ok=False)
@@ -826,6 +828,7 @@ def collect_results(results: Iterable[dict], output: Path, rubric: dict, truth: 
                     job, trajectory, verdict, truth,
                     refusals=refusals, aborted_on_refusals=aborted_on_refusals, extra=result,
                 )
+            record["code_sha"] = code_sha
             stream.write(json.dumps(record, allow_nan=False) + "\n")
             stream.flush()
             records.append(record)
@@ -968,6 +971,15 @@ def main(argv: list[str] | None = None) -> None:
 
     importlib.import_module("matplotlib")  # Fail before launching paid work if the chart dependency is missing.
 
+    current_code_sha = code_sha()
+    if current_code_sha is None:
+        print(
+            "code_sha unavailable: not a git checkout or git not installed",
+            file=sys.stderr,
+        )
+    elif current_code_sha.endswith("-dirty"):
+        print(f"code_sha is dirty: {current_code_sha}", file=sys.stderr)
+
     client_spec = {
         "mode": args.mode,
         "temperature": args.temperature,
@@ -993,6 +1005,7 @@ def main(argv: list[str] | None = None) -> None:
             summary = collect_results(
                 results, args.output, rubric, truth, audit_fn,
                 spend_limit_usd=args.max_spend_usd,
+                code_sha=current_code_sha,
             )
         else:
             secrets = ["falsifylab-keys", *args.secret]
@@ -1045,6 +1058,7 @@ def main(argv: list[str] | None = None) -> None:
                 summary = collect_results(
                     results, args.output, rubric, truth, audit_fn,
                     spend_limit_usd=args.max_spend_usd,
+                    code_sha=current_code_sha,
                 )
     except SpendLimitExceeded as exc:
         print(str(exc), file=sys.stderr)
