@@ -1135,9 +1135,10 @@ def _plot_experiment_selection(
         title="Model / variant and bar style",
         fontsize=9,
     )
+    selection_caption = textwrap.fill(SELECTION_CAPTION, width=130)
     figure.text(
-        0.5, 0.115, SELECTION_CAPTION,
-        ha="center", va="center", fontsize=9,
+        0.5, 0.12, selection_caption,
+        ha="center", va="center", fontsize=8,
     )
     figure.text(
         0.5, 0.075, CONDITIONAL_FOOTNOTE,
