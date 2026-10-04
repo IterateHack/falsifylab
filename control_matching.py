@@ -13,12 +13,30 @@ _BLOCKED = tuple(re.compile(pattern) for pattern in (
     r"\bno(?: visible)? bacterial growth\b",
 ))
 
-# Leading qualifiers must attach to control nouns; a gap can make them modify an
-# unrelated word, such as "no cell lysis in medium".
+# A leading qualifier attaches to the control noun through at most two medium or
+# matrix descriptors from an allow-list; an open gap lets it modify an unrelated
+# word ("no cell lysis control", "cell free spent medium").
+# Known ambiguity, accepted on purpose: "no bacteria growth medium" can mean
+# medium in which no bacteria grow (a valid control) or a "no bacterial growth"
+# readout followed by "medium".
 _BACTERIA_FREE_NOUNS = r"(?:filters?|incubations?|controls?|medium|media|broth|buffers?|pbs|stability)"
 _LEADING_NO_BACTERIA = r"(?:bacteria free|cell free|without bacteria|no bacteria|no cells?)"
 _TRAILING_NO_BACTERIA = r"(?:without bacteria|no bacteria|no cells|bacteria free)"
-_READOUT_WORDS = r"(?:growth|detected|observed|counted|seen)"
+_MEDIUM_DESCRIPTORS = (
+    r"(?:7h9|middlebrook|growth|assay|complete|culture|compound|drug|spiked|test"
+    r"|fresh|sterile|basal|minimal|defined|liquid)"
+)
+_TAIL_PREPOSITIONS = r"(?:in|at|for|over|during|from|of|to|with|under|on|across|throughout)"
+_PRESENT_MATERIAL = r"(?:bacteria|bacterial|cells?|lysates?|mycobacteria|h37rv)"
+
+# A part that says bacteria, cells or lysate are present is not a bacteria-free control.
+_PRESENCE = tuple(re.compile(pattern) for pattern in (
+    r"(?<!non )(?<!not )\binoculated\b",
+    r"\bwith live\b",
+    rf"\b(?:spiked with|containing|plus|with|added)(?: (?!no\b|without\b)\w+){{0,2}} {_PRESENT_MATERIAL}\b(?! free)",
+    rf"\b{_PRESENT_MATERIAL} added\b",
+    r"(?<!no )\blysates?\b",
+))
 
 _ACCEPTED = tuple(re.compile(pattern) for pattern in (
     r"\bsterility controls?\b",
@@ -28,8 +46,8 @@ _ACCEPTED = tuple(re.compile(pattern) for pattern in (
     r"\b(?:non inoculated|not inoculated) (?:medium|media|broth)\b",
     r"\bnegative growth controls?\b",
     r"\b(?:media|medium) controls?\b",
-    rf"\b{_LEADING_NO_BACTERIA}(?: (?:only|alone))?(?: {_BACTERIA_FREE_NOUNS})+\b",
-    rf"\b{_BACTERIA_FREE_NOUNS}\b(?: \w+){{0,4}} {_TRAILING_NO_BACTERIA}\b(?! {_READOUT_WORDS}\b)",
+    rf"\b{_LEADING_NO_BACTERIA}(?: {_MEDIUM_DESCRIPTORS}){{0,2}}(?: (?:only|alone))?(?: {_BACTERIA_FREE_NOUNS})+\b",
+    rf"\b{_BACTERIA_FREE_NOUNS}\b(?: \w+){{0,4}} {_TRAILING_NO_BACTERIA}\b(?= ?$| {_TAIL_PREPOSITIONS}\b)",
 ))
 
 _AMBIGUOUS = re.compile(r"\b(?:negative|background) controls?\b|\bblanks?\b")
@@ -40,6 +58,8 @@ _NO_BACTERIA_QUALIFIER = re.compile(
 
 def _is_accepted_control_part(normalised):
     if any(pattern.search(normalised) for pattern in _BLOCKED):
+        return False
+    if any(pattern.search(normalised) for pattern in _PRESENCE):
         return False
     if any(pattern.search(normalised) for pattern in _ACCEPTED):
         return True

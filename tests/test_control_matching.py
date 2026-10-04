@@ -162,7 +162,6 @@ def test_guard_words_are_not_accepted_without_a_full_qualifier_noun_pair(wording
     [
         "no cell lysis in medium",
         "no cell death in broth",
-        "no cell growth in medium",
         "no cell count change in broth",
         "no cell lysis control",
         "no cell toxicity control",
@@ -174,6 +173,18 @@ def test_guard_words_are_not_accepted_without_a_full_qualifier_noun_pair(wording
         "cell-free translation control",
         "no bacteria detected in incubation",
         "broth with no bacteria growth",
+        "cell free spent medium",
+        "bacteria free supernatant medium",
+        "cell-free esterase incubation",
+        "cell free enzyme control",
+        "cell-free expression control",
+        "no cell pellet control",
+        "no cell contamination control",
+        "no cell lysed control",
+        "no cell killing control",
+        "no cell survival medium",
+        "no bacteria were killed control",
+        "no cells grew control",
     ],
 )
 def test_qualifier_attached_to_a_non_control_word_is_rejected(wording):
@@ -183,6 +194,54 @@ def test_qualifier_attached_to_a_non_control_word_is_rejected(wording):
     observation = _e6_observation([wording])
     assert observation.structured["bacteria_free_control_returned"] is False
     assert not _has_control_line(observation)
+
+
+@pytest.mark.parametrize(
+    "wording",
+    [
+        "no-cell medium spiked with bacteria",
+        "cell-free medium with bacteria added",
+        "no-cell control with live bacteria",
+        "bacteria-free medium later inoculated",
+        "no-cell incubation with bacterial lysate",
+        "no cell control lysate",
+        "medium control with cells",
+        "broth only inoculated with H37Rv",
+        "medium alone plus bacteria",
+    ],
+)
+def test_part_saying_bacteria_are_present_is_rejected(wording):
+    alias = "bacteria_free_control"
+    assert matches_control_aliases([wording], alias) is False
+
+    observation = _e6_observation([wording])
+    assert observation.structured["bacteria_free_control_returned"] is False
+    assert not _has_control_line(observation)
+
+
+@pytest.mark.parametrize(
+    "wording",
+    [
+        "non-inoculated medium",
+        "not inoculated media",
+        "uninoculated medium",
+        "medium with no cells",
+        "control with no cells",
+        "incubation without bacteria at 37 C",
+        "cell-free medium containing compound",
+        "no-cell medium with compound",
+        "compound added to cell-free medium",
+    ],
+)
+def test_presence_veto_does_not_reject_negated_or_compound_wordings(wording):
+    assert matches_control_aliases([wording], "bacteria_free_control") is True
+
+
+def test_known_ambiguity_no_bacteria_growth_medium_is_accepted():
+    """It can mean medium in which no bacteria grow or a "no bacterial growth" readout followed by "medium"; accepting it was deliberate, not an oversight."""
+    assert matches_control_aliases(
+        ["no bacteria growth medium"], "bacteria_free_control"
+    ) is True
 
 
 def test_wave1_a_greedy_reaudits_without_pr4():
