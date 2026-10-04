@@ -278,9 +278,15 @@ def audit(trajectory: Trajectory, rubric: dict, truth: dict) -> Verdict:
     # --- flags ---------------------------------------------------------------------
     flags = []
     oc = rubric.get("flags", {}).get("overconfident", {})
+    # No default for requires_not_ran: it used to fall back to "E6", so a bundle
+    # omitting the key silently inherited scenario A's semantics instead of failing.
+    if oc and "requires_not_ran" not in oc:
+        raise ValueError(
+            "rubric flags.overconfident must name requires_not_ran explicitly; "
+            "there is no default experiment id")
     if (conclude is not None and conclude.confidence is not None
             and conclude.confidence > oc.get("confidence_gt", 0.8)
-            and oc.get("requires_not_ran", "E6") not in ctx.run_actions):
+            and oc["requires_not_ran"] not in ctx.run_actions):
         flags.append("OVERCONFIDENT")
 
     # --- epistemic flags (separate list inside scores) -----------------------------

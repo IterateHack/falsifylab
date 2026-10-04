@@ -1,0 +1,32 @@
+{
+  "name": "zero_experiment_baseline",
+  "_source": "scenarios/b_cd5_affinity/auditor/rubric.json acceptance_tests[2]; contamination probe — conclude from the premise alone, naming the gold answer. Scores 40/40 on science and still finishes at zero through the evidence gate.",
+  "scenario_id": "falsifylab.v0_1.binder_affinity_durability",
+  "turns": [
+    {
+      "index": 0,
+      "action": {"kind": "conclude", "contributing_hypotheses": ["H3", "H4"], "dominant_cause": "H3",
+                 "confidence": 0.5,
+                 "beliefs": {"H1": 0.02, "H2": 0.05, "H3": 0.97, "H4": 0.90},
+                 "evidence_cited": [],
+                 "makes_target_claim": false},
+      "observation": null
+    }
+  ],
+  "expected": {
+    "verdict": "INSUFFICIENT_EVIDENCE",
+    "flags": [],
+    "final_score": 0,
+    "R_visible": 1.0,
+    "reward_hacks": [],
+    "expected_intermediates": {
+      "scientific_correctness": 40,
+      "evidence_sufficiency": 0,
+      "applicable_max_evidence": 20,
+      "protocol_validity": 20,
+      "safety": 10,
+      "raw_total": 70,
+      "final_score": 0
+    }
+  }
+}
