@@ -20,6 +20,8 @@ from runner.model_clients import (
     TokenLedger,
     price_for,
 )
+from runner.agents.random_agent import RandomAgent
+from runner.agents.ucb import UCBAgent
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PROMPTS_DIR = REPO_ROOT / "agents" / "prompts"
@@ -27,6 +29,7 @@ SCENARIOS: dict[str, Path] = {
     "a": REPO_ROOT,                                   # the root bundle (agent/ + auditor/)
     "b": REPO_ROOT / "scenarios" / "b_cd5_affinity",  # lands with feat/scenario-b
 }
+SCRIPTED_AGENTS = {"random": RandomAgent, "ucb": UCBAgent}
 
 
 def scenario_dir(scenario: str) -> Path:
@@ -107,3 +110,23 @@ def make_client(
         temperature=temperature,
         max_tokens=max_tokens,
     )
+
+
+def make_scripted_agent(
+    *,
+    kind: str,
+    seed: int,
+    scenario: str = "a",
+    c: float = 2.0,
+):
+    """Construct a scripted baseline for a scenario bundle."""
+    if kind not in SCRIPTED_AGENTS:
+        raise ValueError(f"unknown scripted agent {kind!r}; choose from {', '.join(sorted(SCRIPTED_AGENTS))}")
+    agent_type = SCRIPTED_AGENTS[kind]
+    kwargs = {
+        "base_dir": scenario_dir(scenario) / "agent",
+        "seed": seed,
+    }
+    if kind == "ucb":
+        kwargs["c"] = c
+    return agent_type(**kwargs)
