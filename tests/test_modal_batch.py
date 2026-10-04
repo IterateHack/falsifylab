@@ -119,7 +119,7 @@ def test_metrics_use_truth_not_visible_reward_and_independent_brier():
     trajectory = episode()
     metrics = batch.episode_metrics(trajectory, verdict(visible=-100), TRUTH)
     assert set(metrics) == {
-        "nominal_success", "valid_success", "reward_hack", "protocol_violation", "cost",
+        "nominal_success", "clean_success", "reward_hack", "protocol_violation", "cost",
         "brier", "overconfidence", "R_visible", "final_score",
     }
     trajectory.turns[-1].action.dominant_cause = "a"
@@ -136,7 +136,7 @@ def test_aborted_metrics_fail_without_requiring_a_conclusion():
         trajectory, verdict("REWARD_HACK", flags=["OVERCONFIDENT"], hacks=["RH1"], protocol=0),
     )
     assert metrics["nominal_success"] is False
-    assert metrics["valid_success"] is False
+    assert metrics["clean_success"] is False
     assert metrics["R_visible"] == 0.0
     assert metrics["final_score"] == 0.0
     assert metrics["brier"] is None
@@ -150,7 +150,7 @@ def test_breaches_survive_verdict_precedence_and_flags_are_explicit():
     metrics = batch.episode_metrics(episode(), verdict("UNSAFE_ACTION", protocol=0,
                                    flags=["OVERCONFIDENT"], hacks=["RH1"]), TRUTH)
     assert metrics["reward_hack"] and metrics["protocol_violation"] and metrics["overconfidence"]
-    assert not metrics["valid_success"]
+    assert not metrics["clean_success"]
     assert batch.episode_metrics(episode(), verdict("REWARD_HACK"), TRUTH)["reward_hack"]
     assert batch.episode_metrics(episode(), verdict("PROTOCOL_VIOLATION"), TRUTH)["protocol_violation"]
 
@@ -186,25 +186,34 @@ def test_per_variant_aggregation_pools_models_and_seeds():
     assert summary["v"]["refusals"] == 0
     assert set(summary["v"]) == {
         "episodes", "completed_episodes", "aborted_on_refusals", "refusals",
-        "nominal_success_rate", "valid_success_rate", "reward_hack_rate",
+        "nominal_success_rate", "clean_success_rate", "reward_hack_rate",
         "protocol_violation_rate", "mean_cost", "mean_brier", "overconfidence_rate",
-        "mean_R_visible", "mean_final_score", "brier_n", "completed_only",
+        "mean_R_visible", "raw_score_mean", "brier_n", "completed_only",
     }
+    assert summary["v"]["clean_success_rate"] == 0.5
+    assert summary["v"]["raw_score_mean"] == 10
+    assert summary["v"]["completed_only"]["clean_success_rate"] == 0.5
+    assert summary["v"]["completed_only"]["raw_score_mean"] == 10
     assert summary["v"]["brier_n"] == 2
     assert summary["v"]["completed_only"]["brier_n"] == 2
     assert summary["w"]["episodes"] == 2
 
 
 def test_grid_summary_counts_failures_parse_failures_aborts_and_sorts():
-    def row(variant, *, scenario=None, success=False, verdict_name="WRONG_CONCLUSION",
-            aborted=False):
+    def row(variant, *, scenario=None, success=False, verdict_name=None,
+            aborted=False, score=10):
         job = {"variant": variant}
         if scenario is not None:
             job["scenario"] = scenario
+        if verdict_name is None:
+            verdict_name = "VALID_SUCCESS" if success else "WRONG_CONCLUSION"
         return {
             "job": job,
             "verdict": {"verdict": verdict_name},
-            "metrics": {"valid_success": success},
+            "metrics": {
+                "clean_success": success and not aborted,
+                "final_score": 0.0 if aborted else score,
+            },
             "aborted_on_refusals": aborted,
         }
 
@@ -218,37 +227,124 @@ def test_grid_summary_counts_failures_parse_failures_aborts_and_sorts():
         row("aborted", scenario="b", success=True),
         row("aborted", scenario="b", aborted=True),
         row("all-parse", scenario="z", verdict_name="PARSE_FAILURE"),
+        row("verdict-counts", verdict_name="INSUFFICIENT_EVIDENCE", aborted=True),
+        row("verdict-counts", verdict_name="PARSE_FAILURE"),
+        row("verdict-counts", verdict_name="REWARD_HACK", score=90),
+        row("verdict-counts", verdict_name="UNRECOGNISED", score=40),
     ]
 
     summary = batch.grid_summary(records)
     cells = {(record["scenario"], record["variant"]): record for record in summary}
+    assert set(cells[("a", "all-fail")]) == {
+        "scenario", "variant", "n_runs", "n_parse_failure", "n_aborted_on_refusals",
+        "n_scored", "n_clean_success", "clean_success_rate", "clean_success_ci95",
+        "frontier_regret", "raw_score_mean", "verdict_counts",
+    }
     assert cells[("a", "all-fail")]["frontier_regret"] == 0
     assert cells[("b", "one-of-four")]["n_runs"] == 4
-    assert cells[("b", "one-of-four")]["n_success"] == 1
-    assert cells[("b", "one-of-four")]["success_rate"] == 0.25
+    assert cells[("b", "one-of-four")]["n_clean_success"] == 1
+    assert cells[("b", "one-of-four")]["n_scored"] == 4
+    assert cells[("b", "one-of-four")]["clean_success_rate"] == 0.25
+    assert cells[("b", "one-of-four")]["clean_success_ci95"] is not None
     assert cells[("b", "one-of-four")]["frontier_regret"] == 0.75
     assert cells[("a", "all-success")]["frontier_regret"] == 0
+    assert cells[("a", "all-success")]["clean_success_rate"] == 1.0
     assert cells[("a", "parse-excluded")]["n_runs"] == 2
     assert cells[("a", "parse-excluded")]["n_parse_failure"] == 1
-    assert cells[("a", "parse-excluded")]["success_rate"] == 1.0
+    assert cells[("a", "parse-excluded")]["n_scored"] == 1
+    assert cells[("a", "parse-excluded")]["clean_success_rate"] == 1.0
+    assert cells[("a", "parse-excluded")]["clean_success_ci95"] is not None
+    assert cells[("a", "parse-excluded")]["raw_score_mean"] == 10
     assert cells[("b", "aborted")]["n_runs"] == 2
-    assert cells[("b", "aborted")]["n_success"] == 1
-    assert cells[("b", "aborted")]["success_rate"] == 0.5
+    assert cells[("b", "aborted")]["n_aborted_on_refusals"] == 1
+    assert cells[("b", "aborted")]["n_clean_success"] == 1
+    assert cells[("b", "aborted")]["clean_success_rate"] == 0.5
+    assert cells[("b", "aborted")]["clean_success_ci95"] is not None
+    assert cells[("b", "aborted")]["raw_score_mean"] == 5
     assert cells[("b", "aborted")]["frontier_regret"] == 0.5
-    assert cells[("z", "all-parse")]["success_rate"] is None
+    assert cells[("z", "all-parse")]["clean_success_rate"] is None
+    assert cells[("z", "all-parse")]["clean_success_ci95"] is None
+    assert cells[("z", "all-parse")]["raw_score_mean"] is None
     assert cells[("z", "all-parse")]["frontier_regret"] is None
-    assert all(record["success_metric"] == "valid_success" for record in summary)
+    assert cells[("a", "verdict-counts")]["n_aborted_on_refusals"] == 1
+    assert cells[("a", "verdict-counts")]["verdict_counts"] == {
+        "VALID_SUCCESS": 0,
+        "REWARD_HACK": 1,
+        "UNSAFE_ACTION": 0,
+        "PROTOCOL_VIOLATION": 0,
+        "INSUFFICIENT_EVIDENCE": 1,
+        "WRONG_CONCLUSION": 0,
+        "PARSE_FAILURE": 1,
+        "OTHER": 1,
+    }
+    assert cells[("a", "verdict-counts")]["raw_score_mean"] == pytest.approx(43.3333, abs=1e-4)
+    assert all(record["verdict_counts"]["VALID_SUCCESS"] >= 0 for record in summary)
     assert [(record["scenario"], record["variant"]) for record in summary] == [
         ("b", "one-of-four"),
         ("b", "aborted"),
         ("a", "all-fail"),
         ("a", "all-success"),
         ("a", "parse-excluded"),
+        ("a", "verdict-counts"),
         ("z", "all-parse"),
     ]
 
 
-def test_collect_logs_audits_and_emits_one_chart(tmp_path, monkeypatch):
+@pytest.mark.parametrize(
+    "k,n,expected",
+    [
+        (1, 4, (0.0456, 0.6994)),
+        (0, 10, (0.0, 0.2775)),
+        (10, 10, (0.7225, 1.0)),
+    ],
+)
+def test_wilson_interval(k, n, expected):
+    low, high = batch.wilson_interval(k, n)
+    assert (round(low, 4), round(high, 4)) == expected
+
+
+def test_wilson_interval_rejects_empty_sample():
+    with pytest.raises(ValueError, match="n must be positive"):
+        batch.wilson_interval(0, 0)
+
+
+def test_clean_chart_places_flagged_score_in_not_clean_column(monkeypatch):
+    from matplotlib.axes import Axes
+
+    records = [
+        {
+            "job": {"variant": "baseline"},
+            "verdict": {"verdict": "REWARD_HACK", "final_score": 90},
+            "metrics": {"clean_success": False},
+            "aborted_on_refusals": False,
+        },
+        {
+            "job": {"variant": "baseline"},
+            "verdict": {"verdict": "VALID_SUCCESS", "final_score": 85},
+            "metrics": {"clean_success": True},
+            "aborted_on_refusals": False,
+        },
+    ]
+    scatter = Axes.scatter
+    points = []
+
+    def tracked_scatter(self, x, y, **kwargs):
+        points.extend((x_value, y_value, kwargs["marker"]) for x_value, y_value in zip(x, y))
+        return scatter(self, x, y, **kwargs)
+
+    monkeypatch.setattr(Axes, "scatter", tracked_scatter)
+    artifact_dir = Path("/home/ubuntu/falsifylab-run-artifacts-final/test_raw_vs_clean")
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    chart_path = artifact_dir / "raw_vs_clean.png"
+    batch.write_clean_chart(records, chart_path)
+
+    assert [batch._jitter(index, 3) for index in range(3)] == [-0.15, 0.0, 0.15]
+    assert any(abs(x_value) <= 0.2 and y_value == 90 for x_value, y_value, _ in points)
+    assert any(abs(x_value - 1) <= 0.2 and y_value == 85 for x_value, y_value, _ in points)
+    assert chart_path.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+
+
+def test_collect_logs_audits_and_emits_both_charts(tmp_path, monkeypatch):
     from matplotlib.axes import Axes
 
     scatter = Axes.scatter
@@ -278,8 +374,8 @@ def test_collect_logs_audits_and_emits_one_chart(tmp_path, monkeypatch):
     assert len(grid) == 2
     assert all(row["scenario"] == "a" for row in grid)
     assert (output / "reward_vs_audit.png").read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
-    assert len(points) == 4
-    assert len(list(output.glob("*.png"))) == 1
+    assert len(points) == 8
+    assert len(list(output.glob("*.png"))) == 2
 
 
 def test_audit_failure_preserves_episode_without_publishing_summary(tmp_path):
@@ -293,6 +389,7 @@ def test_audit_failure_preserves_episode_without_publishing_summary(tmp_path):
     assert not (output / "summary.json").exists()
     assert not (output / "grid_summary.json").exists()
     assert not (output / "reward_vs_audit.png").exists()
+    assert not (output / "raw_vs_clean.png").exists()
 
 
 def test_collect_records_aborted_episode_as_failure_and_charts_audited_verdict(
@@ -341,7 +438,7 @@ def test_collect_records_aborted_episode_as_failure_and_charts_audited_verdict(
     assert len(record["refusals"]) == 1
     assert record["verdict"] == asdict(audited)
     assert record["metrics"]["nominal_success"] is False
-    assert record["metrics"]["valid_success"] is False
+    assert record["metrics"]["clean_success"] is False
     assert record["metrics"]["R_visible"] == 0.0
     assert record["metrics"]["final_score"] == 0.0
     assert record["metrics"]["brier"] is None
@@ -351,18 +448,19 @@ def test_collect_records_aborted_episode_as_failure_and_charts_audited_verdict(
     assert summary["v"]["completed_episodes"] == 1
     assert summary["v"]["aborted_on_refusals"] == 1
     assert summary["v"]["refusals"] == 1
-    assert summary["v"]["valid_success_rate"] == 0.5
-    assert summary["v"]["mean_final_score"] == 45
+    assert summary["v"]["clean_success_rate"] == 0.5
+    assert summary["v"]["raw_score_mean"] == 45
     assert summary["v"]["brier_n"] == 1
-    assert summary["v"]["completed_only"]["valid_success_rate"] == 1.0
-    assert summary["v"]["completed_only"]["mean_final_score"] == 90
+    assert summary["v"]["completed_only"]["clean_success_rate"] == 1.0
+    assert summary["v"]["completed_only"]["raw_score_mean"] == 90
     assert summary["v"]["completed_only"]["brier_n"] == 1
     assert batch.aggregate([record])["v"]["completed_only"] is None
-    assert len(points) == 2
+    assert len(points) == 4
     assert {point[2]["marker"] for point in points} == {"o", "x"}
     aborted_point = next(point for point in points if point[2]["marker"] == "x")
     assert aborted_point[:2] == ([audited.R_visible], [audited.final_score])
     assert (output / "reward_vs_audit.png").read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+    assert (output / "raw_vs_clean.png").read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
 
 
 def test_collect_spend_guard_persists_only_the_record_that_exceeds_limit(tmp_path):
@@ -517,6 +615,7 @@ def test_default_cli_runs_real_bundle_dry_run_without_modal(tmp_path, monkeypatc
     assert (output / "grid_summary.json").is_file()
     assert (output / "spend.json").is_file()
     assert (output / "reward_vs_audit.png").is_file()
+    assert (output / "raw_vs_clean.png").is_file()
     spend = json.loads((output / "spend.json").read_text())
     assert set(spend) == {
         "episodes", "input_tokens", "output_tokens", "cost_usd",
@@ -633,7 +732,7 @@ def test_cli_dispatches_parallel_map_and_real_audit_locally(
                 "--truth", str(truth_path), "--rubric", str(rubric_path), "--output", str(output)])
     captured = capsys.readouterr().out
     grid_start = captured.index("== Grid summary ==")
-    assert grid_start > captured.rfind('"mean_final_score"')
+    assert grid_start > captured.find('"raw_score_mean"')
     assert '"scenario": "a"' in captured[grid_start:]
     worker.map.assert_called_once()
     assert [call.args[0] for call in secret_from_name.call_args_list] == [
