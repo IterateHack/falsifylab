@@ -201,7 +201,7 @@ def test_run_episode_feeds_refusal_back_and_keeps_it_out_of_trajectory():
     refusal = episode_run.refusals[0]
     assert refusal.turn_index == 0
     assert refusal.agent_call == 0
-    assert refusal.rejection_type == "EnvRejection"
+    assert refusal.rejection_type == "other"
     assert refusal.reason == "too expensive"
     assert refusal.action["experiment_id"] == "X"
     assert logs and "refused run_experiment X: too expensive" in logs[0]
@@ -249,7 +249,7 @@ def test_run_one_real_env_records_overbudget_refusal(tmp_path):
     record = json.loads(record_path.read_text())
     assert code == 0
     assert record["refusal_count"] == 1
-    assert record["refusals"][0]["rejection_type"] == "EnvRejection"
+    assert record["refusals"][0]["rejection_type"] == "overspend"
     assert "insufficient budget" in record["refusals"][0]["reason"]
     assert record["refusals"][0]["turn_index"] == 2
     assert record["aborted_on_refusals"] is False

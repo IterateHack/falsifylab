@@ -225,7 +225,7 @@ def test_collect_records_aborted_episode_but_excludes_it_from_scoring_and_chart(
     refusal = {
         "turn_index": len(partial.turns),
         "agent_call": 2,
-        "rejection_type": "EnvRejection",
+        "rejection_type": "overspend",
         "reason": "over budget",
         "action": {"kind": "run_experiment", "experiment_id": "E6"},
     }

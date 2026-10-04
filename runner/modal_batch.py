@@ -153,7 +153,7 @@ def run_episode(job: EpisodeJob, env_factory: Callable, agent_factory: Callable,
             refusals.append(Refusal(
                 turn_index=len(trajectory.turns),
                 agent_call=agent_call,
-                rejection_type=type(exc).__name__,
+                rejection_type=getattr(exc, "code", "unclassified"),
                 reason=exc.reason,
                 action=asdict(saved_action),
             ))
