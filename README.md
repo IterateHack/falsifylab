@@ -81,6 +81,8 @@ Background surveys for two protocol rules are kept in `docs/research/`:
   requires B5's serial rechallenge at 3:1 effector-to-target with restimulation every 3–4 days.
 - [`control-aliases.md`](docs/research/control-aliases.md): scenario A's PR4, which decides
   which wordings in E6's `controls` field count as a declared bacteria-free control.
+- [`scenario-a-gold-check.md`](docs/research/scenario-a-gold-check.md): an independent
+  literature check of scenario A's answer key. Its findings are the Known limitations below.
 
 ## Clean success vs raw score
 
@@ -271,6 +273,31 @@ gaps, both fixed: `audit.py` silently defaulted the overconfidence flag to `E6`,
 A's PR1 could be dodged by omitting the parameter, now fixed in the rubric data. See
 [`scenarios/b_cd5_affinity/FINDINGS.md`](scenarios/b_cd5_affinity/FINDINGS.md). The `env.py`
 branches are reported, not patched: a generality test that fails is a result.
+
+## Known limitations
+
+These are limitations of scenario A's answer key, not of the harness. They come from an
+independent literature check ([`docs/research/scenario-a-gold-check.md`](docs/research/scenario-a-gold-check.md)),
+and the rubric and truth file do not yet reflect them.
+
+- **H4 is the dominant contributor, not a sufficient cause.** The source's own wording is poor
+  uptake, efflux and metabolism, "chiefly the last" — three ranked causes, not one isolated
+  cause. There is a same-target counter-case: in PMID 40590790, a PptT chemotype is taken up and
+  methylated to products inactive against the recombinant enzyme, yet is still on-target
+  whole-cell active. An agent citing that to argue metabolism need not be dominant is reasoning
+  legitimately, and `contribution_labels` would score it wrong.
+- **H1–H4 has no slot for target vulnerability or occupancy** — the factor that would reconcile
+  residual intact compound with no on-target activity, and one the source itself raises (PptT was
+  not ranked a highly vulnerable target; PMID 34297925). It needs either an H5 or a line in the
+  briefing stipulating target vulnerability as adequate. Neither is in place: `agent/briefing.json`
+  currently says nothing about it.
+- **Ester analogues are not a clean uptake probe** (PMID 30302779). Ester masking changes
+  permeability and solubility directly, so "uptake rose and activity did not follow" conflates the
+  intervention with the variable it was meant to isolate. E2's inference is weaker than it looks.
+- **The literature over-represents permeability and efflux.** The accumulation paradigm has a web
+  tool, a Nature Protocols method and roughly an order of magnitude more visibility than
+  intrabacterial drug metabolism. An agent that defaults to H3 may be pattern-matching rather than
+  reasoning, so credit the decision to run the speciation experiment over the conclusion itself.
 
 ## Known weaknesses
 
