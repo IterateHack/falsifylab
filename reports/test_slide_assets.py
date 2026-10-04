@@ -271,7 +271,7 @@ def test_selection_cost_plot_uses_horizontal_bars_and_integer_budget(tmp_path, m
     )
 
     assert len(horizontal_bars) == 1
-    assert any("budget: 8 units" in title for title in plot_titles)
+    assert any("mean cost (budget 8)" in title for title in plot_titles)
 
 
 def test_decisive_experiment_extraction_is_recursive_ordered_and_conditional():

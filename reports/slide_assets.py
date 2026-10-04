@@ -783,8 +783,8 @@ def _plot_experiment_selection(
             )
         cost_axes.axvline(budget, color="#333333", linestyle="--", linewidth=1)
         cost_axes.set_title(
-            f"Scenario {scenario} · mean cost per episode "
-            f"(budget: {_display_cell('budget', budget)} units)",
+            f"Scenario {scenario} · mean cost "
+            f"(budget {_display_cell('budget', budget)})",
             fontsize=12,
         )
         cost_axes.set_yticks(
