@@ -189,6 +189,29 @@ at n=1 per arm - experiment 1 needs no lessons and still moved +0.14, which is
 just run-to-run variance. `compare` says so itself rather than quoting the
 favourable number. Several runs per arm would be needed to claim more.
 
+## Cold-answer check: the capstone measures recall
+
+Opus 5, answering the GLP-1R capstone cold, scores **0.95** on the curriculum's
+own scorer (`scorers/exp6.py`). It is given only the hypothesis statement and
+the six experiment titles: no data, no tools, no lesson cards. The 0.95 is the
+mean of the four answers that parsed, out of five samples; the fifth was
+malformed JSON and counts as a parse failure. The lab run scored **1.00** with
+lessons and **0.79** without. Cold confidence averaged **0.83**, against the
+**0.75** the scientist stated before the capstone in the lab.
+
+So the capstone measures recall rather than capability. Read the mean-0.90
+headline below as a check that the pipeline runs end to end, not as a capability
+result.
+
+Experiments 1, 2 and 4 have numeric scorers and were not tested this way.
+Experiments 3 and 5 are phrase-matched like the capstone and were not tested
+either.
+
+Model and call settings match the lab's capstone (`claude-opus-5`, adaptive
+thinking, effort high). The prompt drops only the capstone's references to
+lessons and earlier results. The prompts, raw answers, scores and script are in
+[`evidence/cold-capstone`](https://github.com/IterateHack/falsifylab/tree/4562f18ddba80cf8dc2d7e6d79de64dba949c024/cold_capstone).
+
 ## Repository layout
 
 ```
@@ -215,6 +238,8 @@ Running the curriculum against Claude Sonnet 5 (Opus 5 for the capstone):
   claimed less certainty than its results earned. The notebook measures the gap
   in whichever direction it falls, and the teaching phase produced genuinely
   specific self-criticism about *why* the confidence was miscalibrated.
+  The capstone part of that 0.90 is reachable without the lab (see the
+  cold-answer check above), so read the 0.90 as a pipeline check.
 - On the first run of experiment 2 the agent spent its entire 25-call budget
   parsing the mmCIF and never submitted, scoring zero. That is an artefact of the
   harness, not a finding about the science, so budgets now reserve their last two
