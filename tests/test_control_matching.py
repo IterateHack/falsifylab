@@ -30,6 +30,14 @@ MUST_ACCEPT = [
     "no-cell 7H9 broth",
     "no-cell compound stability",
     "cell-free drug stability",
+    "medium control (no cells added)",
+    "compound in medium with no bacteria added",
+    "medium control with no added bacteria",
+    "medium control without added cells",
+    "medium control with cells omitted",
+    "medium control with cells removed by filtration",
+    "medium control not containing cells",
+    "compound in medium, no bacteria present",
 ]
 
 
