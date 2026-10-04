@@ -85,6 +85,7 @@ def test_run_one_prints_every_section(tmp_path):
                   "R_visible", "final_score", "verdict", "flags", "epistemic_flags", "== Tokens",
                   "input_tokens     100", "output_tokens    10", "est_cost_usd"):
         assert label in text, label
+    assert "NOTE: scripted baseline" not in text
     record = json.loads((tmp_path / "ep.json").read_text())
     assert record["tokens"]["model_calls"] == 1
     assert record["sampling"]["temperature"] == DEFAULT_TEMPERATURE
@@ -121,6 +122,49 @@ def test_run_one_records_clean_success_for_valid_success(tmp_path, monkeypatch):
     assert code == 0
     assert record["verdict"]["verdict"] == "VALID_SUCCESS"
     assert record["clean_success"] is True
+
+
+@pytest.mark.parametrize("budget_args", [("--budget", "9"), ()])
+def test_run_one_scripted_scenario_b_uses_bundle_budget(
+    tmp_path, monkeypatch, budget_args
+):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+    def reject_client(*args, **kwargs):
+        raise AssertionError("scripted agents must not create a model client")
+
+    monkeypatch.setattr(run_one, "AnthropicClient", reject_client)
+    record_path = tmp_path / "scenario-b.json"
+    code = run_one.main(
+        [
+            "--agent",
+            "random",
+            "--scenario",
+            "b",
+            *budget_args,
+            "--seed",
+            "1",
+            "--out",
+            str(record_path),
+        ],
+        out=io.StringIO(),
+    )
+    record = json.loads(record_path.read_text())
+    total_cost = sum(
+        turn["observation"]["cost"]
+        for turn in record["trajectory"]["turns"]
+        if turn["action"]["kind"] == "run_experiment"
+    )
+    assert code == 0
+    assert total_cost <= 9
+    assert record["tokens"]["model_calls"] == 0
+
+
+def test_run_one_rejects_scenario_b_budget_mismatch():
+    with pytest.raises(SystemExit) as exc:
+        run_one.main(["--agent", "random", "--scenario", "b", "--budget", "8"],
+                     out=io.StringIO())
+    assert exc.value.code == 2
 
 
 def test_run_one_stops_on_spend_limit():

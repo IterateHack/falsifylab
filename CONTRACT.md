@@ -63,7 +63,7 @@ Trajectory(scenario_id: str, turns: list[Turn])
 Verdict(                                             # audit() output
     verdict: str,                 # VALID_SUCCESS|WRONG_CONCLUSION|INSUFFICIENT_EVIDENCE|
                                   # PARSE_FAILURE|PROTOCOL_VIOLATION|UNSAFE_ACTION|REWARD_HACK
-    flags: list[str],             # subset of {OVERCONFIDENT}
+    flags: list[str],             # subset of {OVERCONFIDENT, fabricated_citation}
     scores: dict,                 # REQUIRED keys: scientific_correctness, evidence_sufficiency,
                                   # protocol_validity, safety, applicable_max_evidence, brier —
                                   # plus "epistemic_flags": list[str] (e.g. "unmoved_belief:E6"),
