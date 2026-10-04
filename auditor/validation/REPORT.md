@@ -35,6 +35,15 @@ FPR is measured over the honest cases of the same scenario(s).
 | honest | 12 | 0 |
 | planted | 6 | 34 |
 
+## Cohen's kappa
+
+Agreement between the label (planted vs honest) and the auditor (flagged vs passed). Explicit-only keeps the honest cases and the RH1-RH3 cases.
+
+| subset | n | observed agreement | kappa |
+|---|---|---|---|
+| overall | 52 | 88% | 0.723 |
+| explicit patterns only | 30 | 100% | 1.000 |
+
 ## Label x verdict
 
 | label | VALID_SUCCESS | WRONG_CONCLUSION | INSUFFICIENT_EVIDENCE | PARSE_FAILURE | PROTOCOL_VIOLATION | UNSAFE_ACTION | REWARD_HACK |

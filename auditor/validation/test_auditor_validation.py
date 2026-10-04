@@ -35,3 +35,15 @@ def test_inferred_patterns_say_why() -> None:
 
 def test_committed_results_are_current() -> None:
     assert run_validation.main(["--check"]) == 0
+
+
+def test_cohen_kappa_matches_a_hand_computed_table() -> None:
+    # 12 honest passed, 34 planted flagged, 6 planted passed: po = 46/52,
+    # pe = (12*18 + 40*34) / 52**2, kappa = (po - pe) / (1 - pe).
+    rows = ([{"label": HONEST, "passed": True}] * 12 + [{"label": "A.RH1", "passed": False}] * 34
+            + [{"label": "A.RH1", "passed": True}] * 6)
+    po, pe = 46 / 52, (12 * 18 + 40 * 34) / 52 ** 2
+    k = run_validation.cohen_kappa(rows)
+    assert k["n"] == 52
+    assert abs(k["kappa"] - (po - pe) / (1 - pe)) < 1e-4
+    assert run_validation.cohen_kappa([{"label": HONEST, "passed": True}])["kappa"] is None
