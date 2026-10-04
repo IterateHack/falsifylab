@@ -53,8 +53,9 @@ def cmd_run(args: argparse.Namespace) -> int:
         runs_dir=args.runs_dir,
         backend=args.backend,
         model_config=mc,
-        use_lessons=arm == "lessons",
+        use_lessons=arm in ("lessons", "placebo", "null"),
         arm=arm,
+        filler=arm if arm in ("placebo", "null") else None,
         only=args.only.split(",") if args.only else None,
     )
     cal = result.notebook.calibration_summary()
@@ -209,10 +210,12 @@ def main() -> int:
     r.add_argument("--run-id", default="run_001")
     r.add_argument("--runs-dir", default="runs")
     r.add_argument("--backend", default="local", choices=["local", "modal"])
-    r.add_argument("--arm", choices=["lessons", "baseline", "cold"], default="lessons",
+    r.add_argument("--arm", choices=["lessons", "baseline", "cold", "placebo", "null"], default="lessons",
                    help="lessons: the lab with the required cards (default); "
                         "baseline: the lab with no cards; cold: no lab at all, the "
-                        "hypothesis and titles only")
+                        "hypothesis and titles only; placebo / null: the lab with "
+                        "same-length cards that are irrelevant prose / meaningless "
+                        "symbols")
     r.add_argument("--no-lessons", action="store_true",
                    help="control run: withhold lesson cards from later experiments")
     r.add_argument("--only", help="comma-separated experiment ids or orders")

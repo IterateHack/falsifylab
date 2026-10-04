@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import json
 import os
+import random
+import re
 from typing import Any
 
 from sandbox import get_executor
@@ -142,6 +144,50 @@ def relevant_lessons(spec: Any, earned: list[tuple[str, str, str]]
     return [card for card in earned if card[0] in wanted]
 
 
+# Filler for the control arms. The real cards are replaced word for word, so
+# length, line breaks and markdown marks are identical and only the content is
+# gone. `placebo` swaps in prose about something unrelated; `null` swaps in
+# symbol strings with no meaning at all.
+_PLACEBO_PROSE = (
+    "The lighthouse keeper climbed the spiral stair each evening to trim the wick "
+    "and polish the great lens before the fog rolled in from the headland. Gulls "
+    "wheeled over the rocks while the supply boat, late again, rocked at its "
+    "mooring. In winter the keeper kept a ledger of passing ships, noting their "
+    "flags, their weather and the hour, and on quiet nights he mended nets and "
+    "read old almanacs by the stove. The harbour clock struck twelve, the tide "
+    "turned, and the lamp swept its slow white arm across the water."
+).split()
+_NULL_ALPHABET = "%$#&@*+=~^<>|\\/?!"
+_MD_PREFIX = re.compile(r"^(\s*(?:#+|[-*>]+|\d+[.)])\s+)")
+
+
+def _swap_words(text: str, next_token) -> str:
+    out = []
+    for line in text.split("\n"):
+        m = _MD_PREFIX.match(line)
+        prefix = m.group(1) if m else ""
+        out.append(prefix + " ".join(next_token() for _ in line[len(prefix):].split()))
+    return "\n".join(out)
+
+
+def filler_cards(cards: list[tuple[str, str, str]], kind: str
+                 ) -> list[tuple[str, str, str]]:
+    """Same-shape stand-ins for `cards`: neutral ids and titles, matched word
+    count and layout, no topic. Deterministic, so a rerun gets identical text."""
+    out = []
+    for i, (exp_id, _title, md) in enumerate(cards, 1):
+        if kind == "placebo":
+            words = iter(_PLACEBO_PROSE * (len(md.split()) // len(_PLACEBO_PROSE) + 1))
+            token = lambda: next(words)
+        elif kind == "null":
+            rng = random.Random(exp_id)
+            token = lambda: "".join(rng.choices(_NULL_ALPHABET, k=rng.randint(2, 7)))
+        else:
+            raise ValueError(f"unknown filler kind {kind!r}")
+        out.append((f"card_{i}", "Lesson card", _swap_words(md, token)))
+    return out
+
+
 def lesson_block(cards: list[tuple[str, str, str]]) -> str:
     """The cards as prompt text. Empty when there are none, so an experiment
     with no required lessons is never told it has any."""
@@ -166,6 +212,7 @@ def run_experiment(
     use_lessons: bool = True,
     audit: bool = True,
     audit_replay: bool = True,
+    filler: str | None = None,
 ) -> NotebookEntry:
     entry = notebook_entry
     model = model_config.for_experiment(spec.order, len(curriculum.experiments))
@@ -173,6 +220,8 @@ def run_experiment(
     entry.papers = list(spec.teaching.papers)
     available = relevant_lessons(spec, earned_lessons) if use_lessons else []
     entry.applied_lesson_ids = [exp_id for exp_id, _, _ in available]
+    if filler and available:
+        available = filler_cards(available, filler)
     entry.status = "running"
 
     log.append("experiment_started", {
@@ -180,6 +229,7 @@ def run_experiment(
         "model": model, "max_tool_calls": spec.limits.max_tool_calls,
         "requires_lessons": list(spec.requires_lessons),
         "lessons_shown": entry.applied_lesson_ids,
+        "lesson_filler": filler,
         "n_experiments": len(curriculum.experiments),
     }, experiment_id=spec.id)
 

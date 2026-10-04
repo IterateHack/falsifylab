@@ -42,6 +42,7 @@ def run_curriculum(
     only: list[str] | None = None,
     existing_log: EventLog | None = None,
     arm: str | None = None,
+    filler: str | None = None,
 ) -> RunResult:
     curriculum = load_curriculum(curriculum_root)
     model_config = model_config or ModelConfig()
@@ -95,6 +96,7 @@ def run_curriculum(
                     spec=spec, curriculum=curriculum, log=log, provider=provider,
                     model_config=model_config, earned_lessons=list(earned),
                     notebook_entry=entry, backend=backend, use_lessons=use_lessons,
+                    filler=filler,
                 )
             except Exception as exc:
                 log.append("error", {

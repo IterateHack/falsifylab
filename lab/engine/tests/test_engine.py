@@ -287,3 +287,35 @@ def test_metered_provider_totals_tokens_per_model():
     assert m.usage == {"a": {"calls": 2, "input_tokens": 30, "output_tokens": 12,
                              "cache_read_input_tokens": 0,
                              "cache_creation_input_tokens": 0}}
+
+
+_CARD = ("# Check the chain\n\nRead the **file** first:\n- one two three\n"
+         "- four five\n\n1. last step here\n")
+
+
+@pytest.mark.parametrize("kind", ["placebo", "null"])
+def test_filler_matches_the_card_in_shape_and_carries_no_topic(kind):
+    from engine.agent import filler_cards
+    (cid, title, text), = filler_cards([("exp2_structure_contacts", "Structure", _CARD)], kind)
+    assert (cid, title) == ("card_1", "Lesson card")        # neutral id and title
+    assert len(text.split("\n")) == len(_CARD.split("\n"))
+    for a, b in zip(_CARD.split("\n"), text.split("\n")):
+        assert len(a.split()) == len(b.split()), (a, b)      # same words per line
+        for mark in ("# ", "- ", "1. "):
+            assert a.startswith(mark) == b.startswith(mark)  # same markdown marks
+    assert "chain" not in text and "structure" not in text.lower()
+
+
+def test_null_filler_has_no_letters_and_filler_is_deterministic():
+    from engine.agent import filler_cards
+    card = [("e1", "T", _CARD)]
+    null = filler_cards(card, "null")[0][2]
+    assert not any(ch.isalpha() for ch in null)
+    assert filler_cards(card, "null") == filler_cards(card, "null")
+    assert filler_cards(card, "placebo") == filler_cards(card, "placebo")
+
+
+def test_unknown_filler_is_refused():
+    from engine.agent import filler_cards
+    with pytest.raises(ValueError):
+        filler_cards([("e1", "T", "x")], "bogus")
