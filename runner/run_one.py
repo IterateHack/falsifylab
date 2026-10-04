@@ -27,8 +27,8 @@ from contract import Trajectory, Verdict
 from runner.factories import make_agent, make_env, make_scripted_agent, scenario_dir
 from runner.modal_batch import EpisodeJob, run_episode
 from runner.model_clients import (
-    API_KEY_ENV, DEFAULT_SPEND_LIMIT_USD, DEFAULT_TEMPERATURE, AnthropicClient, SpendLimitExceeded,
-    TokenLedger, price_for, sampling_settings,
+    API_KEY_ENV, DEFAULT_PROVIDER_RETRIES, DEFAULT_SPEND_LIMIT_USD, DEFAULT_TEMPERATURE,
+    AnthropicClient, SpendLimitExceeded, TokenLedger, price_for, sampling_settings,
 )
 from runner.provenance import code_sha
 
@@ -48,6 +48,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-refusals", type=int, default=3)
     parser.add_argument("--max-tokens", type=int, default=2048, help="max output tokens per model call")
     parser.add_argument("--temperature", type=float, default=DEFAULT_TEMPERATURE)
+    parser.add_argument("--provider-retries", type=int, default=DEFAULT_PROVIDER_RETRIES)
     parser.add_argument("--max-spend-usd", type=float, default=DEFAULT_SPEND_LIMIT_USD)
     parser.add_argument("--usd-per-mtok-in", type=float, default=None)
     parser.add_argument("--usd-per-mtok-out", type=float, default=None)
@@ -67,6 +68,8 @@ def main(argv: Optional[list[str]] = None, client_factory: Optional[Callable] = 
     bundle_budget = bundle_env.state.budget_remaining
     if not 0.0 <= args.temperature <= 1.0:
         parser.error("--temperature must be in [0, 1]")
+    if args.provider_retries < 0:
+        parser.error("--provider-retries must be nonnegative")
     if args.agent == "llm":
         missing = [
             option
@@ -84,7 +87,12 @@ def main(argv: Optional[list[str]] = None, client_factory: Optional[Callable] = 
             if not os.environ.get(API_KEY_ENV):
                 print(f"{API_KEY_ENV} is not set; export it before running.", file=sys.stderr)
                 return 1
-            client_factory = partial(AnthropicClient, max_tokens=args.max_tokens, temperature=args.temperature)
+            client_factory = partial(
+                AnthropicClient,
+                max_tokens=args.max_tokens,
+                temperature=args.temperature,
+                provider_retries=args.provider_retries,
+            )
         usd_in, usd_out = price_for(args.model, args.usd_per_mtok_in, args.usd_per_mtok_out)
         ledger = TokenLedger(usd_in, usd_out, limit_usd=args.max_spend_usd)
         client = client_factory(args.model, ledger)
@@ -95,6 +103,7 @@ def main(argv: Optional[list[str]] = None, client_factory: Optional[Callable] = 
     sampling = None if args.agent != "llm" else {
         **sampling_settings(args.model, args.temperature),
         "max_tokens": args.max_tokens,
+        "provider_retries": getattr(client, "provider_retries", 0),
         "seed_applied_to_model": False,
     }
     agents = []

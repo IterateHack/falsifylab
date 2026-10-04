@@ -30,6 +30,7 @@ PRICES_USD_PER_MTOK: dict[str, tuple[float, float]] = {
 }
 DEFAULT_SPEND_LIMIT_USD = 20.0
 DEFAULT_TEMPERATURE = 1.0
+DEFAULT_PROVIDER_RETRIES = 1
 API_KEY_ENV = "ANTHROPIC_API_KEY"
 
 
@@ -64,7 +65,7 @@ def price_for(model: str, usd_in: Optional[float] = None, usd_out: Optional[floa
 
 @dataclass
 class TokenLedger:
-    """Cumulative token spend for one stage, with a hard USD stop."""
+    """Cumulative token spend for one episode or stage, with a hard USD stop."""
 
     usd_per_mtok_in: float
     usd_per_mtok_out: float
@@ -133,6 +134,7 @@ class DryRunClient:
         self.ledger = ledger
         self.hypothesis_ids = list(hypothesis_ids)
         self.call_log: list[dict] = []
+        self.provider_retries = 0
 
     def complete(self, system: str, messages: list[dict]) -> str:
         reply = json.dumps({
@@ -174,10 +176,14 @@ class AnthropicClient:
         *,
         max_tokens: int = 2048,
         temperature: float = DEFAULT_TEMPERATURE,
+        provider_retries: int = DEFAULT_PROVIDER_RETRIES,
+        stage_ledger: Optional[TokenLedger] = None,
         client=None,
     ) -> None:
         if not 0.0 <= temperature <= 1.0:
             raise ValueError("temperature must be in [0, 1]")
+        if provider_retries < 0:
+            raise ValueError("provider_retries must be nonnegative")
         if client is None:
             if not os.environ.get(API_KEY_ENV):
                 raise RuntimeError(f"{API_KEY_ENV} is not set in the environment")
@@ -189,26 +195,45 @@ class AnthropicClient:
         self.max_tokens = max_tokens
         self.sampling = sampling_settings(model, temperature)
         self.temperature = self.sampling["temperature"]
+        self.provider_retries = provider_retries
+        self.stage_ledger = stage_ledger
         self._client = client
         self.call_log: list[dict] = []
 
+    def _record_usage(self, input_tokens: int, output_tokens: int) -> None:
+        episode_error = stage_error = None
+        try:
+            self.ledger.record(input_tokens, output_tokens, label=self.model)
+        except SpendLimitExceeded as exc:
+            episode_error = exc
+        if self.stage_ledger is not None and self.stage_ledger is not self.ledger:
+            try:
+                self.stage_ledger.record(input_tokens, output_tokens, label=self.model)
+            except SpendLimitExceeded as exc:
+                stage_error = exc
+        if stage_error is not None:
+            raise stage_error
+        if episode_error is not None:
+            raise episode_error
+
     def complete(self, system: str, messages: list[dict]) -> str:
-        response = self._client.messages.create(
-            model=self.model,
-            system=system,
-            messages=[{"role": m["role"], "content": m["content"]} for m in messages],
-            max_tokens=self.max_tokens,
-            **({"extra_body": {"temperature": self.temperature}}
-               if self.sampling["sampling_params_sent"] else {}),
-        )
-        text = "".join(getattr(block, "text", "") for block in response.content)
-        usage = response.usage
-        self.call_log.append({
-            "input_tokens": usage.input_tokens,
-            "output_tokens": usage.output_tokens,
-            "stop_reason": getattr(response, "stop_reason", None),
-        })
-        self.ledger.record(usage.input_tokens, usage.output_tokens, label=self.model)
-        if response.stop_reason == "refusal":
-            raise ProviderRefusal("Anthropic returned stop_reason=refusal")
-        return text
+        for _ in range(self.provider_retries + 1):
+            response = self._client.messages.create(
+                model=self.model,
+                system=system,
+                messages=[{"role": m["role"], "content": m["content"]} for m in messages],
+                max_tokens=self.max_tokens,
+                **({"extra_body": {"temperature": self.temperature}}
+                   if self.sampling["sampling_params_sent"] else {}),
+            )
+            text = "".join(getattr(block, "text", "") for block in response.content)
+            usage = response.usage
+            self.call_log.append({
+                "input_tokens": usage.input_tokens,
+                "output_tokens": usage.output_tokens,
+                "stop_reason": getattr(response, "stop_reason", None),
+            })
+            self._record_usage(usage.input_tokens, usage.output_tokens)
+            if response.stop_reason != "refusal":
+                return text
+        raise ProviderRefusal("Anthropic returned stop_reason=refusal")

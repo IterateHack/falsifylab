@@ -75,7 +75,9 @@ from typing import Callable, Iterable, Mapping
 
 from contract import Agent, Env, Observation, Result, Trajectory, Turn, Verdict, trajectory_from_dict
 from env import EnvRejection
-from runner.model_clients import DEFAULT_TEMPERATURE, ProviderRefusal, SpendLimitExceeded, price_for
+from runner.model_clients import (
+    DEFAULT_PROVIDER_RETRIES, DEFAULT_TEMPERATURE, ProviderRefusal, SpendLimitExceeded, price_for,
+)
 from runner.agents import SCRIPTED_VARIANTS
 from runner.provenance import code_sha
 
@@ -298,6 +300,16 @@ def run_episode(job: EpisodeJob, env_factory: Callable, agent_factory: Callable,
     raise RuntimeError(f"Episode {job.episode_id} did not conclude within {max_turns} turns")
 
 
+def _sampling_payload(client, mode: str | None) -> dict:
+    return {
+        **client.sampling,
+        "max_tokens": client.max_tokens,
+        "provider_retries": getattr(client, "provider_retries", 0),
+        "seed_applied_to_model": False,
+        "client": mode,
+    }
+
+
 def _worker_info() -> dict:
     task_id = os.environ.get("MODAL_TASK_ID")
     return {
@@ -321,12 +333,7 @@ def _harness_error_result(
     }
     if client is not None:
         result.update({
-            "sampling": {
-                **client.sampling,
-                "max_tokens": client.max_tokens,
-                "seed_applied_to_model": False,
-                "client": mode,
-            },
+            "sampling": _sampling_payload(client, mode),
             "tokens": client.ledger.snapshot(),
             "model_call_log": client.call_log,
         })
@@ -346,7 +353,8 @@ def _ordered_worker_results(jobs: Iterable[EpisodeJob], results: Iterable) -> It
 
 
 def remote_episode(job: EpisodeJob, env_factory: str, agent_factory: str,
-                   max_turns: int, client_spec: dict | None = None) -> dict:
+                   max_turns: int, client_spec: dict | None = None,
+                   stage_ledger=None) -> dict:
     client = None
     try:
         result = {"job": asdict(job)}
@@ -376,6 +384,8 @@ def remote_episode(job: EpisodeJob, env_factory: str, agent_factory: str,
                 usd_per_mtok_in=client_spec["usd_per_mtok_in"],
                 usd_per_mtok_out=client_spec["usd_per_mtok_out"],
                 spend_limit_usd=client_spec["spend_limit_usd"],
+                provider_retries=client_spec.get("provider_retries", DEFAULT_PROVIDER_RETRIES),
+                stage_ledger=stage_ledger,
             )
             env_maker = partial(
                 resolve(env_factory), scenario=job.scenario, budget=client_spec["budget"],
@@ -385,12 +395,7 @@ def remote_episode(job: EpisodeJob, env_factory: str, agent_factory: str,
             )
             episode = run_episode(job, env_maker, agent_maker, max_turns)
             result.update({
-                "sampling": {
-                    **client.sampling,
-                    "max_tokens": client.max_tokens,
-                    "seed_applied_to_model": False,
-                    "client": client_spec["mode"],
-                },
+                "sampling": _sampling_payload(client, client_spec["mode"]),
                 "tokens": client.ledger.snapshot(),
                 "model_call_log": client.call_log,
                 "worker": _worker_info(),
@@ -894,6 +899,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--scenario", default="a")
     parser.add_argument("--budget", type=int)
     parser.add_argument("--temperature", type=float, default=DEFAULT_TEMPERATURE)
+    parser.add_argument("--provider-retries", type=int, default=DEFAULT_PROVIDER_RETRIES)
     parser.add_argument("--max-tokens", type=int, default=2048)
     parser.add_argument("--max-spend-usd", type=float, default=20.0)
     parser.add_argument("--usd-per-mtok-in", type=float)
@@ -936,6 +942,8 @@ def main(argv: list[str] | None = None) -> None:
         parser.error("Turn, container and timeout limits must be positive")
     if not 0.0 <= args.temperature <= 1.0:
         parser.error("temperature must be in [0, 1]")
+    if args.provider_retries < 0:
+        parser.error("--provider-retries must be nonnegative")
     if args.output.exists():
         parser.error("Output directory already exists; choose a new batch directory")
     from runner.factories import make_env as validate_env, scenario_dir
@@ -987,6 +995,7 @@ def main(argv: list[str] | None = None) -> None:
         "usd_per_mtok_in": args.usd_per_mtok_in,
         "usd_per_mtok_out": args.usd_per_mtok_out,
         "spend_limit_usd": args.max_spend_usd,
+        "provider_retries": args.provider_retries,
         "budget": budget,
     }
     try:
