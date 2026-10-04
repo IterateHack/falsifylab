@@ -130,6 +130,30 @@ def _blocks_to_text(content: list[Any]) -> str:
     return "\n".join(out).strip()
 
 
+def relevant_lessons(spec: Any, earned: list[tuple[str, str, str]]
+                     ) -> list[tuple[str, str, str]]:
+    """The earned cards this experiment declares it needs, in curriculum order.
+
+    Relevance is the experiment's own `requires_lessons`. Cards earned on other
+    experiments are not shown: they would add context that is not what the
+    experiment is designed to test, and make arms incomparable.
+    """
+    wanted = set(spec.requires_lessons)
+    return [card for card in earned if card[0] in wanted]
+
+
+def lesson_block(cards: list[tuple[str, str, str]]) -> str:
+    """The cards as prompt text. Empty when there are none, so an experiment
+    with no required lessons is never told it has any."""
+    if not cards:
+        return ""
+    body = "\n\n".join(f"### {title} ({exp_id})\n\n{md.strip()}"
+                        for exp_id, title, md in cards)
+    return ("## Lessons from earlier experiments\n\n"
+            "These cards were earned on earlier experiments and bear on this one. "
+            "`read_lessons` returns the same text.\n\n" + body + "\n\n")
+
+
 def run_experiment(
     spec: ExperimentSpec,
     curriculum: Curriculum,
@@ -147,13 +171,15 @@ def run_experiment(
     model = model_config.for_experiment(spec.order, len(curriculum.experiments))
     entry.model = model
     entry.papers = list(spec.teaching.papers)
-    entry.applied_lesson_ids = list(spec.requires_lessons) if use_lessons else []
+    available = relevant_lessons(spec, earned_lessons) if use_lessons else []
+    entry.applied_lesson_ids = [exp_id for exp_id, _, _ in available]
     entry.status = "running"
 
     log.append("experiment_started", {
         "order": spec.order, "title": spec.title, "type": spec.type,
         "model": model, "max_tool_calls": spec.limits.max_tool_calls,
-        "requires_lessons": entry.applied_lesson_ids,
+        "requires_lessons": list(spec.requires_lessons),
+        "lessons_shown": entry.applied_lesson_ids,
         "n_experiments": len(curriculum.experiments),
     }, experiment_id=spec.id)
 
@@ -163,17 +189,11 @@ def run_experiment(
         for path in spec.dataset_paths():
             executor.put_file(f"data/{path.name}", path.read_bytes(), read_only=True)
 
-        available = earned_lessons if use_lessons else []
         ctx = ToolContext(spec=spec, entry=entry, log=log, executor=executor,
                           earned_lessons=available, phase="attempt")
 
         schemas = tool_schemas(ctx)
-        lesson_hint = ""
-        if available:
-            ids = ", ".join(e for e, _, _ in available)
-            lesson_hint = (f"You have earned lesson cards from: {ids}. "
-                           f"Call `read_lessons` to retrieve them - this experiment "
-                           f"is designed to need them.\n\n")
+        lesson_hint = lesson_block(available)
         messages: list[dict[str, Any]] = [{
             "role": "user",
             "content": FIRST_USER.format(

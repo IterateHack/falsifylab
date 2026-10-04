@@ -207,6 +207,43 @@ def test_every_experiment_has_data_ground_truth_and_a_lesson(curriculum):
             assert d.exists()
 
 
+def _cards(curriculum, upto_order):
+    return [(e.id, e.title, f"card for {e.id}")
+            for e in curriculum.experiments if e.order < upto_order]
+
+
+def test_an_experiment_is_shown_only_the_cards_it_requires(curriculum):
+    from engine.agent import relevant_lessons
+    for e in curriculum.experiments:
+        shown = relevant_lessons(e, _cards(curriculum, e.order))
+        assert [c[0] for c in shown] == [
+            r for r in (x.id for x in curriculum.experiments)
+            if r in e.requires_lessons], e.id
+
+
+def test_exp3_is_not_shown_the_exp1_card(curriculum):
+    from engine.agent import relevant_lessons
+    e3 = curriculum.by_id("exp3_peptide_engineering")
+    shown = relevant_lessons(e3, _cards(curriculum, e3.order))
+    assert [c[0] for c in shown] == ["exp2_structure_contacts"]
+
+
+def test_an_experiment_with_no_required_lessons_is_shown_none(curriculum):
+    from engine.agent import lesson_block, relevant_lessons
+    e2 = curriculum.by_id("exp2_structure_contacts")
+    shown = relevant_lessons(e2, _cards(curriculum, e2.order))
+    assert shown == []
+    assert lesson_block(shown) == ""
+
+
+def test_lesson_block_puts_the_card_text_in_the_prompt():
+    from engine.agent import lesson_block
+    block = lesson_block([("exp2", "Structure", "  Check the chain IDs.  ")])
+    assert "Check the chain IDs." in block
+    assert "Structure (exp2)" in block
+    assert "read_lessons" in block
+
+
 def _open_gate(ctx) -> None:
     dispatch(ctx, "write_notebook_section", {
         "section": "hypothesis_and_prediction", "text": "prediction",
