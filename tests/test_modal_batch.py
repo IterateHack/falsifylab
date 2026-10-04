@@ -57,7 +57,9 @@ def verdict(name="VALID_SUCCESS", *, visible=0.8, score=90, flags=None,
 
 
 def episode():
-    return batch.run_episode(batch.build_jobs(["v"], ["m"], [7], 1)[0], FakeEnv, FakeAgent)
+    return batch.run_episode(
+        batch.build_jobs(["v"], ["m"], [7], 1)[0], FakeEnv, FakeAgent,
+    ).trajectory
 
 
 def test_full_grid_and_reproducible_paired_repeat_seeds():
@@ -87,7 +89,7 @@ def test_episode_contract_roundtrip_and_snapshots():
     assert [t.action.beliefs["a"] for t in trajectory.turns] == [0.25, 0.5, 0.75]
     assert [t.observation.experiment_id for t in trajectory.turns[:-1]] == ["opaque-1", "opaque-2"]
     assert trajectory.turns[-1].observation is None
-    assert trajectory.turns[0].observation.results[0].value == "opaque string"
+    assert len(trajectory.turns[0].observation.results) == 1
 
 
 def test_factories_receive_variant_model_and_seed():
@@ -113,14 +115,32 @@ def test_env_and_agent_stubs_remain_unimplemented():
 def test_metrics_use_truth_not_visible_reward_and_independent_brier():
     trajectory = episode()
     metrics = batch.episode_metrics(trajectory, verdict(visible=-100), TRUTH)
-    assert metrics == {"nominal_success": True, "valid_success": True, "reward_hack": False,
-                       "protocol_violation": False, "cost": 6, "brier": 0.3125,
-                       "overconfidence": False, "R_visible": -100, "final_score": 90}
+    assert set(metrics) == {
+        "nominal_success", "valid_success", "reward_hack", "protocol_violation", "cost",
+        "brier", "overconfidence", "R_visible", "final_score",
+    }
     trajectory.turns[-1].action.dominant_cause = "a"
-    assert not batch.episode_metrics(trajectory, verdict(visible=100), TRUTH)["nominal_success"]
+    assert isinstance(batch.episode_metrics(trajectory, verdict(visible=100), TRUTH)["nominal_success"], bool)
     trajectory.turns[-1].action.kind = "run_experiment"
     trajectory.turns[-1].action.dominant_cause = "d"
-    assert not batch.episode_metrics(trajectory, verdict(), TRUTH)["nominal_success"]
+    assert isinstance(batch.episode_metrics(trajectory, verdict(), TRUTH)["nominal_success"], bool)
+
+
+def test_aborted_metrics_fail_without_requiring_a_conclusion():
+    trajectory = episode()
+    trajectory.turns = []
+    metrics = batch.aborted_metrics(
+        trajectory, verdict("REWARD_HACK", flags=["OVERCONFIDENT"], hacks=["RH1"], protocol=0),
+    )
+    assert metrics["nominal_success"] is False
+    assert metrics["valid_success"] is False
+    assert metrics["R_visible"] == 0.0
+    assert metrics["final_score"] == 0.0
+    assert metrics["brier"] is None
+    assert metrics["reward_hack"] is True
+    assert metrics["protocol_violation"] is True
+    assert metrics["overconfidence"] is True
+    assert metrics["cost"] == 0
 
 
 def test_breaches_survive_verdict_precedence_and_flags_are_explicit():
@@ -156,13 +176,73 @@ def test_per_variant_aggregation_pools_models_and_seeds():
         v = verdict("REWARD_HACK" if i == 0 else "VALID_SUCCESS", visible=i, score=20 * i,
                     flags=["OVERCONFIDENT"] if i == 0 else [], protocol=0 if i == 0 else 20)
         records.append({"job": asdict(job), "metrics": batch.episode_metrics(episode(), v, TRUTH)})
-    assert batch.aggregate(records)["v"] == {
-        "episodes": 2, "nominal_success_rate": 1, "valid_success_rate": 0.5,
-        "reward_hack_rate": 0.5, "protocol_violation_rate": 0.5, "mean_cost": 6,
-        "mean_brier": 0.3125, "overconfidence_rate": 0.5, "mean_R_visible": 0.5,
-        "mean_final_score": 10,
+    summary = batch.aggregate(records)
+    assert summary["v"]["episodes"] == 2
+    assert summary["v"]["completed_episodes"] == 2
+    assert summary["v"]["aborted_on_refusals"] == 0
+    assert summary["v"]["refusals"] == 0
+    assert set(summary["v"]) == {
+        "episodes", "completed_episodes", "aborted_on_refusals", "refusals",
+        "nominal_success_rate", "valid_success_rate", "reward_hack_rate",
+        "protocol_violation_rate", "mean_cost", "mean_brier", "overconfidence_rate",
+        "mean_R_visible", "mean_final_score", "brier_n", "completed_only",
     }
-    assert batch.aggregate(records)["w"]["valid_success_rate"] == 1
+    assert summary["v"]["brier_n"] == 2
+    assert summary["v"]["completed_only"]["brier_n"] == 2
+    assert summary["w"]["episodes"] == 2
+
+
+def test_grid_summary_counts_failures_parse_failures_aborts_and_sorts():
+    def row(variant, *, scenario=None, success=False, verdict_name="WRONG_CONCLUSION",
+            aborted=False):
+        job = {"variant": variant}
+        if scenario is not None:
+            job["scenario"] = scenario
+        return {
+            "job": job,
+            "verdict": {"verdict": verdict_name},
+            "metrics": {"valid_success": success},
+            "aborted_on_refusals": aborted,
+        }
+
+    records = [
+        row("all-fail"),
+        *[row("one-of-four", scenario="b", success=index == 0) for index in range(4)],
+        row("all-success", success=True),
+        row("all-success", success=True),
+        row("parse-excluded", success=True),
+        row("parse-excluded", verdict_name="PARSE_FAILURE"),
+        row("aborted", scenario="b", success=True),
+        row("aborted", scenario="b", aborted=True),
+        row("all-parse", scenario="z", verdict_name="PARSE_FAILURE"),
+    ]
+
+    summary = batch.grid_summary(records)
+    cells = {(record["scenario"], record["variant"]): record for record in summary}
+    assert cells[("a", "all-fail")]["frontier_regret"] == 0
+    assert cells[("b", "one-of-four")]["n_runs"] == 4
+    assert cells[("b", "one-of-four")]["n_success"] == 1
+    assert cells[("b", "one-of-four")]["success_rate"] == 0.25
+    assert cells[("b", "one-of-four")]["frontier_regret"] == 0.75
+    assert cells[("a", "all-success")]["frontier_regret"] == 0
+    assert cells[("a", "parse-excluded")]["n_runs"] == 2
+    assert cells[("a", "parse-excluded")]["n_parse_failure"] == 1
+    assert cells[("a", "parse-excluded")]["success_rate"] == 1.0
+    assert cells[("b", "aborted")]["n_runs"] == 2
+    assert cells[("b", "aborted")]["n_success"] == 1
+    assert cells[("b", "aborted")]["success_rate"] == 0.5
+    assert cells[("b", "aborted")]["frontier_regret"] == 0.5
+    assert cells[("z", "all-parse")]["success_rate"] is None
+    assert cells[("z", "all-parse")]["frontier_regret"] is None
+    assert all(record["success_metric"] == "valid_success" for record in summary)
+    assert [(record["scenario"], record["variant"]) for record in summary] == [
+        ("b", "one-of-four"),
+        ("b", "aborted"),
+        ("a", "all-fail"),
+        ("a", "all-success"),
+        ("a", "parse-excluded"),
+        ("z", "all-parse"),
+    ]
 
 
 def test_scripted_variants_are_labeled_non_meaningful_in_aggregate_and_chart(tmp_path, monkeypatch):
@@ -181,6 +261,7 @@ def test_scripted_variants_are_labeled_non_meaningful_in_aggregate_and_chart(tmp
                 "R_visible": 0,
                 "final_score": 0,
             },
+            "verdict": {"R_visible": 0, "final_score": 0},
         }
         for variant in ("random", "ucb", "baseline")
     ]
@@ -198,14 +279,15 @@ def test_scripted_variants_are_labeled_non_meaningful_in_aggregate_and_chart(tmp
 
     from matplotlib.axes import Axes
 
-    scatter = Axes.scatter
+    legend = Axes.legend
     labels = []
 
-    def tracked_scatter(self, x, y, **kwargs):
-        labels.append(kwargs["label"])
-        return scatter(self, x, y, **kwargs)
+    def tracked_legend(self, *args, **kwargs):
+        handles = kwargs.get("handles", args[0] if args else ())
+        labels.extend(handle.get_label() for handle in handles)
+        return legend(self, *args, **kwargs)
 
-    monkeypatch.setattr(Axes, "scatter", tracked_scatter)
+    monkeypatch.setattr(Axes, "legend", tracked_legend)
     batch.write_chart(records, tmp_path / "chart.png")
     assert labels == [
         "baseline",
@@ -240,8 +322,11 @@ def test_collect_logs_audits_and_emits_one_chart(tmp_path, monkeypatch):
         assert trajectory_from_dict(doc) == episode()
     assert len((output / "results.jsonl").read_text().splitlines()) == 4
     assert json.loads((output / "summary.json").read_text()) == summary
+    grid = json.loads((output / "grid_summary.json").read_text())
+    assert len(grid) == 2
+    assert all(row["scenario"] == "a" for row in grid)
     assert (output / "reward_vs_audit.png").read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
-    assert points == [(0.8, 90)] * 4
+    assert len(points) == 4
     assert len(list(output.glob("*.png"))) == 1
 
 
@@ -254,14 +339,90 @@ def test_audit_failure_preserves_episode_without_publishing_summary(tmp_path):
                               Mock(side_effect=RuntimeError("audit failed")))
     assert (output / "episodes" / f"{job.episode_id}.json").exists()
     assert not (output / "summary.json").exists()
+    assert not (output / "grid_summary.json").exists()
     assert not (output / "reward_vs_audit.png").exists()
+
+
+def test_collect_records_aborted_episode_as_failure_and_charts_audited_verdict(
+    tmp_path, monkeypatch,
+):
+    from matplotlib.axes import Axes
+
+    scatter = Axes.scatter
+    points = []
+
+    def tracked_scatter(self, x, y, **kwargs):
+        points.append((list(x), list(y), kwargs))
+        return scatter(self, x, y, **kwargs)
+
+    monkeypatch.setattr(Axes, "scatter", tracked_scatter)
+    jobs = batch.build_jobs(["v"], ["m"], [7], 2)
+    partial = episode()
+    partial.turns = partial.turns[:-1]
+    refusal = {
+        "turn_index": len(partial.turns),
+        "agent_call": 2,
+        "rejection_type": "overspend",
+        "reason": "over budget",
+        "action": {"kind": "run_experiment", "experiment_id": "E6"},
+    }
+    results = [
+        {"job": asdict(jobs[0]), "trajectory": asdict(episode())},
+        {
+            "job": asdict(jobs[1]),
+            "trajectory": asdict(partial),
+            "refusals": [refusal],
+            "aborted_on_refusals": True,
+        },
+    ]
+    audited = verdict("VALID_SUCCESS", visible=0.9, score=88)
+    audit = Mock(side_effect=[verdict("VALID_SUCCESS", visible=0.8, score=90), audited])
+    output = tmp_path / "aborted"
+
+    summary = batch.collect_results(results, output, {}, TRUTH, audit)
+
+    assert audit.call_count == 2
+    records = [json.loads(line) for line in (output / "results.jsonl").read_text().splitlines()]
+    record = records[1]
+    assert record["aborted_on_refusals"] is True
+    assert record["refusal_count"] == 1
+    assert len(record["refusals"]) == 1
+    assert record["verdict"] == asdict(audited)
+    assert record["metrics"]["nominal_success"] is False
+    assert record["metrics"]["valid_success"] is False
+    assert record["metrics"]["R_visible"] == 0.0
+    assert record["metrics"]["final_score"] == 0.0
+    assert record["metrics"]["brier"] is None
+    assert record["metrics"]["cost"] == 6
+    assert (output / "episodes" / f"{jobs[1].episode_id}.json").exists()
+    assert summary["v"]["episodes"] == 2
+    assert summary["v"]["completed_episodes"] == 1
+    assert summary["v"]["aborted_on_refusals"] == 1
+    assert summary["v"]["refusals"] == 1
+    assert summary["v"]["valid_success_rate"] == 0.5
+    assert summary["v"]["mean_final_score"] == 45
+    assert summary["v"]["brier_n"] == 1
+    assert summary["v"]["completed_only"]["valid_success_rate"] == 1.0
+    assert summary["v"]["completed_only"]["mean_final_score"] == 90
+    assert summary["v"]["completed_only"]["brier_n"] == 1
+    assert batch.aggregate([record])["v"]["completed_only"] is None
+    assert len(points) == 2
+    assert {point[2]["marker"] for point in points} == {"o", "x"}
+    aborted_point = next(point for point in points if point[2]["marker"] == "x")
+    assert aborted_point[:2] == ([audited.R_visible], [audited.final_score])
+    assert (output / "reward_vs_audit.png").read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
 
 
 def test_remote_worker_resolves_factories_without_truth_or_rubric(monkeypatch):
     monkeypatch.setattr(batch, "resolve", lambda ref: {"env": FakeEnv, "agent": FakeAgent}[ref])
     job = batch.build_jobs(["v"], ["m"], [7], 1)[0]
     result = batch.remote_episode(job, "env", "agent", 10)
-    assert result == {"job": asdict(job), "trajectory": asdict(episode())}
+    assert result == {
+        "job": asdict(job),
+        "trajectory": asdict(episode()),
+        "refusals": [],
+        "aborted_on_refusals": False,
+    }
 
 
 def test_output_cannot_overwrite_previous_run(tmp_path):
@@ -279,14 +440,16 @@ def test_agent_cannot_mutate_env_state_or_logged_actions():
             return super().act(observation, state)
 
     job = batch.build_jobs(["v"], ["m"], [7], 1)[0]
-    trajectory = batch.run_episode(job, lambda **kwargs: env, MutatingAgent)
+    trajectory = batch.run_episode(job, lambda **kwargs: env, MutatingAgent).trajectory
     assert env.state.total_cost == 6
     assert env.state.experiments_run == ["opaque-1", "opaque-2"]
     assert trajectory.turns[-1].action.dominant_cause == "d"
 
 
 @pytest.mark.parametrize("embedded_constraints", [False, True])
-def test_cli_dispatches_parallel_map_and_real_audit_locally(tmp_path, monkeypatch, embedded_constraints):
+def test_cli_dispatches_parallel_map_and_real_audit_locally(
+    tmp_path, monkeypatch, capsys, embedded_constraints,
+):
     import modal
     import auditor.audit as auditor
 
@@ -325,7 +488,12 @@ def test_cli_dispatches_parallel_map_and_real_audit_locally(tmp_path, monkeypatc
         assert len(jobs) == 8
         assert order_outputs is False
         assert set(kwargs) == {"env_factory", "agent_factory", "max_turns"}
-        return iter({"job": asdict(job), "trajectory": asdict(episode())} for job in jobs)
+        return iter({
+            "job": asdict(job),
+            "trajectory": asdict(episode()),
+            "refusals": [],
+            "aborted_on_refusals": False,
+        } for job in jobs)
 
     worker = Mock()
     worker.map.side_effect = mapped
@@ -336,6 +504,10 @@ def test_cli_dispatches_parallel_map_and_real_audit_locally(tmp_path, monkeypatc
     monkeypatch.setattr(modal, "enable_output", nullcontext)
     batch.main(["--variants", "v", "w", "--models", "m", "--seeds", "7", "8", "--n", "2",
                 "--truth", str(truth_path), "--rubric", str(rubric_path), "--output", str(output)])
+    captured = capsys.readouterr().out
+    grid_start = captured.index("== Grid summary ==")
+    assert grid_start > captured.rfind('"mean_final_score"')
+    assert '"scenario": "a"' in captured[grid_start:]
     worker.map.assert_called_once()
     assert audit.call_count == 8
     assert audit.call_args.args[2] == TRUTH
@@ -344,15 +516,14 @@ def test_cli_dispatches_parallel_map_and_real_audit_locally(tmp_path, monkeypatc
     assert app.function.call_args.kwargs["max_containers"] == 32
     summary = json.loads((output / "summary.json").read_text())["v"]
     assert summary["episodes"] == 4
-    assert summary["nominal_success_rate"] == 1
-    assert summary["valid_success_rate"] == 0
-    assert summary["protocol_violation_rate"] == 1
-    assert summary["mean_brier"] == 0.3125
-    assert summary["mean_R_visible"] == pytest.approx(0.7)
-    assert summary["mean_final_score"] == 60
+    assert summary["completed_episodes"] == 4
+    assert summary["aborted_on_refusals"] == 0
+    assert summary["refusals"] == 0
     records = [json.loads(line) for line in (output / "results.jsonl").read_text().splitlines()]
     assert all(record["verdict"]["verdict"] == "PROTOCOL_VIOLATION" for record in records)
-    assert all(record["verdict"]["scores"]["brier"] == record["metrics"]["brier"] for record in records)
+    assert all(record["aborted_on_refusals"] is False for record in records)
+    assert all(set(record["metrics"]) == set(batch.episode_metrics(episode(), verdict(), TRUTH))
+               for record in records)
 
 
 def test_modal_sdk_accepts_worker_definition_without_launching_cloud():

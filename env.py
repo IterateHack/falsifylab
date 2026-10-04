@@ -21,6 +21,7 @@ Refusals raise EnvRejection with a reason: over budget, too few E6 arms, a
 purchase after the episode ended, an unknown experiment, or a conclude whose
 evidence_cited is not structured. A refusal is not an Observation and is not a
 Turn — the experiment did not run, nothing was charged, and State is unchanged.
+Rejection codes are overspend, malformed_conclude, unknown_experiment, and other.
 A conclude's citations must be {experiment, supports?} objects so the auditor
 judges them structurally and never text-matches (a prose citation is an
 auditor-invisible reward-hack loophole, per the ENV WORKSTREAM note in
@@ -36,6 +37,7 @@ from typing import Optional, Union
 
 from contract import Action, Observation, Result, State, Trajectory, Turn
 
+REJECTION_CODES = ("overspend", "malformed_conclude", "unknown_experiment", "other")
 BRIEFING_EXPERIMENT_ID = "__briefing__"
 
 # EC1 / experiments.json: E6's arms run together; all three, never fewer.
@@ -53,9 +55,10 @@ class EnvRejection(Exception):
     human-readable. Nothing ran, nothing was charged, State is unchanged, and no
     Turn was recorded."""
 
-    def __init__(self, reason: str) -> None:
+    def __init__(self, reason: str, code: str = "other") -> None:
         super().__init__(reason)
         self.reason = reason
+        self.code = code
 
 
 def _load_json(path: Path) -> dict:
@@ -121,13 +124,13 @@ class Env:
             self._record(action, None)                     # conclude turn: observation is None
             return self._briefing_observation()
         if action.kind != "run_experiment":
-            raise EnvRejection(f"unknown action kind: {action.kind!r}")
+            raise EnvRejection(f"unknown action kind: {action.kind!r}", code="other")
         if self._state.concluded:
-            raise EnvRejection("episode already concluded; no further purchases")
+            raise EnvRejection("episode already concluded; no further purchases", code="other")
 
         eid = action.experiment_id
         if eid not in self._observations:
-            raise EnvRejection(f"unknown experiment: {eid!r}")
+            raise EnvRejection(f"unknown experiment: {eid!r}", code="unknown_experiment")
         params = action.parameters or {}
 
         # EC1: E6 runs all three arms together; fewer is refused, not truncated.
@@ -139,7 +142,8 @@ class Env:
             if len(distinct_valid) < _E6_MIN_ARMS:
                 raise EnvRejection(
                     f"E6 runs all {_E6_MIN_ARMS} arms together "
-                    f"({', '.join(_E6_ARMS)}); got arms={arms!r}. Refused, not truncated."
+                    f"({', '.join(_E6_ARMS)}); got arms={arms!r}. Refused, not truncated.",
+                    code="other",
                 )
 
         # Budget: reject a purchase that would exceed it; do not charge.
@@ -147,7 +151,8 @@ class Env:
         if cost > self._state.budget_remaining:
             raise EnvRejection(
                 f"insufficient budget for {eid}: it costs {cost} unit(s) but "
-                f"{self._state.budget_remaining} of {self._budget_units} remain"
+                f"{self._state.budget_remaining} of {self._budget_units} remain",
+                code="overspend",
             )
 
         # Charge and record. The same experiment bought twice is charged twice
@@ -178,7 +183,8 @@ class Env:
             raise EnvRejection(
                 "malformed conclude: evidence_cited must be a list of "
                 "{experiment, supports?} citation objects, got "
-                f"{type(evidence_cited).__name__}"
+                f"{type(evidence_cited).__name__}",
+                code="malformed_conclude",
             )
         for i, c in enumerate(evidence_cited):
             if not isinstance(c, dict):
@@ -186,24 +192,28 @@ class Env:
                     f"malformed conclude: evidence_cited[{i}] is a bare "
                     f"{type(c).__name__} ({c!r}); a citation must be an object "
                     "{experiment, supports?}. Bare strings are rejected — a prose "
-                    "citation is an auditor-invisible reward-hack loophole."
+                    "citation is an auditor-invisible reward-hack loophole.",
+                    code="malformed_conclude",
                 )
             if not c.get("experiment"):
                 raise EnvRejection(
                     f"malformed conclude: evidence_cited[{i}] is missing the required "
-                    f"'experiment' field: {c!r}"
+                    f"'experiment' field: {c!r}",
+                    code="malformed_conclude",
                 )
             experiment = c["experiment"]
             if experiment not in self._costs:
                 raise EnvRejection(
                     f"malformed conclude: evidence_cited[{i}] cites unknown experiment "
-                    f"{experiment!r}; valid ids are {sorted(self._costs)}"
+                    f"{experiment!r}; valid ids are {sorted(self._costs)}",
+                    code="malformed_conclude",
                 )
             supports = c.get("supports")
             if supports is not None and supports not in _SUPPORTS:
                 raise EnvRejection(
                     f"malformed conclude: evidence_cited[{i}] has invalid supports "
-                    f"{supports!r}; must be one of {', '.join(_SUPPORTS)} or omitted"
+                    f"{supports!r}; must be one of {', '.join(_SUPPORTS)} or omitted",
+                    code="malformed_conclude",
                 )
 
     # --- trajectory capture ---------------------------------------------------

@@ -1,21 +1,22 @@
-"""Run ONE episode locally against the real Env, auditor, and agent.
+"""Run ONE episode locally against the real Env, the real auditor and a real model.
 
     python -m runner.run_one --scenario a --variant baseline --budget 8 \\
         --model claude-sonnet-4-5 --seed 0
-    python -m runner.run_one --agent ucb --scenario b --seed 0
 
-LLM runs read ANTHROPIC_API_KEY from the environment; scripted runs need no
-key. Prints the full trajectory, a model transcript or decision log, the audit
-(four dimension scores, applicable_max_evidence, R_visible, final_score,
-verdict, flags, epistemic_flags, reward hacks) and the episode's token usage
-with its estimated cost. Every model call is logged to stderr with the
-cumulative spend; the run stops with a clear message if the estimate passes
---max-spend-usd (default $20).
+    --agent random|ucb runs a zero-model-call scripted baseline (no API key needed).
+
+Reads ANTHROPIC_API_KEY from the environment. Prints the full trajectory, the
+model transcript or decision log, the audit (four dimension scores,
+applicable_max_evidence, R_visible, final_score, verdict, flags,
+epistemic_flags, reward hacks) and the episode's token usage with its estimated
+cost. Every model call is logged to stderr with the cumulative spend; the run
+stops with a clear message if the estimate passes --max-spend-usd (default $20).
 """
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from dataclasses import asdict
 from functools import partial
@@ -26,7 +27,8 @@ from contract import Trajectory, Verdict
 from runner.factories import make_agent, make_env, make_scripted_agent, scenario_dir
 from runner.modal_batch import EpisodeJob, run_episode
 from runner.model_clients import (
-    API_KEY_ENV, DEFAULT_SPEND_LIMIT_USD, AnthropicClient, SpendLimitExceeded, TokenLedger, price_for,
+    API_KEY_ENV, DEFAULT_SPEND_LIMIT_USD, DEFAULT_TEMPERATURE, AnthropicClient, SpendLimitExceeded,
+    TokenLedger, price_for,
 )
 
 DIMENSIONS = ("scientific_correctness", "evidence_sufficiency", "protocol_validity", "safety")
@@ -44,7 +46,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-turns", type=int, default=100)
     parser.add_argument("--max-refusals", type=int, default=3)
     parser.add_argument("--max-tokens", type=int, default=2048, help="max output tokens per model call")
-    parser.add_argument("--temperature", type=float, default=None, help="omit to use the API default")
+    parser.add_argument("--temperature", type=float, default=DEFAULT_TEMPERATURE)
     parser.add_argument("--max-spend-usd", type=float, default=DEFAULT_SPEND_LIMIT_USD)
     parser.add_argument("--usd-per-mtok-in", type=float, default=None)
     parser.add_argument("--usd-per-mtok-out", type=float, default=None)
@@ -57,19 +59,28 @@ def main(argv: Optional[list[str]] = None, client_factory: Optional[Callable] = 
          out=sys.stdout) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    try:
+        bundle_env = make_env(seed=args.seed, scenario=args.scenario, budget=args.budget)
+    except ValueError as exc:
+        parser.error(str(exc))
+    bundle_budget = bundle_env.state.budget_remaining
+    if not 0.0 <= args.temperature <= 1.0:
+        parser.error("--temperature must be in [0, 1]")
     if args.agent == "llm":
-        if not args.variant:
-            parser.error("--variant is required when --agent=llm")
-        if not args.model:
-            parser.error("--model is required when --agent=llm")
+        missing = [
+            option
+            for option, value in (("--variant", args.variant), ("--model", args.model))
+            if not value
+        ]
+        if missing:
+            parser.error(f"the following arguments are required: {', '.join(missing)}")
     elif args.variant is not None or args.model is not None:
         parser.error("--variant and --model are only valid when --agent=llm")
-
     say = partial(print, file=out, flush=True)
     bundle = scenario_dir(args.scenario)
     if args.agent == "llm":
         if client_factory is None:
-            if not __import__("os").environ.get(API_KEY_ENV):
+            if not os.environ.get(API_KEY_ENV):
                 print(f"{API_KEY_ENV} is not set; export it before running.", file=sys.stderr)
                 return 1
             client_factory = partial(AnthropicClient, max_tokens=args.max_tokens, temperature=args.temperature)
@@ -89,7 +100,7 @@ def main(argv: Optional[list[str]] = None, client_factory: Optional[Callable] = 
             )
         else:
             agent = make_scripted_agent(
-                kind=variant, seed=seed, scenario=args.scenario, c=args.ucb_c
+                kind=args.agent, seed=seed, scenario=args.scenario, c=args.ucb_c
             )
         agents.append(agent)
         return agent
@@ -100,9 +111,10 @@ def main(argv: Optional[list[str]] = None, client_factory: Optional[Callable] = 
         job = EpisodeJob(f"{args.seed:08d}", args.agent, "none", args.seed, 0, args.seed)
     say(f"# run_one: agent={args.agent} scenario={args.scenario} ({bundle}) "
         f"variant={args.variant} model={args.model} "
-        f"seed={args.seed} budget={args.budget if args.budget is not None else 'bundle default'}")
+        f"seed={args.seed} budget={args.budget if args.budget is not None else 'bundle default'} "
+        f"temperature={args.temperature} max_tokens={args.max_tokens}")
     try:
-        trajectory = run_episode(
+        episode_run = run_episode(
             job, partial(make_env, scenario=args.scenario, budget=args.budget), agent_factory,
             max_turns=args.max_turns, max_refusals=args.max_refusals,
             log=partial(print, file=sys.stderr, flush=True),
@@ -110,6 +122,7 @@ def main(argv: Optional[list[str]] = None, client_factory: Optional[Callable] = 
     except SpendLimitExceeded as exc:
         say(str(exc))
         return 2
+    trajectory = episode_run.trajectory
 
     from auditor.audit import audit, load_rubric  # auditor stays out of the agent process until here
 
@@ -123,7 +136,8 @@ def main(argv: Optional[list[str]] = None, client_factory: Optional[Callable] = 
         say(format_decision_log(agent.transcript))
     elif agent is not None and not args.no_transcript:
         say(format_transcript(agent.transcript))
-    say(format_verdict(verdict))
+    say(format_refusals(episode_run.refusals, episode_run.aborted_on_refusals))
+    say(format_verdict(verdict, aborted_on_refusals=episode_run.aborted_on_refusals))
     if args.agent != "llm":
         say("  NOTE: scripted baseline — beliefs, dominant cause and confidence are random; "
             "conclusion metrics above are not meaningful. Compare experiment selection only.")
@@ -135,6 +149,17 @@ def main(argv: Optional[list[str]] = None, client_factory: Optional[Callable] = 
             "scenario_dir": str(bundle),
             "trajectory": asdict(trajectory),
             "verdict": asdict(verdict),
+            "sampling": None if args.agent != "llm" else {
+                "model": args.model,
+                "temperature": args.temperature,
+                "max_tokens": args.max_tokens,
+                "seed_applied_to_model": False,
+            },
+            "budget": {"requested": args.budget, "bundle": bundle_budget},
+            "refusals": [asdict(refusal) for refusal in episode_run.refusals],
+            "refusal_count": episode_run.refusal_count,
+            "aborted_on_refusals": episode_run.aborted_on_refusals,
+            "model_call_log": getattr(client, "call_log", None),
             "tokens": ledger.snapshot(),
             "agent_stats": agent.stats() if agent is not None else None,
             "transcript": agent.transcript if agent is not None else None,
@@ -142,7 +167,7 @@ def main(argv: Optional[list[str]] = None, client_factory: Optional[Callable] = 
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(json.dumps(record, indent=2, allow_nan=False) + "\n", encoding="utf-8")
         say(f"\nwrote {args.out}")
-    return 0
+    return 3 if episode_run.aborted_on_refusals else 0
 
 
 def format_trajectory(trajectory: Trajectory) -> str:
@@ -184,7 +209,20 @@ def format_decision_log(transcript: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def format_verdict(verdict: Verdict) -> str:
+def format_refusals(refusals: list, aborted_on_refusals: bool) -> str:
+    lines = ["\n== Refusals ==",
+             f"  refusal_count {len(refusals)}  aborted_on_refusals {aborted_on_refusals}"]
+    for refusal in refusals:
+        action = refusal.action
+        lines.append(
+            f"  agent call {refusal.agent_call}, before turn {refusal.turn_index}: "
+            f"{refusal.rejection_type} on {action.get('kind')} "
+            f"{action.get('experiment_id') or ''}: {refusal.reason}"
+        )
+    return "\n".join(lines)
+
+
+def format_verdict(verdict: Verdict, *, aborted_on_refusals: bool = False) -> str:
     scores = verdict.scores
     lines = ["\n== Audit =="]
     for key in DIMENSIONS:
@@ -198,6 +236,8 @@ def format_verdict(verdict: Verdict) -> str:
     lines.append(f"  {'flags':<24} {verdict.flags}")
     lines.append(f"  {'epistemic_flags':<24} {scores.get('epistemic_flags', [])}")
     lines.append(f"  {'reward_hacks':<24} {verdict.reward_hacks}")
+    if aborted_on_refusals:
+        lines.append("  NOTE: aborted_on_refusals — no conclude; this verdict scores a partial trajectory")
     return "\n".join(lines)
 
 

@@ -268,11 +268,12 @@ def _run_real_env_episode(kind, scenario, seed):
         return env
 
     job = EpisodeJob(f"{seed:08d}", kind, "none", seed, 0, seed)
-    trajectory = run_episode(
+    episode_run = run_episode(
         job,
         env_factory,
         agent_factory,
     )
+    trajectory = episode_run.trajectory
     hypothesis_ids = {item["id"] for item in agent_instances[0].hypotheses}
     budget_units = agent_instances[0].budget_units
     assert trajectory.turns[-1].action.kind == "conclude"
@@ -306,6 +307,6 @@ def _run_real_env_episode(kind, scenario, seed):
         job,
         env_factory,
         agent_factory,
-    )
+    ).trajectory
     assert asdict(repeat) == asdict(trajectory)
     assert agent_instances[1].model_calls == 0
