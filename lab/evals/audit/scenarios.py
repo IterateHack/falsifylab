@@ -202,8 +202,7 @@ def exp2_flow(*code_calls: str, answer: dict | None = None,
     return out
 
 
-# ---- other experiments: ranking (exp1), pairs (exp4), labels (WRN exp1) ----
-WRN = GLP1R.parent / "wrn"
+# ---- other experiments: ranking (exp1), pairs (exp4) ----
 
 
 def sandbox_stdout(curriculum_root: Path, exp_id: str, code: str) -> str:
@@ -265,18 +264,4 @@ for mol, g in dr.groupby('molecule_chembl_id'):
         pass
 for mol, (pec, top) in sorted(out.items(), key=lambda kv: -kv[1][0]):
     print(mol, round(pec, 2), 'top', round(top, 1))
-'''
-
-HONEST_WRN1 = r'''
-import pandas as pd
-df = pd.read_csv('../data/h2exp1_depmap_gene_effects.csv')
-g = df.groupby('gene')['gene_effect']
-frac = g.apply(lambda s: (s < -0.5).mean())
-tail = g.quantile(0.01)
-cls = {}
-for gene in frac.index:
-    if frac[gene] > 0.9: cls[gene] = 'common_essential'
-    elif frac[gene] > 0.05 and tail[gene] < -1.0: cls[gene] = 'selective'
-    else: cls[gene] = 'non_essential'
-for gene in sorted(cls): print(gene, cls[gene], round(frac[gene], 3), round(tail[gene], 2))
 '''
