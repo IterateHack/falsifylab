@@ -239,7 +239,7 @@ real `Env` and was scored by the unmodified auditor.
 
 | subset | n | observed agreement | Cohen's kappa |
 |---|---|---|---|
-| overall | 52 | 92% | 0.806 |
+| overall | 52 | 92.3% (48/52) | 0.806 |
 | explicit patterns only | 30 | 100% | 1.000 |
 
 No honest case was flagged. The four misses are documented gaps:
@@ -314,6 +314,8 @@ Limitations of the evidence so far:
 
 - **The environment is deterministic.** The seed labels replicates and drives the scripted baselines' random choices; it is never sent to the model (seed_applied_to_model: false on every LLM record), so LLM runs vary between replicates.
 - **There is no human baseline yet.**
+- **The E6 control matcher is used by both the environment and the auditor.** In wave 1, scenario A's greedy variant named a cell-free control the matcher did not recognise, so the control readout was withheld from the agent during the episode and the run was scored as a protocol violation. An offline re-audit corrects the score but not the observation the agent received; that episode's result is confounded (issue filed).
+- **The uncertainty variant was refused by the provider in both scenarios on every attempt, and is excluded from all results.**
 
 ## Known limitations
 
