@@ -62,6 +62,7 @@ def test_synthetic_cli_creates_all_stamped_assets_and_manifest(tmp_path, capsys)
             "clean_success_ci.csv",
             "clean_success_ci.md",
             "raw_vs_clean.png",
+            "cost_of_pass.png",
             "experiment_selection.png",
             "experiment_selection.csv",
             "experiment_selection.md",
@@ -78,6 +79,13 @@ def test_synthetic_cli_creates_all_stamped_assets_and_manifest(tmp_path, capsys)
     entries = manifest["assets"]
     assert {entry["path"] for entry in entries} == expected
     assert not (output / "_synthetic_input" / "REPORT.md").exists()
+    for label in ("synthetic_batch", "synthetic_reaudit"):
+        ci_csv = output / label / "clean_success_ci.csv"
+        headers = next(csv.reader(ci_csv.open(encoding="utf-8")))
+        assert {
+            "mean_cost", "cost_of_pass", "pass^1", "pass^3", "pass^5",
+            "n_valid_success",
+        } <= set(headers)
     for entry in entries:
         asset = output / entry["path"]
         assert asset.is_file()
@@ -99,9 +107,13 @@ def test_synthetic_cli_creates_all_stamped_assets_and_manifest(tmp_path, capsys)
         if asset.suffix == ".png":
             assert asset.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
         elif asset.suffix == ".md":
-            last_line = asset.read_text(encoding="utf-8").splitlines()[-1]
+            content = asset.read_text(encoding="utf-8")
+            last_line = content.splitlines()[-1]
             assert last_line.startswith("*")
             assert ("SYNTHETIC DATA" in last_line) is not is_validation
+            if entry["path"].endswith("clean_success_ci.md"):
+                assert slide_assets.PASS_K_CAPTION in content
+                assert slide_assets.COST_OF_PASS_CAPTION in content
         elif asset.suffix == ".csv":
             rows = list(csv.DictReader(asset.open(encoding="utf-8")))
             assert rows
@@ -170,6 +182,120 @@ def test_clean_success_rows_match_grid_and_reject_tampering(tmp_path):
     scripted_target["n_clean_success"] += 1
     with pytest.raises(ValueError, match="scenario=a, variant=random"):
         slide_assets._clean_success_rows(records, changed_scripted)
+
+
+def test_pass_k_combinatorics_follow_counted_run_trials():
+    assert slide_assets._pass_k(5, 3, 1) == 0.6
+    assert slide_assets._pass_k(5, 3, 3) == 0.1
+    assert slide_assets._pass_k(5, 3, 5) == 0.0
+    assert [slide_assets._pass_k(10, 10, k) for k in (1, 3, 5)] == [1.0] * 3
+    assert slide_assets._pass_k(4, 3, 5) is None
+    assert [slide_assets._pass_k(5, 0, k) for k in (1, 3, 5)] == [0.0] * 3
+
+
+def test_pass_k_uses_valid_verdicts_and_cost_of_pass_uses_clean_success(
+    tmp_path, monkeypatch,
+):
+    def record(index, scenario, verdict, clean_success, cost, *, aborted=False, variant="baseline"):
+        return {
+            "job": {
+                "episode_id": f"{index:08d}",
+                "scenario": scenario,
+                "variant": variant,
+                "model": "model-x",
+            },
+            "verdict": {"verdict": verdict},
+            "metrics": {
+                "clean_success": clean_success,
+                "cost": cost,
+                "final_score": 80,
+            },
+            "aborted_on_refusals": aborted,
+        }
+
+    records = [
+        record(0, "a", "VALID_SUCCESS", True, 2),
+        record(1, "a", "VALID_SUCCESS", True, 4),
+        record(2, "a", "VALID_SUCCESS", False, 6, aborted=True),
+        record(3, "b", "WRONG_CONCLUSION", False, 2),
+        record(4, "b", "WRONG_CONCLUSION", False, 4),
+        record(5, "b", "WRONG_CONCLUSION", False, 6),
+        record(6, "a", "PARSE_FAILURE", False, 100),
+        record(7, "a", "HARNESS_ERROR", False, 100),
+        {
+            **record(8, "a", "WRONG_CONCLUSION", False, 100),
+            "metrics": None,
+            "provider_refusal": True,
+        },
+    ]
+    rows = slide_assets._clean_success_rows(records, batch.grid_summary(records))
+    by_scenario = {row["scenario"]: row for row in rows}
+    successful = by_scenario["a"]
+    assert successful["n_runs"] == 6
+    assert successful["n_scored"] == 3
+    assert successful["n_clean_success"] == 2
+    assert successful["n_valid_success"] == 3
+    assert successful["pass^1"] == 1.0
+    assert successful["pass^3"] == 1.0
+    assert successful["pass^5"] is None
+    assert successful["mean_cost"] == 4.0
+    assert successful["clean_success_rate"] == 2 / 3
+    assert successful["cost_of_pass"] == 6.0
+
+    zero_rate = by_scenario["b"]
+    assert zero_rate["clean_success_rate"] == 0
+    assert zero_rate["cost_of_pass"] is None
+
+    plotted = []
+    texts = []
+    legend_titles = []
+    axis_limits = []
+    annotations = []
+    original_errorbar = Axes.errorbar
+    from matplotlib.figure import Figure
+
+    original_figure_text = Figure.text
+    original_legend = Figure.legend
+    original_set_ylim = Axes.set_ylim
+    original_annotate = Axes.annotate
+
+    def capture_errorbar(self, *args, **kwargs):
+        plotted.append((args[0], args[1], kwargs.get("fmt")))
+        return original_errorbar(self, *args, **kwargs)
+
+    def capture_text(self, x, y, text, *args, **kwargs):
+        texts.append(text)
+        return original_figure_text(self, x, y, text, *args, **kwargs)
+
+    def capture_legend(self, *args, **kwargs):
+        legend_titles.append(kwargs.get("title"))
+        return original_legend(self, *args, **kwargs)
+
+    def capture_set_ylim(self, *args, **kwargs):
+        axis_limits.append(kwargs.get("bottom"))
+        return original_set_ylim(self, *args, **kwargs)
+
+    def capture_annotate(self, *args, **kwargs):
+        annotations.append(args)
+        return original_annotate(self, *args, **kwargs)
+
+    monkeypatch.setattr(Axes, "errorbar", capture_errorbar)
+    monkeypatch.setattr(Figure, "text", capture_text)
+    monkeypatch.setattr(Figure, "legend", capture_legend)
+    monkeypatch.setattr(Axes, "set_ylim", capture_set_ylim)
+    monkeypatch.setattr(Axes, "annotate", capture_annotate)
+    slide_assets._plot_cost_of_pass(
+        tmp_path / "cost_of_pass.png",
+        [*rows, {**successful, "variant": "random"}],
+        _stamp(),
+    )
+
+    assert plotted == [(2 / 3, 6.0, "o")]
+    assert slide_assets.COST_OF_PASS_CAPTION in texts
+    assert "1 cell(s) with clean success 0 omitted (cost_of_pass undefined)" in texts
+    assert legend_titles == ["Variant", "Scenario"]
+    assert 0 in axis_limits
+    assert annotations == []
 
 
 def test_selection_rows_count_scored_cost_and_charged_purchases():
@@ -478,6 +604,12 @@ def test_number_formatting_is_display_only(tmp_path):
     row = {
         "clean_success_rate": 5 / 6,
         "clean_success_ci95": [0.4371234567, 0.9701234567],
+        "pass^1": 1 / 3,
+        "pass^3": None,
+        "pass^5": 0.01234567,
+        "n_valid_success": 2,
+        "mean_cost": 4.1234567,
+        "cost_of_pass": 6.1234567,
         "best-of-n minus mean": 0.1234567,
         "recall": "100%",
         "false-alarm rate": "25%",
@@ -487,6 +619,9 @@ def test_number_formatting_is_display_only(tmp_path):
     markdown = "\n".join(slide_assets._markdown_table(headers, [row]))
     assert "0.833" in markdown
     assert "[0.437, 0.970]" in markdown
+    assert "0.333" in markdown
+    assert "0.012" in markdown
+    assert "6.123" in markdown
     assert "0.123" in markdown
     assert "1.000" in markdown
     assert "0.250" in markdown
@@ -500,6 +635,11 @@ def test_number_formatting_is_display_only(tmp_path):
     assert csv_row["clean_success_ci95"] == json.dumps(
         row["clean_success_ci95"], separators=(",", ":"),
     )
+    assert csv_row["pass^1"] == str(row["pass^1"])
+    assert csv_row["pass^3"] == ""
+    assert csv_row["pass^5"] == str(row["pass^5"])
+    assert csv_row["mean_cost"] == str(row["mean_cost"])
+    assert csv_row["cost_of_pass"] == str(row["cost_of_pass"])
     assert csv_row["best-of-n minus mean"] == str(row["best-of-n minus mean"])
     assert csv_row["budget"] == str(row["budget"])
 
@@ -510,6 +650,10 @@ def test_synthetic_success_and_raw_score_metrics_have_semantic_spread(tmp_path):
     grid_rows = json.loads((batch_dir / "grid_summary.json").read_text(encoding="utf-8"))
     clean_rows = slide_assets._clean_success_rows(records, grid_rows)
     score_rows = slide_assets._cell_score_rows(records, clean_rows)
+    assert all(
+        row["pass^1"] == row["n_valid_success"] / row["n_scored"]
+        for row in clean_rows
+    )
 
     rates = [row["clean_success_rate"] for row in clean_rows]
     assert min(rates) <= 0.35

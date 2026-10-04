@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 from collections import defaultdict
 from pathlib import Path
 import subprocess
@@ -28,6 +29,15 @@ SELECTION_CAPTION = (
     "bought = ran the experiment; parameter requirements of the evidence rules not checked"
 )
 CONDITIONAL_FOOTNOTE = "* scored only when the conclusion makes a target claim"
+PASS_K_CAPTION = (
+    "pass^k = C(c,k)/C(n,k) per cell: n counted runs (seeds), c with verdict "
+    "VALID_SUCCESS; probability that k runs drawn without replacement all succeed "
+    "(tau-bench, arXiv:2406.12045)."
+)
+COST_OF_PASS_CAPTION = (
+    "cost_of_pass = mean_cost / clean_success_rate (Cost-of-Pass, arXiv:2504.13359). "
+    "Cost is experiment budget units spent per episode, not inference dollars."
+)
 PATTERN_HEADING = "## Per-pattern recall and false-positive rate"
 KAPPA_HEADING = "## Cohen's kappa"
 PATTERN_HEADER = (
@@ -194,6 +204,7 @@ def _display_cell(header: str, value) -> str:
     rate_headers = {
         "clean_success_rate", "best-of-n minus mean", "frontier_regret",
         "recall", "false-alarm rate", "observed agreement",
+        "pass^1", "pass^3", "pass^5", "cost_of_pass",
     }
     if header in rate_headers:
         try:
@@ -318,6 +329,10 @@ def _check_grid_consistency(records: list[dict], grid_rows: list[dict]) -> None:
                 )
 
 
+def _pass_k(n: int, c: int, k: int) -> float | None:
+    return math.comb(c, k) / math.comb(n, k) if n >= k else None
+
+
 def _clean_success_rows(records: list[dict], grid_rows: list[dict]) -> list[dict]:
     _check_grid_consistency(records, grid_rows)
     result = []
@@ -334,6 +349,14 @@ def _clean_success_rows(records: list[dict], grid_rows: list[dict]) -> list[dict
         n_scored = len(scored)
         rate = n_clean_success / n_scored if n_scored else None
         ci95 = list(wilson_interval(n_clean_success, n_scored)) if n_scored else None
+        n_valid_success = sum(
+            record["verdict"]["verdict"] == "VALID_SUCCESS"
+            for record in scored
+        )
+        mean_cost = (
+            fmean(float((record.get("metrics") or {})["cost"]) for record in scored)
+            if scored else None
+        )
         result.append({
             "model": model,
             "scenario": scenario,
@@ -348,7 +371,17 @@ def _clean_success_rows(records: list[dict], grid_rows: list[dict]) -> list[dict
             "n_scored": n_scored,
             "n_clean_success": n_clean_success,
             "clean_success_rate": rate,
+            "pass^1": _pass_k(n_scored, n_valid_success, 1),
+            "pass^3": _pass_k(n_scored, n_valid_success, 3),
+            "pass^5": _pass_k(n_scored, n_valid_success, 5),
+            "n_valid_success": n_valid_success,
             "clean_success_ci95": ci95,
+            "mean_cost": mean_cost,
+            "cost_of_pass": (
+                mean_cost / rate
+                if mean_cost is not None and rate not in (None, 0)
+                else None
+            ),
         })
     return result
 
@@ -611,6 +644,106 @@ def _plot_raw_vs_clean(path: Path, rows: list[dict], stamp: dict) -> None:
         title="Scenario",
         fontsize=9,
     )
+    _save_figure(figure, path, stamp)
+
+
+def _plot_cost_of_pass(path: Path, rows: list[dict], stamp: dict) -> None:
+    from matplotlib.lines import Line2D
+
+    llm_rows = [
+        row for row in rows
+        if row["variant"] not in SCRIPTED_VARIANTS
+    ]
+    plotted_rows = [
+        row for row in llm_rows
+        if row.get("cost_of_pass") is not None
+        and row.get("clean_success_rate") is not None
+    ]
+    scenarios = sorted({row["scenario"] for row in llm_rows})
+    variants = sorted({row["variant"] for row in llm_rows})
+    colors = _variant_colors(set(variants))
+    markers = ("o", "s", "^", "D", "v", "P", "X", "<", ">")
+    scenario_markers = {
+        scenario: markers[index % len(markers)]
+        for index, scenario in enumerate(scenarios)
+    }
+
+    figure = _figure(stamp)
+    axes = figure.subplots()
+    figure.subplots_adjust(left=0.1, right=0.98, bottom=0.42, top=0.88)
+    for row in plotted_rows:
+        rate = row["clean_success_rate"]
+        low, high = row["clean_success_ci95"]
+        color = colors[row["variant"]]
+        axes.errorbar(
+            rate,
+            row["cost_of_pass"],
+            xerr=[[rate - low], [high - rate]],
+            fmt=scenario_markers[row["scenario"]],
+            color=color,
+            ecolor=color,
+            markerfacecolor=color,
+            markeredgecolor=color,
+            capsize=3,
+            label="_nolegend_",
+        )
+    axes.set_title("Cost of pass vs clean success", fontsize=14)
+    axes.set_xlabel("Clean success rate (horizontal 95% Wilson CI)", fontsize=10)
+    axes.set_ylabel("Cost of pass (budget units)", fontsize=10)
+    axes.set_xlim(0, 1)
+    axes.set_ylim(bottom=0)
+    axes.tick_params(axis="both", labelsize=9)
+    from matplotlib.ticker import FormatStrFormatter
+
+    axes.xaxis.set_major_formatter(FormatStrFormatter("%.3f"))
+    axes.grid(alpha=0.25)
+
+    variant_handles = [
+        Line2D(
+            [], [], color=colors[variant], marker="o", linestyle="None", label=variant,
+        )
+        for variant in variants
+    ]
+    scenario_handles = [
+        Line2D(
+            [], [], color="#444444", marker=scenario_markers[scenario],
+            linestyle="None", label=scenario,
+        )
+        for scenario in scenarios
+    ]
+    if variant_handles:
+        figure.legend(
+            handles=variant_handles,
+            loc="center",
+            bbox_to_anchor=(0.5, 0.28),
+            ncol=max(1, len(variant_handles)),
+            title="Variant",
+            fontsize=9,
+        )
+    if scenario_handles:
+        figure.legend(
+            handles=scenario_handles,
+            loc="center",
+            bbox_to_anchor=(0.5, 0.19),
+            ncol=max(1, len(scenario_handles)),
+            title="Scenario",
+            fontsize=9,
+        )
+    figure.text(
+        0.5, 0.115, COST_OF_PASS_CAPTION,
+        ha="center", va="center", fontsize=7,
+    )
+    zero_rate_cells = sum(
+        row.get("clean_success_rate") == 0
+        for row in llm_rows
+    )
+    if zero_rate_cells:
+        figure.text(
+            0.5, 0.075,
+            f"{zero_rate_cells} cell(s) with clean success 0 omitted "
+            "(cost_of_pass undefined)",
+            ha="center", va="center", fontsize=8,
+        )
     _save_figure(figure, path, stamp)
 
 
@@ -1098,7 +1231,8 @@ def generate_batch_assets(
     ci_headers = [
         "model", "scenario", "variant", "n_runs", "n_harness_error",
         "n_parse_failure", "n_provider_refusal", "n_scored", "n_clean_success",
-        "clean_success_rate", "clean_success_ci95",
+        "clean_success_rate", "pass^1", "pass^3", "pass^5", "n_valid_success",
+        "clean_success_ci95", "mean_cost", "cost_of_pass",
     ]
     ci_csv = output_dir / "clean_success_ci.csv"
     ci_md = output_dir / "clean_success_ci.md"
@@ -1110,11 +1244,15 @@ def generate_batch_assets(
         ci_headers,
         clean_rows,
         stamp,
+        extra_sections=[PASS_K_CAPTION, COST_OF_PASS_CAPTION],
     )
     _plot_clean_success(ci_png, clean_rows, stamp)
 
     raw_png = output_dir / "raw_vs_clean.png"
     _plot_raw_vs_clean(raw_png, score_rows, stamp)
+
+    cost_of_pass_png = output_dir / "cost_of_pass.png"
+    _plot_cost_of_pass(cost_of_pass_png, clean_rows, stamp)
 
     scenarios = sorted({
         record.get("job", {}).get("scenario", "a")
@@ -1187,7 +1325,10 @@ def generate_batch_assets(
     )
     return [
         _asset_entry(path, output_root, stamp, source_files)
-        for path in (ci_png, ci_csv, ci_md, raw_png, frontier_md, frontier_csv, frontier_png)
+        for path in (
+            ci_png, ci_csv, ci_md, raw_png, cost_of_pass_png,
+            frontier_md, frontier_csv, frontier_png,
+        )
     ] + [
         _asset_entry(path, output_root, stamp, selection_source_files)
         for path in (selection_png, selection_md, selection_csv)
