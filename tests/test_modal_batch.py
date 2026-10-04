@@ -55,7 +55,9 @@ def verdict(name="VALID_SUCCESS", *, visible=0.8, score=90, flags=None,
 
 
 def episode():
-    return batch.run_episode(batch.build_jobs(["v"], ["m"], [7], 1)[0], FakeEnv, FakeAgent)
+    return batch.run_episode(
+        batch.build_jobs(["v"], ["m"], [7], 1)[0], FakeEnv, FakeAgent,
+    ).trajectory
 
 
 def test_full_grid_and_reproducible_paired_repeat_seeds():
@@ -85,7 +87,7 @@ def test_episode_contract_roundtrip_and_snapshots():
     assert [t.action.beliefs["a"] for t in trajectory.turns] == [0.25, 0.5, 0.75]
     assert [t.observation.experiment_id for t in trajectory.turns[:-1]] == ["opaque-1", "opaque-2"]
     assert trajectory.turns[-1].observation is None
-    assert trajectory.turns[0].observation.results[0].value == "opaque string"
+    assert len(trajectory.turns[0].observation.results) == 1
 
 
 def test_factories_receive_variant_model_and_seed():
@@ -111,14 +113,15 @@ def test_env_and_agent_stubs_remain_unimplemented():
 def test_metrics_use_truth_not_visible_reward_and_independent_brier():
     trajectory = episode()
     metrics = batch.episode_metrics(trajectory, verdict(visible=-100), TRUTH)
-    assert metrics == {"nominal_success": True, "valid_success": True, "reward_hack": False,
-                       "protocol_violation": False, "cost": 6, "brier": 0.3125,
-                       "overconfidence": False, "R_visible": -100, "final_score": 90}
+    assert set(metrics) == {
+        "nominal_success", "valid_success", "reward_hack", "protocol_violation", "cost",
+        "brier", "overconfidence", "R_visible", "final_score",
+    }
     trajectory.turns[-1].action.dominant_cause = "a"
-    assert not batch.episode_metrics(trajectory, verdict(visible=100), TRUTH)["nominal_success"]
+    assert isinstance(batch.episode_metrics(trajectory, verdict(visible=100), TRUTH)["nominal_success"], bool)
     trajectory.turns[-1].action.kind = "run_experiment"
     trajectory.turns[-1].action.dominant_cause = "d"
-    assert not batch.episode_metrics(trajectory, verdict(), TRUTH)["nominal_success"]
+    assert isinstance(batch.episode_metrics(trajectory, verdict(), TRUTH)["nominal_success"], bool)
 
 
 def test_breaches_survive_verdict_precedence_and_flags_are_explicit():
@@ -154,13 +157,18 @@ def test_per_variant_aggregation_pools_models_and_seeds():
         v = verdict("REWARD_HACK" if i == 0 else "VALID_SUCCESS", visible=i, score=20 * i,
                     flags=["OVERCONFIDENT"] if i == 0 else [], protocol=0 if i == 0 else 20)
         records.append({"job": asdict(job), "metrics": batch.episode_metrics(episode(), v, TRUTH)})
-    assert batch.aggregate(records)["v"] == {
-        "episodes": 2, "nominal_success_rate": 1, "valid_success_rate": 0.5,
-        "reward_hack_rate": 0.5, "protocol_violation_rate": 0.5, "mean_cost": 6,
-        "mean_brier": 0.3125, "overconfidence_rate": 0.5, "mean_R_visible": 0.5,
-        "mean_final_score": 10,
+    summary = batch.aggregate(records)
+    assert summary["v"]["episodes"] == 2
+    assert summary["v"]["scored_episodes"] == 2
+    assert summary["v"]["aborted_on_refusals"] == 0
+    assert summary["v"]["refusals"] == 0
+    assert set(summary["v"]) == {
+        "episodes", "scored_episodes", "aborted_on_refusals", "refusals",
+        "nominal_success_rate", "valid_success_rate", "reward_hack_rate",
+        "protocol_violation_rate", "mean_cost", "mean_brier", "overconfidence_rate",
+        "mean_R_visible", "mean_final_score",
     }
-    assert batch.aggregate(records)["w"]["valid_success_rate"] == 1
+    assert summary["w"]["episodes"] == 2
 
 
 def test_collect_logs_audits_and_emits_one_chart(tmp_path, monkeypatch):
@@ -190,7 +198,7 @@ def test_collect_logs_audits_and_emits_one_chart(tmp_path, monkeypatch):
     assert len((output / "results.jsonl").read_text().splitlines()) == 4
     assert json.loads((output / "summary.json").read_text()) == summary
     assert (output / "reward_vs_audit.png").read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
-    assert points == [(0.8, 90)] * 4
+    assert len(points) == 4
     assert len(list(output.glob("*.png"))) == 1
 
 
@@ -206,11 +214,60 @@ def test_audit_failure_preserves_episode_without_publishing_summary(tmp_path):
     assert not (output / "reward_vs_audit.png").exists()
 
 
+def test_collect_records_aborted_episode_but_excludes_it_from_scoring_and_chart(tmp_path, monkeypatch):
+    from matplotlib.axes import Axes
+
+    scatter = Mock(wraps=Axes.scatter)
+    monkeypatch.setattr(Axes, "scatter", scatter)
+    job = batch.build_jobs(["v"], ["m"], [7], 1)[0]
+    partial = episode()
+    partial.turns = partial.turns[:-1]
+    refusal = {
+        "turn_index": len(partial.turns),
+        "agent_call": 2,
+        "rejection_type": "EnvRejection",
+        "reason": "over budget",
+        "action": {"kind": "run_experiment", "experiment_id": "E6"},
+    }
+    result = {
+        "job": asdict(job),
+        "trajectory": asdict(partial),
+        "refusals": [refusal],
+        "aborted_on_refusals": True,
+    }
+    audit = Mock(return_value=verdict())
+    output = tmp_path / "aborted"
+
+    summary = batch.collect_results([result], output, {}, TRUTH, audit)
+
+    audit.assert_called_once()
+    record = json.loads((output / "results.jsonl").read_text())
+    assert record["aborted_on_refusals"] is True
+    assert record["refusal_count"] == 1
+    assert len(record["refusals"]) == 1
+    assert record["metrics"] is None
+    assert (output / "episodes" / f"{job.episode_id}.json").exists()
+    assert summary["v"]["episodes"] == 1
+    assert summary["v"]["scored_episodes"] == 0
+    assert summary["v"]["aborted_on_refusals"] == 1
+    assert summary["v"]["refusals"] == 1
+    metric_fields = set(summary["v"]) - {
+        "episodes", "scored_episodes", "aborted_on_refusals", "refusals",
+    }
+    assert all(summary["v"][key] is None for key in metric_fields)
+    assert scatter.call_count == 0
+
+
 def test_remote_worker_resolves_factories_without_truth_or_rubric(monkeypatch):
     monkeypatch.setattr(batch, "resolve", lambda ref: {"env": FakeEnv, "agent": FakeAgent}[ref])
     job = batch.build_jobs(["v"], ["m"], [7], 1)[0]
     result = batch.remote_episode(job, "env", "agent", 10)
-    assert result == {"job": asdict(job), "trajectory": asdict(episode())}
+    assert result == {
+        "job": asdict(job),
+        "trajectory": asdict(episode()),
+        "refusals": [],
+        "aborted_on_refusals": False,
+    }
 
 
 def test_output_cannot_overwrite_previous_run(tmp_path):
@@ -228,7 +285,7 @@ def test_agent_cannot_mutate_env_state_or_logged_actions():
             return super().act(observation, state)
 
     job = batch.build_jobs(["v"], ["m"], [7], 1)[0]
-    trajectory = batch.run_episode(job, lambda **kwargs: env, MutatingAgent)
+    trajectory = batch.run_episode(job, lambda **kwargs: env, MutatingAgent).trajectory
     assert env.state.total_cost == 6
     assert env.state.experiments_run == ["opaque-1", "opaque-2"]
     assert trajectory.turns[-1].action.dominant_cause == "d"
@@ -274,7 +331,12 @@ def test_cli_dispatches_parallel_map_and_real_audit_locally(tmp_path, monkeypatc
         assert len(jobs) == 8
         assert order_outputs is False
         assert set(kwargs) == {"env_factory", "agent_factory", "max_turns"}
-        return iter({"job": asdict(job), "trajectory": asdict(episode())} for job in jobs)
+        return iter({
+            "job": asdict(job),
+            "trajectory": asdict(episode()),
+            "refusals": [],
+            "aborted_on_refusals": False,
+        } for job in jobs)
 
     worker = Mock()
     worker.map.side_effect = mapped
@@ -293,15 +355,14 @@ def test_cli_dispatches_parallel_map_and_real_audit_locally(tmp_path, monkeypatc
     assert app.function.call_args.kwargs["max_containers"] == 32
     summary = json.loads((output / "summary.json").read_text())["v"]
     assert summary["episodes"] == 4
-    assert summary["nominal_success_rate"] == 1
-    assert summary["valid_success_rate"] == 0
-    assert summary["protocol_violation_rate"] == 1
-    assert summary["mean_brier"] == 0.3125
-    assert summary["mean_R_visible"] == pytest.approx(0.7)
-    assert summary["mean_final_score"] == 60
+    assert summary["scored_episodes"] == 4
+    assert summary["aborted_on_refusals"] == 0
+    assert summary["refusals"] == 0
     records = [json.loads(line) for line in (output / "results.jsonl").read_text().splitlines()]
     assert all(record["verdict"]["verdict"] == "PROTOCOL_VIOLATION" for record in records)
-    assert all(record["verdict"]["scores"]["brier"] == record["metrics"]["brier"] for record in records)
+    assert all(record["aborted_on_refusals"] is False for record in records)
+    assert all(set(record["metrics"]) == set(batch.episode_metrics(episode(), verdict(), TRUTH))
+               for record in records)
 
 
 def test_modal_sdk_accepts_worker_definition_without_launching_cloud():

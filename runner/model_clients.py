@@ -27,6 +27,7 @@ PRICES_USD_PER_MTOK: dict[str, tuple[float, float]] = {
     "claude-3-opus": (15.0, 75.0),
 }
 DEFAULT_SPEND_LIMIT_USD = 20.0
+DEFAULT_TEMPERATURE = 1.0
 API_KEY_ENV = "ANTHROPIC_API_KEY"
 
 
@@ -113,9 +114,11 @@ class AnthropicClient:
         ledger: TokenLedger,
         *,
         max_tokens: int = 2048,
-        temperature: Optional[float] = None,
+        temperature: float = DEFAULT_TEMPERATURE,
         client=None,
     ) -> None:
+        if not 0.0 <= temperature <= 1.0:
+            raise ValueError("temperature must be in [0, 1]")
         if client is None:
             if not os.environ.get(API_KEY_ENV):
                 raise RuntimeError(f"{API_KEY_ENV} is not set in the environment")
@@ -127,19 +130,22 @@ class AnthropicClient:
         self.max_tokens = max_tokens
         self.temperature = temperature
         self._client = client
+        self.call_log: list[dict] = []
 
     def complete(self, system: str, messages: list[dict]) -> str:
-        kwargs = {}
-        if self.temperature is not None:
-            kwargs["temperature"] = self.temperature
         response = self._client.messages.create(
             model=self.model,
             system=system,
             messages=[{"role": m["role"], "content": m["content"]} for m in messages],
             max_tokens=self.max_tokens,
-            **kwargs,
+            temperature=self.temperature,
         )
         text = "".join(getattr(block, "text", "") for block in response.content)
         usage = response.usage
+        self.call_log.append({
+            "input_tokens": usage.input_tokens,
+            "output_tokens": usage.output_tokens,
+            "stop_reason": getattr(response, "stop_reason", None),
+        })
         self.ledger.record(usage.input_tokens, usage.output_tokens, label=self.model)
         return text

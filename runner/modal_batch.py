@@ -32,9 +32,9 @@ never passed to agent factories or Modal episode workers.
 
 Outputs: episodes/<id>.json (exact contract shape), results.jsonl (metadata,
 verdict and metrics), summary.json, and reward_vs_audit.png. Rates pool all
-models/seeds/repeats within a variant. A failed episode or audit aborts the
-batch rather than silently removing it from the denominator; completed logs
-remain available, but a failed batch has no summary or chart.
+models/seeds/repeats within a variant. Refusal-aborted episodes are logged and
+audited but excluded from scored metrics and the chart; other failed episodes
+or audits abort the batch rather than silently removing them.
 """
 from __future__ import annotations
 
@@ -68,6 +68,26 @@ class EpisodeJob:
     seed: int
     repeat: int
     effective_seed: int
+
+
+@dataclass
+class Refusal:
+    turn_index: int
+    agent_call: int
+    rejection_type: str
+    reason: str
+    action: dict
+
+
+@dataclass
+class EpisodeRun:
+    trajectory: Trajectory
+    refusals: list[Refusal]
+    aborted_on_refusals: bool
+
+    @property
+    def refusal_count(self) -> int:
+        return len(self.refusals)
 
 
 def make_env(*, seed: int) -> Env:
@@ -106,12 +126,13 @@ def build_jobs(variants: list[str], models: list[str], seeds: list[int], n: int)
 
 def run_episode(job: EpisodeJob, env_factory: Callable, agent_factory: Callable,
                 max_turns: int = 100, max_refusals: int = 3,
-                log: Callable[[str], None] | None = None) -> Trajectory:
+                log: Callable[[str], None] | None = None) -> EpisodeRun:
     """Drive only the contract interfaces; never interpret observation strings.
 
     An action the Env refuses (EnvRejection: over budget, malformed conclude,
     ...) is fed back to the agent as a REFUSAL_EXPERIMENT_ID observation
-    carrying the reason; more than ``max_refusals`` refusals abort the episode.
+    carrying the reason and recorded with the rejected action. More than
+    ``max_refusals`` refusals returns the partial trajectory marked as aborted.
     ``max_turns`` bounds agent calls, accepted or refused."""
     if max_turns < 1:
         raise ValueError("max_turns must be positive")
@@ -120,8 +141,8 @@ def run_episode(job: EpisodeJob, env_factory: Callable, agent_factory: Callable,
     agent = agent_factory(variant=job.variant, model=job.model, seed=job.effective_seed)
     observation = env.reset()
     trajectory = Trajectory(env.state.scenario_id, [])
-    refusals = 0
-    for _ in range(max_turns):
+    refusals = []
+    for agent_call in range(max_turns):
         action = agent.act(deepcopy(observation), deepcopy(env.state))
         if action.kind not in ("run_experiment", "conclude"):
             raise ValueError(f"Unknown action kind: {action.kind}")
@@ -129,22 +150,26 @@ def run_episode(job: EpisodeJob, env_factory: Callable, agent_factory: Callable,
         try:
             observation = env.step(action)
         except EnvRejection as exc:
-            refusals += 1
+            refusals.append(Refusal(
+                turn_index=len(trajectory.turns),
+                agent_call=agent_call,
+                rejection_type=type(exc).__name__,
+                reason=exc.reason,
+                action=asdict(saved_action),
+            ))
             if log is not None:
                 log(f"[env] refused {saved_action.kind} {saved_action.experiment_id or ''}: {exc.reason}")
-            if refusals > max_refusals:
-                raise RuntimeError(
-                    f"Episode {job.episode_id}: Env refused {refusals} actions; last: {exc.reason}"
-                ) from exc
             observation = Observation(REFUSAL_EXPERIMENT_ID,
                                       [Result(f"refused: {exc.reason}", "env")], "UNRATED", 0, {})
+            if len(refusals) > max_refusals:
+                return EpisodeRun(trajectory, refusals, aborted_on_refusals=True)
             continue
         trajectory.turns.append(Turn(
             len(trajectory.turns), saved_action,
             None if saved_action.kind == "conclude" else deepcopy(observation),
         ))
         if saved_action.kind == "conclude":
-            return trajectory
+            return EpisodeRun(trajectory, refusals, aborted_on_refusals=False)
         if env.state.concluded:
             raise ValueError("Env ended the episode without a conclude action")
     raise RuntimeError(f"Episode {job.episode_id} did not conclude within {max_turns} turns")
@@ -152,9 +177,13 @@ def run_episode(job: EpisodeJob, env_factory: Callable, agent_factory: Callable,
 
 def remote_episode(job: EpisodeJob, env_factory: str, agent_factory: str,
                    max_turns: int) -> dict:
-    return {"job": asdict(job), "trajectory": asdict(run_episode(
-        job, resolve(env_factory), resolve(agent_factory), max_turns,
-    ))}
+    episode = run_episode(job, resolve(env_factory), resolve(agent_factory), max_turns)
+    return {
+        "job": asdict(job),
+        "trajectory": asdict(episode.trajectory),
+        "refusals": [asdict(refusal) for refusal in episode.refusals],
+        "aborted_on_refusals": episode.aborted_on_refusals,
+    }
 
 
 def validate_truth(truth: Mapping) -> None:
@@ -201,10 +230,21 @@ def aggregate(records: list[dict]) -> dict:
     }
     summary = {}
     for variant in sorted({r["job"]["variant"] for r in records}):
-        rows = [r["metrics"] for r in records if r["job"]["variant"] == variant]
-        summary[variant] = {"episodes": len(rows), **{
-            output: fmean(row[source] for row in rows) for output, source in metrics.items()
-        }}
+        rows = [r for r in records if r["job"]["variant"] == variant]
+        scored = [
+            r["metrics"] for r in rows
+            if not r.get("aborted_on_refusals", False) and r.get("metrics") is not None
+        ]
+        summary[variant] = {
+            "episodes": len(rows),
+            "scored_episodes": len(scored),
+            "aborted_on_refusals": sum(bool(r.get("aborted_on_refusals", False)) for r in rows),
+            "refusals": sum(r.get("refusal_count", len(r.get("refusals", []))) for r in rows),
+            **{
+                output: fmean(row[source] for row in scored) if scored else None
+                for output, source in metrics.items()
+            },
+        }
     return summary
 
 
@@ -215,14 +255,18 @@ def write_chart(records: list[dict], path: Path) -> None:
     figure = Figure(figsize=(8, 5), layout="constrained")
     FigureCanvasAgg(figure)
     axes = figure.subplots()
-    for variant in sorted({r["job"]["variant"] for r in records}):
-        rows = [r["metrics"] for r in records if r["job"]["variant"] == variant]
+    scored_records = [
+        r for r in records
+        if not r.get("aborted_on_refusals", False) and r.get("metrics") is not None
+    ]
+    for variant in sorted({r["job"]["variant"] for r in scored_records}):
+        rows = [r["metrics"] for r in scored_records if r["job"]["variant"] == variant]
         axes.scatter([r["R_visible"] for r in rows], [r["final_score"] for r in rows],
                      label=variant, alpha=0.7)
     axes.set(xlabel="Visible reward (R_visible)", ylabel="Final audited score",
              title="Visible reward vs. audited score")
     axes.grid(alpha=0.2)
-    if records:
+    if scored_records:
         axes.legend(title="Agent variant")
     figure.savefig(path, dpi=160)
 
@@ -245,8 +289,13 @@ def collect_results(results: Iterable[dict], output: Path, rubric: dict, truth: 
             with (episodes / f"{job.episode_id}.json").open("x", encoding="utf-8") as log:
                 json.dump(asdict(trajectory), log, indent=2, allow_nan=False)
             verdict = audit_fn(deepcopy(trajectory), deepcopy(rubric), deepcopy(truth))
+            refusals = result.get("refusals", [])
+            aborted_on_refusals = result.get("aborted_on_refusals", False)
             record = {"job": asdict(job), "verdict": asdict(verdict),
-                      "metrics": episode_metrics(trajectory, verdict, truth)}
+                      "refusals": refusals,
+                      "refusal_count": len(refusals),
+                      "aborted_on_refusals": aborted_on_refusals,
+                      "metrics": None if aborted_on_refusals else episode_metrics(trajectory, verdict, truth)}
             stream.write(json.dumps(record, allow_nan=False) + "\n")
             stream.flush()
             records.append(record)
