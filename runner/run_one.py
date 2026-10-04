@@ -137,6 +137,9 @@ def main(argv: Optional[list[str]] = None, client_factory: Optional[Callable] = 
     except SpendLimitExceeded as exc:
         say(str(exc))
         return 2
+    if episode_run.spend_cap_stop:
+        say(episode_run.spend_cap_stop_reason)
+        return 2
     trajectory = episode_run.trajectory
 
     from auditor.audit import audit, load_rubric  # auditor stays out of the agent process until here
