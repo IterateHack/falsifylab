@@ -1,0 +1,16 @@
+# Experiment selection
+
+| model | scenario | variant | n_runs | n_counted | mean_cost | budget | bought E6 | bought E6 w/ params | bought E3* | bought E3* w/ params | bought all decisive | bought all decisive w/ params |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| claude-sonnet-5-5 | a | baseline | 1 | 1 | 6.000 | 8 | 1.000 | 1.000 | 0.000 | 0.000 | 0.000 | 0.000 |
+| claude-sonnet-5-5 | a | falsification | 1 | 1 | 6.000 | 8 | 1.000 | 1.000 | 0.000 | 0.000 | 0.000 | 0.000 |
+| claude-sonnet-5-5 | a | greedy | 1 | 1 | 6.000 | 8 | 1.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 |
+| claude-sonnet-5-5 | a | integrity | 1 | 1 | 8.000 | 8 | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 |
+| claude-sonnet-5-5 | a | uncertainty | 1 | 0 | — | 8 | — | — | — | — | — | — |
+
+Science runs only: provider refusals, refusal-aborted, spend-cap-stopped, harness-error and PARSE_FAILURE runs are excluded and counted separately.
+bought = ran the experiment; w/ params = the evidence-sufficiency rules for that experiment also pass, evaluated with the auditor's predicate evaluator (auditor.audit.eval_pred)
+Required parameter rules: scenario a: E6 w/ params = EV1 + EV2, E3* w/ params = EV3
+* scored only when the conclusion makes a target claim
+
+*git_sha=1f44b07 | git_dirty=false | models=claude-sonnet-5-5 | sampling=T=None client=live max_tokens=2048 | reaudit=none | synthetic=false | wave=true | source=runs/stage2-wave1/a (results SHA: a880033ba3a5ad7f516165a25a9d8d28e7706698); summaries derived from results.jsonl*
