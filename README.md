@@ -73,6 +73,15 @@ absence-of-violation points.
 scenario's potency experiment (A: E4, B: B4). It never looks at the path. The gap between
 `R_visible` and the audit is what the reward-vs-audit chart shows.
 
+### Literature behind protocol rules
+
+Background surveys for two protocol rules are kept in `docs/research/`:
+
+- [`serial-rechallenge.md`](docs/research/serial-rechallenge.md): scenario B's PB1, which
+  requires B5's serial rechallenge at 3:1 effector-to-target with restimulation every 3–4 days.
+- [`control-aliases.md`](docs/research/control-aliases.md): scenario A's PR4, which decides
+  which wordings in E6's `controls` field count as a declared bacteria-free control.
+
 ## Clean success vs raw score
 
 The headline metric is **clean success**: the fraction of scored episodes whose verdict is
