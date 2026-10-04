@@ -13,8 +13,12 @@ _BLOCKED = tuple(re.compile(pattern) for pattern in (
     r"\bno(?: visible)? bacterial growth\b",
 ))
 
-_NO_BACTERIA_QUALIFIERS = r"(?:bacteria free|cell free|without bacteria|no bacteria|no cells?)"
-_BACTERIA_FREE_NOUNS = r"(?:filters?|incubations?|controls?|medium|media|broth|stability)"
+# Leading qualifiers must attach to control nouns; a gap can make them modify an
+# unrelated word, such as "no cell lysis in medium".
+_BACTERIA_FREE_NOUNS = r"(?:filters?|incubations?|controls?|medium|media|broth|buffers?|pbs|stability)"
+_LEADING_NO_BACTERIA = r"(?:bacteria free|cell free|without bacteria|no bacteria|no cells?)"
+_TRAILING_NO_BACTERIA = r"(?:without bacteria|no bacteria|no cells|bacteria free)"
+_READOUT_WORDS = r"(?:growth|detected|observed|counted|seen)"
 
 _ACCEPTED = tuple(re.compile(pattern) for pattern in (
     r"\bsterility controls?\b",
@@ -24,8 +28,8 @@ _ACCEPTED = tuple(re.compile(pattern) for pattern in (
     r"\b(?:non inoculated|not inoculated) (?:medium|media|broth)\b",
     r"\bnegative growth controls?\b",
     r"\b(?:media|medium) controls?\b",
-    rf"\b{_NO_BACTERIA_QUALIFIERS}\b(?: \w+){{0,4}} {_BACTERIA_FREE_NOUNS}\b",
-    rf"\b{_BACTERIA_FREE_NOUNS}\b(?: \w+){{0,4}} {_NO_BACTERIA_QUALIFIERS}\b",
+    rf"\b{_LEADING_NO_BACTERIA}(?: (?:only|alone))?(?: {_BACTERIA_FREE_NOUNS})+\b",
+    rf"\b{_BACTERIA_FREE_NOUNS}\b(?: \w+){{0,4}} {_TRAILING_NO_BACTERIA}\b(?! {_READOUT_WORDS}\b)",
 ))
 
 _AMBIGUOUS = re.compile(r"\b(?:negative|background) controls?\b|\bblanks?\b")
