@@ -20,7 +20,7 @@ Two scenarios ship, both from open-access papers, and both load through one unmo
 
 ## The lab
 
-A second instrument built alongside the auditor: real-data curricula (GLP-1R, WRN), sandboxed analysis, a prediction-before-data gate, lesson cards and a pixel-art lab UI. It uses the same verdict labels, implemented independently; precedence and the meaning of "fabricated citation" differ. There is no code integration between the two. See [lab/README.md](lab/README.md), and run its commands from lab/.
+A second instrument built alongside the auditor: a real-data curriculum (GLP-1R), sandboxed analysis, a prediction-before-data gate, lesson cards, an evaluation of whether the lessons help, and a pixel-art lab UI. It uses the same verdict labels, implemented independently; precedence and the meaning of "fabricated citation" differ. There is no code integration between the two, and no result from the lab is evidence about the PptT question above: GLP-1R is the lab's curriculum, not a second scientific hypothesis. See [lab/README.md](lab/README.md), and run its commands from lab/ (`cd lab && pytest -q`).
 
 ## The answer-key fence
 

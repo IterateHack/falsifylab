@@ -121,7 +121,7 @@ still unvalidated. Runs recorded before the path was logged are shown as
         |
         +--> Sandbox B: scorer + ground truth. The agent never gets a handle on it
         |
-        +--> lesson cards, appended to what later experiments can read
+        +--> lesson cards, shown only to the experiments that require them
 ```
 
 **The gate.** Until the notebook holds `hypothesis_and_prediction` (with a
@@ -134,7 +134,9 @@ that nothing under `private/` is ever reachable from the agent's sandbox.
 
 **Teaching after the fact.** The lesson card is shown only after the score is
 fixed, so it can never influence the attempt it grades. The agent then writes
-what it got wrong, and that lesson becomes available to later experiments.
+what it got wrong. The experiment's lesson card then goes only to the later
+experiments that name it in `requires_lessons`, and the engine puts those cards in
+their first prompt. The agent's own notes go to the notebook and are not fed back.
 
 **The event log is the single source of truth.** The notebook and the animation
 are both views over it. Replay is the demo default; live mode streams over SSE.
@@ -157,9 +159,10 @@ code carries neither the API layer nor the Anthropic SDK.
 executed - the development machine had no Modal credentials. The local backend is
 the tested one, and both Modal modules say so at the top of the file.
 
-## The control run
+## The first control run (n=1, historical)
 
-The claim that lessons help is testable, so it is tested:
+The claim that lessons help is testable, so it is tested. This was the first
+attempt, one run per arm:
 
 ```bash
 ./.venv/bin/python -m engine.cli run --run-id control_no_lessons --no-lessons
@@ -228,10 +231,40 @@ Not yet done: the held-out validation and test experiments the plan calls for.
 Until they exist, any gain measured on the current six experiments is a gain on
 the experiments the cards were written from.
 
+### First look at the arms (2026-10-04)
+
+The first small set run with the relevance fix: 3 cold, 2 baseline, 2 lessons.
+Mean score per experiment (0 to 1):
+
+| Experiment | Cold | Baseline | Lessons |
+|---|---|---|---|
+| 1 Genetic support | 0.04 | 0.84 | 0.80 |
+| 2 Peptide-receptor structure | 0.34 | 1.00 | 1.00 |
+| 3 Peptide engineering | 0.93 | 0.95 | 0.95 |
+| 4 Potency | 0.00 | 0.93 | 0.92 |
+| 5 Small-molecule feasibility | 0.75 | 0.75 | 0.85 |
+| 6 Capstone | 0.78 | 0.88 | 1.00 |
+| **Mean** | **0.47** | **0.89** | **0.92** |
+
+- **The lab adds a lot over memory alone** (+0.42 over cold), almost all of it on
+  the data-analysis experiments (1, 2, 4).
+- **Memory alone is strong on the reasoning experiments** (3, 5, 6), so those
+  partly measure recall.
+- **Lessons versus no lessons: no detectable difference** (+0.03). The gains sit
+  on experiments 5 and 6, which depend on earlier lessons, but two runs per arm
+  cannot establish that.
+- **Do not quote the intervals.** With two or three runs a bootstrap interval is
+  a resample of a handful of numbers, and a permutation p cannot go below 0.1
+  (2 vs 3 runs) or 0.17 (2 vs 2). `aggregate` flags this on its result line.
+- **Cost:** a lab run is about 1.1M input and 0.1M output tokens on Sonnet plus a
+  small Opus capstone; a cold run is about 4k in and 11k out. No prompt caching is
+  used. Token counts only: `usage.json` records tokens, not prices.
+
 ## Repository layout
 
 ```
-engine/       event log, specs, agent loop, tool gating, scoring, audit, replay, notebook, CLI
+engine/       event log, specs, agent loop, tool gating, scoring, audit, replay, notebook,
+              the cold arm, the multi-run aggregator, token metering, CLI
 evals/        the audit eval suite: scripted agents with known right verdicts
 sandbox/      Executor contract; local and Modal backends
 curricula/    one folder per curriculum: specs, scorers, ground truth, lessons, audit specs, fetch
@@ -240,12 +273,13 @@ api/          FastAPI (replay + SSE) and the Modal deployment
 web/          Vite + React pixel lab and notebook overlay
 art/          generates every spritesheet with Pillow
 devin/        curriculum-engineering playbook and session launcher
-docs/         reference verification, dataset provenance, credits
+docs/         evaluation plan, reference verification, dataset provenance, credits
 ```
 
 ## What we found
 
-Running the curriculum against Claude Sonnet 5 (Opus 5 for the capstone):
+Running the curriculum against Claude Sonnet 5 (Opus 5 for the capstone), in the
+first single run, before the relevance fix:
 
 - It scored well - mean **0.90** across six experiments - and it was
   **systematically underconfident**, with a mean calibration gap of **-0.30**.
@@ -265,8 +299,9 @@ Both results are in `runs/`, and the notebook is readable as markdown at
 
 - **Pretraining leakage is real.** These are famous results. Scoring targets
   data-analysis outputs rather than recall wherever possible, the notebook
-  records prior knowledge claimed, and the control run exists to quantify it -
-  but a model that already knows about Trp33 cannot unknow it.
+  records prior knowledge claimed, and the cold arm now quantifies it: with no data
+  at all the model scores 0.93 on peptide engineering and 0.75 on small-molecule
+  feasibility. A model that already knows about Trp33 cannot unknow it.
 - **n=1 per arm in the committed runs.** Treat deltas under about 0.1 between those runs as noise. `aggregate` exists to replace them.
 - **Three data soft spots** - transcribed half-lives, Open Targets release
   dependence, and simulated dose-response points over real potencies - are listed
