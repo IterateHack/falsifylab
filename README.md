@@ -18,6 +18,10 @@ Two scenarios ship, both from open-access papers, and both load through one unmo
 | `a` | repo root (`agent/`, `auditor/`) | why the most potent PptT inhibitor series does not kill *M. tuberculosis* (Singh et al., *Sci. Adv.* 10:eadj6406, 2024) | 8 / 17 units |
 | `b` | `scenarios/b_cd5_affinity/` | why higher-affinity CD5 CAR-T binders kill better short-term but control tumours worse (doi:10.1016/j.omton.2026.201158) | 9 / 19 units |
 
+## The lab
+
+A second instrument built alongside the auditor: real-data curricula (GLP-1R, WRN), sandboxed analysis, a prediction-before-data gate, lesson cards and a pixel-art lab UI. It uses the same verdict labels, implemented independently; precedence and the meaning of "fabricated citation" differ. There is no code integration between the two. See [lab/README.md](lab/README.md), and run its commands from lab/.
+
 ## The answer-key fence
 
 ```
