@@ -194,9 +194,6 @@ listing which episodes' verdicts changed. `--audit module:callable`, `--rubric` 
 
 ### Viewer
 
-> **Not on `main` yet.** The episode viewer is on branch `devin/1791096316-demo-viewer`
-> (`demo/viewer.html`). This section describes that branch.
-
 Open `demo/viewer.html` in a browser. It is a single offline file. Load a `results.jsonl`
 with the button or by drag and drop, or press **Sample** for the embedded episodes built from
 the validation cases. It replays each episode turn by turn with its verdict.
