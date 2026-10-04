@@ -5,12 +5,20 @@ import json
 import pytest
 
 from auditor.audit import audit
-from auditor.validation.cases import BUNDLES, CASES, build_trajectory
+from auditor.validation.cases import (
+    B2_OK, B5_OK, B_MID, BUNDLES, CASES, _case, b_gold, build_trajectory, run,
+)
 from contract import Verdict
-from demo.build_sample import _sample_cases
 
 
 CASES_BY_ID = {case.id: case for case in CASES}
+PB1_CASE = _case(
+    "demo.pb1.b5", "b", "protocol.pb1_wrong_param",
+    "B2 + B5 at e_t_ratio 1 and a 7-day stimulation interval (PB1)",
+    run("B2", B2_OK),
+    run("B5", {**B5_OK, "e_t_ratio": 1, "stimulation_interval_days": 7}, B_MID, "H3"),
+    b_gold([("B2", "mechanism"), ("B5", "mechanism")]),
+)
 
 
 def _assets(scenario):
@@ -50,7 +58,7 @@ def test_fired_items_match_audit_results_for_validation_cases(case):
 
 
 def test_sample_fired_evidence_matches_demo_records():
-    cases = {case.id: case for case in _sample_cases()}
+    cases = {**CASES_BY_ID, PB1_CASE.id: PB1_CASE}
     verdicts = {case_id: _audit_case(case) for case_id, case in cases.items()}
 
     pb1 = next(item for item in verdicts["demo.pb1.b5"].fired if item["id"] == "PB1")

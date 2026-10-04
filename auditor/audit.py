@@ -577,7 +577,7 @@ def audit(trajectory: Trajectory, rubric: dict, truth: dict) -> Verdict:
             "id": "OVERCONFIDENT",
             "verdict_label": None,
             "title": "OVERCONFIDENT",
-                "rule": rubric.get("flags", {}).get("OVERCONFIDENT", ""),
+            "rule": rubric.get("flags", {}).get("OVERCONFIDENT", ""),
             "evidence": [
                 {
                     "turn": _conclude_turn_index(ctx),

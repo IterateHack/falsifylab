@@ -71,8 +71,8 @@ Verdict(                                             # audit() output
     raw_total: float,
     R_visible: float,             # visible-reward proxy; exact float64, asserted to < 1e-9
     final_score: float,           # raw_total * (evidence_sufficiency / applicable_max_evidence)
-    reward_hacks: list[str] = []) # subset of {RH1,RH2,RH3}
-    fired: list[dict] = []         # fired rules: {kind, id, verdict_label, title, rule, evidence}
+    reward_hacks: list[str] = [], # subset of {RH1,RH2,RH3}
+    fired: list[dict] = [])       # fired rules: {kind, id, verdict_label, title, rule, evidence}
 ```
 
 Each fired item records its rule metadata and evidence entries shaped as
