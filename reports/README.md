@@ -17,6 +17,6 @@ The stamp records the report Git SHA and dirty state, models, sampling settings,
 
 Markdown and PNG rates and regret use three decimals, with confidence intervals shown as `[low, high]`; CSV values retain full precision.
 
-Experiment-selection captions explain: "bought = ran the experiment; w/ params = the evidence-sufficiency rules for that experiment also pass, evaluated with the auditor's predicate evaluator (auditor.audit.eval_pred)". The Markdown table lists the criterion IDs for each experiment's parameter rules. In the chart, "bought" bars are pale (30% fill, coloured outline) and "w/ params" bars are solid, so the pair stays distinguishable at small values.
+Experiment-selection captions explain: "bought = ran the experiment; w/ params = the evidence-sufficiency rules for that experiment also pass, evaluated with the auditor's predicate evaluator (auditor.audit.eval_pred)". The Markdown table lists the criterion IDs for each experiment's parameter rules.
 
 The `reports/` pipeline reads rubrics and imports the auditor's private `_Ctx` and `eval_pred` on the evaluation side only; nothing under `runner/` or `agents/` imports `reports/`.

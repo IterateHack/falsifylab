@@ -422,7 +422,9 @@ def test_selection_cost_plot_uses_horizontal_bars_and_integer_budget(tmp_path, m
     assert len(horizontal_bars) == 1
     assert any("mean cost (budget 8)" in title for title in plot_titles)
     assert any(
-        " ".join(text.splitlines()) == slide_assets.SELECTION_CAPTION
+        " ".join(text.splitlines()) == (
+            f"{slide_assets.SELECTION_CAPTION}. {slide_assets.SELECTION_LEGEND_CAPTION}"
+        )
         for text in figure_texts
     )
     assert {"bought (pale)", "w/ params (solid)"} <= set(figure_legend_labels)

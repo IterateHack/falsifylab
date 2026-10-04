@@ -32,6 +32,9 @@ SELECTION_CAPTION = (
     "experiment also pass, evaluated with the auditor's predicate evaluator "
     "(auditor.audit.eval_pred)"
 )
+SELECTION_LEGEND_CAPTION = (
+    "Each pair: pale bar with coloured outline = bought; solid bar beside it = w/ params."
+)
 CONDITIONAL_FOOTNOTE = "* scored only when the conclusion makes a target claim"
 BOUGHT_ALPHA = 0.3
 PASS_K_CAPTION = (
@@ -1142,7 +1145,9 @@ def _plot_experiment_selection(
         ncol=4,
         fontsize=9,
     )
-    selection_caption = textwrap.fill(SELECTION_CAPTION, width=130)
+    selection_caption = textwrap.fill(
+        f"{SELECTION_CAPTION}. {SELECTION_LEGEND_CAPTION}", width=130,
+    )
     figure.text(
         0.5, 0.12, selection_caption,
         ha="center", va="center", fontsize=8,
