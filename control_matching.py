@@ -29,7 +29,7 @@ _MEDIUM_DESCRIPTORS = (
 _TAIL_PREPOSITIONS = r"(?:in|at|for|over|during|from|of|to|with|under|on|across|throughout)"
 _PRESENT_MATERIAL = r"(?:bacteria|bacterial|cells?|lysates?|mycobacteria|h37rv)"
 
-# A part that says bacteria, cells or lysate are present is not a bacteria-free control.
+# A part that says bacteria, cells or lysate are present is not a bacteria-free control, unless the mention is negated ("no cells added") or removed ("cells omitted").
 _PRESENCE = tuple(re.compile(pattern) for pattern in (
     r"(?<!non )(?<!not )\binoculated\b",
     r"\bwith live\b",
@@ -37,6 +37,8 @@ _PRESENCE = tuple(re.compile(pattern) for pattern in (
     rf"\b{_PRESENT_MATERIAL} added\b",
     r"(?<!no )\blysates?\b",
 ))
+_NEGATORS = frozenset({"no", "without", "not", "minus"})
+_REMOVAL_AFTER = re.compile(r"^ (?:omitted|removed|absent|excluded)\b")
 
 _ACCEPTED = tuple(re.compile(pattern) for pattern in (
     r"\bsterility controls?\b",
@@ -47,7 +49,7 @@ _ACCEPTED = tuple(re.compile(pattern) for pattern in (
     r"\bnegative growth controls?\b",
     r"\b(?:media|medium) controls?\b",
     rf"\b{_LEADING_NO_BACTERIA}(?: {_MEDIUM_DESCRIPTORS}){{0,2}}(?: (?:only|alone))?(?: {_BACTERIA_FREE_NOUNS})+\b",
-    rf"\b{_BACTERIA_FREE_NOUNS}\b(?: \w+){{0,4}} {_TRAILING_NO_BACTERIA}\b(?= ?$| {_TAIL_PREPOSITIONS}\b)",
+    rf"\b{_BACTERIA_FREE_NOUNS}\b(?: \w+){{0,4}} {_TRAILING_NO_BACTERIA}\b(?= ?$| {_TAIL_PREPOSITIONS}\b| (?:present|added|omitted|absent)\b)",
 ))
 
 _AMBIGUOUS = re.compile(r"\b(?:negative|background) controls?\b|\bblanks?\b")
@@ -56,10 +58,21 @@ _NO_BACTERIA_QUALIFIER = re.compile(
 )
 
 
+def _says_bacteria_present(normalised):
+    for pattern in _PRESENCE:
+        for match in pattern.finditer(normalised):
+            if _NEGATORS.intersection(normalised[:match.start()].split()[-2:]):
+                continue
+            if _REMOVAL_AFTER.match(normalised[match.end():]):
+                continue
+            return True
+    return False
+
+
 def _is_accepted_control_part(normalised):
     if any(pattern.search(normalised) for pattern in _BLOCKED):
         return False
-    if any(pattern.search(normalised) for pattern in _PRESENCE):
+    if _says_bacteria_present(normalised):
         return False
     if any(pattern.search(normalised) for pattern in _ACCEPTED):
         return True

@@ -217,6 +217,11 @@ def test_qualifier_attached_to_a_non_control_word_is_rejected(wording):
         "medium control with cells",
         "broth only inoculated with H37Rv",
         "medium alone plus bacteria",
+        "no-cell medium containing cells",
+        "no cell medium with bacteria added",
+        "medium control with cells added",
+        "medium control with cells present",
+        "medium control with cells not removed",
     ],
 )
 def test_part_saying_bacteria_are_present_is_rejected(wording):
