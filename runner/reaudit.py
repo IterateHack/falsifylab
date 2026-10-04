@@ -12,6 +12,10 @@ from runner.factories import scenario_dir
 from runner.modal_batch import EpisodeJob, build_record, resolve, validate_truth, write_summaries
 
 
+class MissingTrajectoryError(FileNotFoundError):
+    pass
+
+
 def _read_records(results_path: Path) -> list[dict]:
     with results_path.open(encoding="utf-8") as stream:
         return [json.loads(line) for line in stream]
@@ -39,6 +43,7 @@ def _load_default_assets(scenario: str) -> tuple[dict, dict]:
 
 def reaudit(results_path: Path, output: Path, *,
             audit_fn: Callable[[Trajectory, Mapping, Mapping], Verdict],
+            audit_reference: str | None = None,
             rubric: Mapping | None = None, truth: Mapping | None = None) -> dict:
     results_path = Path(results_path)
     output = Path(output)
@@ -71,11 +76,12 @@ def reaudit(results_path: Path, output: Path, *,
             trajectory_doc = record["trajectory"]
         else:
             fallback = results_path.parent / "episodes" / f"{episode_id}.json"
-            if not fallback.is_file():
-                raise FileNotFoundError(
+            try:
+                trajectory_doc = json.loads(fallback.read_text(encoding="utf-8"))
+            except FileNotFoundError as exc:
+                raise MissingTrajectoryError(
                     f"Missing trajectory for episode {episode_id}: {fallback}"
-                )
-            trajectory_doc = json.loads(fallback.read_text(encoding="utf-8"))
+                ) from exc
         trajectory = trajectory_from_dict(trajectory_doc)
         scenario = job_data.get("scenario", "a")
         episode_rubric, episode_truth = assets[scenario]
@@ -99,17 +105,14 @@ def reaudit(results_path: Path, output: Path, *,
         for record in rebuilt_records:
             stream.write(json.dumps(record, allow_nan=False) + "\n")
     write_summaries(rebuilt_records, output)
-    audit_reference = getattr(audit_fn, "__dict__", {}).get("__reaudit_reference__")
-    if not isinstance(audit_reference, str):
+    if audit_reference is None:
         module = getattr(audit_fn, "__module__", None)
-        name = getattr(audit_fn, "__qualname__", None)
-        if not isinstance(name, str):
-            name = getattr(audit_fn, "__name__", None)
-        if not isinstance(module, str):
-            module = type(audit_fn).__module__
-        if not isinstance(name, str):
-            name = type(audit_fn).__qualname__
-        audit_reference = f"{module}:{name}"
+        qualname = getattr(audit_fn, "__qualname__", None)
+        audit_reference = (
+            f"{module}:{qualname}"
+            if isinstance(module, str) and isinstance(qualname, str)
+            else str(type(audit_fn))
+        )
     result = {
         "source": str(results_path),
         "episodes": len(rebuilt_records),
@@ -150,19 +153,19 @@ def main(argv: list[str] | None = None) -> None:
                 truth_override = json.loads(args.truth.read_text(encoding="utf-8"))
 
         audit_fn = resolve(args.audit)
+    except (OSError, ValueError, ImportError) as exc:
+        parser.error(str(exc))
 
-        def audit_with_reference(trajectory, rubric, truth):
-            return audit_fn(trajectory, rubric, truth)
-
-        audit_with_reference.__reaudit_reference__ = args.audit
+    try:
         result = reaudit(
             args.results,
             args.output,
-            audit_fn=audit_with_reference,
+            audit_fn=audit_fn,
+            audit_reference=args.audit,
             rubric=rubric_override,
             truth=truth_override,
         )
-    except (OSError, ValueError, TypeError, ImportError) as exc:
+    except MissingTrajectoryError as exc:
         parser.error(str(exc))
     print(f"Re-audit complete: {len(result['verdicts_changed'])} verdicts changed")
 

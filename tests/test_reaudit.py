@@ -241,3 +241,25 @@ def test_cli_rejects_asset_overrides_for_multiple_scenarios(tmp_path):
             "--rubric", str(tmp_path / "rubric.json"),
         ])
     assert exc.value.code == 2
+
+
+def test_main_propagates_typeerror_from_audit(tmp_path, monkeypatch):
+    source = tmp_path / "source"
+    _create_synthetic_batch(source)
+    rubric_path = tmp_path / "rubric.json"
+    rubric_path.write_text("{}")
+    truth_path = tmp_path / "truth.json"
+    truth_path.write_text(json.dumps(TRUTH))
+
+    def broken_audit(trajectory, rubric, truth):
+        raise TypeError("boom")
+
+    monkeypatch.setattr(reaudit_module, "resolve", lambda reference: broken_audit)
+    monkeypatch.setattr(reaudit_module, "_load_rubric", lambda path: RUBRIC)
+    with pytest.raises(TypeError, match="boom"):
+        reaudit_module.main([
+            str(source / "results.jsonl"),
+            "--output", str(tmp_path / "reaudited"),
+            "--rubric", str(rubric_path),
+            "--truth", str(truth_path),
+        ])
