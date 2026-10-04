@@ -15,16 +15,16 @@ from auditor.audit import _Ctx, eval_pred
 from contract import trajectory_from_dict
 from runner.factories import scenario_dir
 from runner.modal_batch import (
-    HARNESS_ERROR_VERDICT,
     SCRIPTED_VARIANTS,
-    split_science_records,
     wilson_interval,
 )
 from reports.replicates import (
     BOOTSTRAP_RESAMPLES,
     BOOTSTRAP_SEED,
     REPLICATE_HEADERS,
+    classify,
     replicate_rows,
+    science_records,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -44,27 +44,30 @@ SELECTION_LEGEND_CAPTION = (
 CONDITIONAL_FOOTNOTE = "* scored only when the conclusion makes a target claim"
 BOUGHT_ALPHA = 0.3
 PASS_K_CAPTION = (
-    "pass^k = C(c,k)/C(n,k) per cell: n counted runs (seeds), c with verdict "
-    "VALID_SUCCESS; probability that k runs drawn without replacement all succeed "
-    "(tau-bench, arXiv:2406.12045). Because pass^k counts VALID_SUCCESS runs, it can "
-    "differ from clean_success_rate where a run aborted on refusals."
+    "pass^k = C(c,k)/C(n,k) per cell: n = science runs, c with verdict VALID_SUCCESS; "
+    "probability that k runs drawn without replacement all succeed "
+    "(tau-bench, arXiv:2406.12045). pass^1 therefore equals clean_success_rate."
 )
 COST_OF_PASS_CAPTION = (
     "cost_of_pass = mean_cost / clean_success_rate (Cost-of-Pass, arXiv:2504.13359). "
     "Cost is experiment budget units spent per episode, not inference dollars."
 )
+SCIENCE_DENOMINATOR_CAPTION = (
+    "Science runs only: provider refusals, refusal-aborted, spend-cap-stopped, "
+    "harness-error and PARSE_FAILURE runs are excluded and counted separately."
+)
+GRID_DENOMINATOR_NOTE = (
+    "runner's grid_summary.json keeps refusal-aborted runs in its denominator; "
+    "its rates therefore differ."
+)
 REPLICATE_CAPTION = (
-    "n = science runs. Refusal (provider refusal + env-refusal abort) and cap-stop "
-    "(max_turns) runs are reported as rates over all runs and excluded from clean "
-    "success and cost-of-pass. 95% percentile bootstrap over runs "
+    f"{SCIENCE_DENOMINATOR_CAPTION} n = science runs. Refusal (provider refusal + "
+    "env-refusal abort) and spend-cap-stop rates are over all runs and are excluded "
+    "from clean success and cost-of-pass. 95% percentile bootstrap over runs "
     f"(B={BOOTSTRAP_RESAMPLES}, seed={BOOTSTRAP_SEED}); CIs are null when n < 2. "
     "cost_of_pass = mean_cost / clean_success_mean (Cost-of-Pass, arXiv:2504.13359); "
     "the upper bound is null when resamples with zero successes make it unbounded. "
     "Cost is experiment budget units, not inference dollars."
-)
-REPLICATE_DENOMINATOR_NOTE = (
-    "This denominator differs from grid_summary/clean_success_ci, which keep "
-    "aborted-on-refusal runs in the denominator."
 )
 PATTERN_HEADING = "## Per-pattern recall and false-positive rate"
 KAPPA_HEADING = "## Cohen's kappa"
@@ -251,7 +254,7 @@ def _display_cell(header: str, value) -> str:
         "recall", "false-alarm rate", "observed agreement",
         "pass^1", "pass^3", "pass^5", "cost_of_pass",
         "provider_refusal_rate", "refusal_abort_rate", "refusal_rate",
-        "cap_stop_rate", "clean_success_mean", "cost_of_pass_unbounded_share",
+        "spend_cap_stop_rate", "clean_success_mean", "cost_of_pass_unbounded_share",
     }
     if header in rate_headers:
         try:
@@ -332,16 +335,15 @@ def _batch_groups(records: list[dict], keys: tuple[str, ...]) -> dict[tuple, lis
     return groups
 
 
-def _split_counted_records(records: list[dict]) -> tuple[list[dict], list[dict], list[dict]]:
-    non_harness_rows = [
+def _grid_science_records(records: list[dict]) -> list[dict]:
+    return [
         record for record in records
-        if record["verdict"]["verdict"] != HARNESS_ERROR_VERDICT
+        if classify(record) in {"science", "refusal_abort"}
     ]
-    return split_science_records(non_harness_rows)
 
 
 def _scored_success_values(records: list[dict]) -> tuple[int, int, float | None, list | None]:
-    scored, _, _ = _split_counted_records(records)
+    scored = _grid_science_records(records)
     n_clean_success = sum(
         (record.get("metrics") or {}).get("clean_success") is True for record in scored
     )
@@ -388,7 +390,15 @@ def _clean_success_rows(records: list[dict], grid_rows: list[dict]) -> list[dict
     ):
         if variant in SCRIPTED_VARIANTS:
             continue
-        scored, excluded, provider_refusals = _split_counted_records(cell_records)
+        classifications = [classify(record) for record in cell_records]
+        scored = science_records(cell_records)
+        category_counts = {
+            category: classifications.count(category)
+            for category in (
+                "provider_refusal", "refusal_abort", "spend_cap_stop",
+                "harness_error", "parse_failure",
+            )
+        }
         n_clean_success = sum(
             (record.get("metrics") or {}).get("clean_success") is True
             for record in scored
@@ -410,11 +420,12 @@ def _clean_success_rows(records: list[dict], grid_rows: list[dict]) -> list[dict
             "variant": variant,
             "n_runs": len(cell_records),
             "n_harness_error": sum(
-                record["verdict"]["verdict"] == HARNESS_ERROR_VERDICT
-                for record in cell_records
+                category == "harness_error" for category in classifications
             ),
-            "n_parse_failure": len(excluded),
-            "n_provider_refusal": len(provider_refusals),
+            "n_parse_failure": category_counts["parse_failure"],
+            "n_provider_refusal": category_counts["provider_refusal"],
+            "n_refusal_abort": category_counts["refusal_abort"],
+            "n_spend_cap_stop": category_counts["spend_cap_stop"],
             "n_scored": n_scored,
             "n_clean_success": n_clean_success,
             "clean_success_rate": rate,
@@ -437,7 +448,7 @@ def _cell_score_rows(records: list[dict], clean_rows: list[dict]) -> list[dict]:
     groups = _batch_groups(records, ("model", "scenario", "variant"))
     result = []
     for row in clean_rows:
-        scored, _, _ = _split_counted_records(
+        scored = science_records(
             groups[(row["model"], row["scenario"], row["variant"])],
         )
         result.append({
@@ -596,6 +607,10 @@ def _plot_clean_success(path: Path, rows: list[dict], stamp: dict) -> None:
     axes.yaxis.set_major_formatter(FormatStrFormatter("%.3f"))
     axes.grid(axis="y", alpha=0.25)
     _dedupe_legend(axes)
+    figure.text(
+        0.5, 0.09, textwrap.fill(SCIENCE_DENOMINATOR_CAPTION, width=145),
+        ha="center", va="center", fontsize=6,
+    )
     _save_figure(figure, path, stamp)
 
 
@@ -679,7 +694,7 @@ def _plot_raw_vs_clean(path: Path, rows: list[dict], stamp: dict) -> None:
     figure.legend(
         handles=variant_handles,
         loc="center",
-        bbox_to_anchor=(0.5, 0.20),
+        bbox_to_anchor=(0.5, 0.22),
         ncol=max(1, len(variant_handles)),
         title="Variant",
         fontsize=9,
@@ -687,10 +702,14 @@ def _plot_raw_vs_clean(path: Path, rows: list[dict], stamp: dict) -> None:
     figure.legend(
         handles=scenario_handles,
         loc="center",
-        bbox_to_anchor=(0.5, 0.095),
+        bbox_to_anchor=(0.5, 0.14),
         ncol=max(1, len(scenario_handles)),
         title="Scenario",
         fontsize=9,
+    )
+    figure.text(
+        0.5, 0.08, textwrap.fill(SCIENCE_DENOMINATOR_CAPTION, width=145),
+        ha="center", va="center", fontsize=6,
     )
     _save_figure(figure, path, stamp)
 
@@ -778,8 +797,12 @@ def _plot_cost_of_pass(path: Path, rows: list[dict], stamp: dict) -> None:
             fontsize=9,
         )
     figure.text(
-        0.5, 0.115, COST_OF_PASS_CAPTION,
-        ha="center", va="center", fontsize=7,
+        0.5, 0.12,
+        textwrap.fill(
+            f"{COST_OF_PASS_CAPTION} {SCIENCE_DENOMINATOR_CAPTION}",
+            width=145,
+        ),
+        ha="center", va="center", fontsize=6,
     )
     zero_rate_cells = sum(
         row.get("clean_success_rate") == 0
@@ -787,7 +810,7 @@ def _plot_cost_of_pass(path: Path, rows: list[dict], stamp: dict) -> None:
     )
     if zero_rate_cells:
         figure.text(
-            0.5, 0.075,
+            0.5, 0.08,
             f"{zero_rate_cells} cell(s) with clean success 0 omitted "
             "(cost_of_pass undefined)",
             ha="center", va="center", fontsize=8,
@@ -979,7 +1002,7 @@ def _experiment_selection_rows(
     for (model, scenario, variant), cell_records in sorted(
         _batch_groups(records, ("model", "scenario", "variant")).items()
     ):
-        scored, _, _ = _split_counted_records(cell_records)
+        scored = science_records(cell_records)
         experiments = scenario_data[scenario]["experiments"]
         bought_by_record = [
             _counted_record_experiments(record)
@@ -1185,22 +1208,27 @@ def _plot_experiment_selection(
         fontsize=9,
     )
     selection_caption = textwrap.fill(
-        f"{SELECTION_CAPTION}. {SELECTION_LEGEND_CAPTION}", width=130,
+        (
+            f"{SELECTION_CAPTION}. {SELECTION_LEGEND_CAPTION} "
+            f"{SCIENCE_DENOMINATOR_CAPTION}"
+        ),
+        width=160,
+        break_on_hyphens=False,
     )
     figure.text(
         0.5, 0.12, selection_caption,
-        ha="center", va="center", fontsize=8,
+        ha="center", va="center", fontsize=6,
     )
     figure.text(
-        0.5, 0.075, CONDITIONAL_FOOTNOTE,
-        ha="center", va="center", fontsize=9,
+        0.5, 0.08, CONDITIONAL_FOOTNOTE,
+        ha="center", va="center", fontsize=8,
     )
     _save_figure(figure, path, stamp)
 
 
-def _top3_frontier(grid_rows: list[dict]) -> list[dict]:
+def _top3_frontier(rows: list[dict]) -> list[dict]:
     candidates = [
-        row for row in grid_rows
+        row for row in rows
         if row.get("frontier_regret") is not None
         and row.get("variant") not in SCRIPTED_VARIANTS
     ]
@@ -1215,7 +1243,30 @@ def _top3_frontier(grid_rows: list[dict]) -> list[dict]:
     )[:3]
 
 
-def _frontier_rows(grid_rows: list[dict]) -> list[dict]:
+def _frontier_rows(records: list[dict]) -> list[dict]:
+    rows = []
+    for (scenario, variant), cell_records in sorted(
+        _batch_groups(records, ("scenario", "variant")).items()
+    ):
+        if variant in SCRIPTED_VARIANTS:
+            continue
+        scored = science_records(cell_records)
+        n_scored = len(scored)
+        n_clean_success = sum(
+            (record.get("metrics") or {}).get("clean_success") is True
+            for record in scored
+        )
+        rate = n_clean_success / n_scored if n_scored else None
+        rows.append({
+            "scenario": scenario,
+            "variant": variant,
+            "n_scored": n_scored,
+            "clean_success_rate": rate,
+            "frontier_regret": (
+                (1 if n_clean_success >= 1 else 0) - rate
+                if n_scored else None
+            ),
+        })
     return [
         {
             "scenario": row["scenario"],
@@ -1224,7 +1275,7 @@ def _frontier_rows(grid_rows: list[dict]) -> list[dict]:
             "clean_success_rate": row["clean_success_rate"],
             "best-of-n minus mean": row["frontier_regret"],
         }
-        for row in _top3_frontier(grid_rows)
+        for row in _top3_frontier(rows)
     ]
 
 
@@ -1433,8 +1484,9 @@ def generate_batch_assets(
 
     ci_headers = [
         "model", "scenario", "variant", "n_runs", "n_harness_error",
-        "n_parse_failure", "n_provider_refusal", "n_scored", "n_clean_success",
-        "clean_success_rate", "pass^1", "pass^3", "pass^5", "n_valid_success",
+        "n_parse_failure", "n_provider_refusal", "n_refusal_abort",
+        "n_spend_cap_stop", "n_scored", "n_clean_success", "clean_success_rate",
+        "pass^1", "pass^3", "pass^5", "n_valid_success",
         "clean_success_ci95", "mean_cost", "cost_of_pass",
     ]
     ci_csv = output_dir / "clean_success_ci.csv"
@@ -1447,7 +1499,12 @@ def generate_batch_assets(
         ci_headers,
         clean_rows,
         stamp,
-        extra_sections=[PASS_K_CAPTION, COST_OF_PASS_CAPTION],
+        extra_sections=[
+            SCIENCE_DENOMINATOR_CAPTION,
+            GRID_DENOMINATOR_NOTE,
+            PASS_K_CAPTION,
+            COST_OF_PASS_CAPTION,
+        ],
     )
     _plot_clean_success(ci_png, clean_rows, stamp)
 
@@ -1500,6 +1557,7 @@ def generate_batch_assets(
         selection_rows,
         stamp,
         extra_sections=[
+            SCIENCE_DENOMINATOR_CAPTION,
             SELECTION_CAPTION,
             f"Required parameter rules: {rule_summary}",
             CONDITIONAL_FOOTNOTE,
@@ -1515,7 +1573,7 @@ def generate_batch_assets(
         ),
     ]))
 
-    frontier_rows = _frontier_rows(grid_rows)
+    frontier_rows = _frontier_rows(records)
     frontier_headers = [
         "scenario", "variant", "n_scored", "clean_success_rate", "best-of-n minus mean",
     ]
@@ -1530,6 +1588,7 @@ def generate_batch_assets(
         frontier_rows,
         stamp,
         footnote=SCRIPTED_FOOTNOTE,
+        extra_sections=[SCIENCE_DENOMINATOR_CAPTION],
     )
     _plot_table(
         frontier_png,
@@ -1537,7 +1596,7 @@ def generate_batch_assets(
         frontier_headers,
         frontier_rows,
         stamp,
-        footnote=SCRIPTED_FOOTNOTE,
+        footnote=f"{SCIENCE_DENOMINATOR_CAPTION} {SCRIPTED_FOOTNOTE}",
     )
     return [
         _asset_entry(path, output_root, stamp, source_files)
@@ -1670,7 +1729,6 @@ def generate_replicate_assets(
         stamp,
         extra_sections=[
             REPLICATE_CAPTION,
-            REPLICATE_DENOMINATOR_NOTE,
             scripted_note,
         ],
     )

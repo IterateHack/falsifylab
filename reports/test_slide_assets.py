@@ -1,6 +1,7 @@
 """Slide-asset pipeline tests with synthetic batch data."""
 import csv
 import json
+from copy import deepcopy
 from pathlib import Path
 import shutil
 import subprocess
@@ -105,12 +106,18 @@ def test_synthetic_cli_creates_all_stamped_assets_and_manifest(tmp_path, capsys)
         headers = next(csv.reader(ci_csv.open(encoding="utf-8")))
         assert {
             "mean_cost", "cost_of_pass", "pass^1", "pass^3", "pass^5",
-            "n_valid_success",
+            "n_valid_success", "n_refusal_abort", "n_spend_cap_stop",
         } <= set(headers)
-    assert (
-        "Because pass^k counts VALID_SUCCESS runs, it can differ from "
-        "clean_success_rate where a run aborted on refusals."
-    ) in slide_assets.PASS_K_CAPTION
+        ci_rows = list(csv.DictReader(ci_csv.open(encoding="utf-8")))
+        for row in ci_rows:
+            n = int(row["n_scored"])
+            if n:
+                assert float(row["pass^1"]) == int(row["n_valid_success"]) / n
+            else:
+                assert row["pass^1"] == ""
+    assert "n = science runs" in slide_assets.PASS_K_CAPTION
+    assert "pass^1 therefore equals clean_success_rate" in slide_assets.PASS_K_CAPTION
+    assert "aborted on refusals" not in slide_assets.PASS_K_CAPTION
     for entry in entries:
         asset = output / entry["path"]
         assert asset.is_file()
@@ -140,6 +147,8 @@ def test_synthetic_cli_creates_all_stamped_assets_and_manifest(tmp_path, capsys)
             if entry["path"].endswith("clean_success_ci.md"):
                 assert slide_assets.PASS_K_CAPTION in content
                 assert slide_assets.COST_OF_PASS_CAPTION in content
+                assert slide_assets.SCIENCE_DENOMINATOR_CAPTION in content
+                assert slide_assets.GRID_DENOMINATOR_NOTE in content
         elif asset.suffix == ".csv":
             rows = list(csv.DictReader(asset.open(encoding="utf-8")))
             assert rows
@@ -242,14 +251,19 @@ def test_clean_success_rows_match_grid_and_reject_tampering(tmp_path):
         if record["job"]["scenario"] == "a"
         and record["job"]["variant"] == "baseline"
         and record["job"]["model"] == "model-x"
+        and slide_assets.classify(record) == "science"
     ]
     single_model_grid = batch.grid_summary(one_model)
+    slide_assets._check_grid_consistency(one_model, single_model_grid)
     row = slide_assets._clean_success_rows(one_model, single_model_grid)[0]
     grid_row = single_model_grid[0]
-    for key in (
-        "n_clean_success", "n_scored", "clean_success_rate", "clean_success_ci95",
-    ):
-        assert row[key] == grid_row[key]
+    assert grid_row["n_scored"] >= row["n_scored"]
+    science = slide_assets.science_records(one_model)
+    assert row["n_scored"] == len(science)
+    assert row["n_clean_success"] == sum(
+        (record.get("metrics") or {}).get("clean_success") is True
+        for record in science
+    )
 
     full_grid = json.loads((batch_dir / "grid_summary.json").read_text(encoding="utf-8"))
     changed = [dict(row) for row in full_grid]
@@ -280,6 +294,116 @@ def test_pass_k_combinatorics_follow_counted_run_trials():
     assert [slide_assets._pass_k(5, 0, k) for k in (1, 3, 5)] == [0.0] * 3
 
 
+def test_science_metrics_are_invariant_to_refusal_abort_and_spend_cap_stop(tmp_path):
+    batch_dir, _ = create_synthetic_inputs(tmp_path / "inputs")
+    records = _load_records(batch_dir)
+    template = next(
+        record for record in records
+        if record["job"]["scenario"] == "a"
+        and record["job"]["variant"] == "baseline"
+        and record["job"]["model"] == "model-x"
+    )
+
+    refusal_abort = deepcopy(template)
+    refusal_abort["job"]["seed"] = 900001
+    refusal_abort["job"]["repeat"] = 900001
+    refusal_abort["job"]["episode_id"] = "90000001"
+    refusal_abort["aborted_on_refusals"] = True
+    refusal_abort["outcome"] = "aborted_on_refusals"
+    refusal_abort["verdict"] = {"verdict": "VALID_SUCCESS"}
+    refusal_abort["metrics"]["clean_success"] = True
+
+    spend_cap_stop = deepcopy(template)
+    spend_cap_stop["job"]["seed"] = 900002
+    spend_cap_stop["job"]["repeat"] = 900002
+    spend_cap_stop["job"]["episode_id"] = "90000002"
+    spend_cap_stop["spend_cap_stop"] = True
+    spend_cap_stop["outcome"] = "spend_cap_stop"
+    spend_cap_stop["verdict"] = {"verdict": batch.HARNESS_ERROR_VERDICT}
+    spend_cap_stop["metrics"] = None
+
+    combined = [*records, refusal_abort, spend_cap_stop]
+    base_ci = slide_assets._clean_success_rows(records, batch.grid_summary(records))
+    combined_grid = batch.grid_summary(combined)
+    combined_ci = slide_assets._clean_success_rows(combined, combined_grid)
+    ci_fields = (
+        "n_scored", "n_clean_success", "clean_success_rate", "pass^1",
+        "pass^3", "pass^5", "n_valid_success", "clean_success_ci95",
+        "mean_cost", "cost_of_pass",
+    )
+    ci_key = lambda row: (row["model"], row["scenario"], row["variant"])
+    base_ci_by_key = {ci_key(row): row for row in base_ci}
+    combined_ci_by_key = {ci_key(row): row for row in combined_ci}
+    assert set(base_ci_by_key) == set(combined_ci_by_key)
+    for key, row in base_ci_by_key.items():
+        for field in ci_fields:
+            assert combined_ci_by_key[key][field] == row[field]
+    target_ci = combined_ci_by_key[("model-x", "a", "baseline")]
+    assert target_ci["n_refusal_abort"] == 1
+    assert target_ci["n_spend_cap_stop"] == 1
+
+    base_scores = slide_assets._cell_score_rows(records, base_ci)
+    combined_scores = slide_assets._cell_score_rows(combined, combined_ci)
+    score_key = lambda row: (row["model"], row["scenario"], row["variant"])
+    base_scores_by_key = {score_key(row): row for row in base_scores}
+    combined_scores_by_key = {score_key(row): row for row in combined_scores}
+    assert set(base_scores_by_key) == set(combined_scores_by_key)
+    assert {
+        key: row["raw_score_mean"] for key, row in base_scores_by_key.items()
+    } == {
+        key: row["raw_score_mean"] for key, row in combined_scores_by_key.items()
+    }
+
+    scenario_data = {
+        scenario: slide_assets._scenario_selection_data(scenario)
+        for scenario in ("a", "b")
+    }
+    base_selection = slide_assets._experiment_selection_rows(records, scenario_data)
+    combined_selection = slide_assets._experiment_selection_rows(combined, scenario_data)
+    selection_key = lambda row: (row["model"], row["scenario"], row["variant"])
+    base_selection_by_key = {
+        selection_key(row): row for row in base_selection
+    }
+    combined_selection_by_key = {
+        selection_key(row): row for row in combined_selection
+    }
+    for key, row in base_selection_by_key.items():
+        selection_fields = [
+            field for field in row
+            if field == "n_counted" or field == "mean_cost" or field.startswith("bought ")
+        ]
+        for field in selection_fields:
+            assert combined_selection_by_key[key][field] == row[field]
+
+    assert slide_assets._frontier_rows(records) == slide_assets._frontier_rows(combined)
+    base_replicates, _ = slide_assets.replicate_rows(records)
+    combined_replicates, _ = slide_assets.replicate_rows(combined)
+    replicate_fields = (
+        "n", "clean_success_mean", "clean_success_ci95", "mean_cost",
+        "cost_of_pass", "cost_of_pass_ci95", "cost_of_pass_unbounded_share",
+    )
+    base_replicates_by_key = {
+        (row["model"], row["scenario"], row["variant"]): row
+        for row in base_replicates
+    }
+    combined_replicates_by_key = {
+        (row["model"], row["scenario"], row["variant"]): row
+        for row in combined_replicates
+    }
+    for key, row in base_replicates_by_key.items():
+        for field in replicate_fields:
+            assert combined_replicates_by_key[key][field] == row[field]
+
+    changed_grid = [dict(row) for row in combined_grid]
+    target_grid = next(
+        row for row in changed_grid
+        if row["scenario"] == "a" and row["variant"] == "baseline"
+    )
+    target_grid["n_clean_success"] += 1
+    with pytest.raises(ValueError, match="scenario=a, variant=baseline"):
+        slide_assets._clean_success_rows(combined, changed_grid)
+
+
 def test_pass_k_uses_valid_verdicts_and_cost_of_pass_uses_clean_success(
     tmp_path, monkeypatch,
 ):
@@ -302,31 +426,32 @@ def test_pass_k_uses_valid_verdicts_and_cost_of_pass_uses_clean_success(
 
     records = [
         record(0, "a", "VALID_SUCCESS", True, 2),
-        record(1, "a", "VALID_SUCCESS", True, 4),
+        record(1, "a", "WRONG_CONCLUSION", False, 4),
         record(2, "a", "VALID_SUCCESS", False, 6, aborted=True),
         record(3, "b", "WRONG_CONCLUSION", False, 2),
         record(4, "b", "WRONG_CONCLUSION", False, 4),
         record(5, "b", "WRONG_CONCLUSION", False, 6),
-        record(6, "a", "PARSE_FAILURE", False, 100),
-        record(7, "a", "HARNESS_ERROR", False, 100),
         {
-            **record(8, "a", "WRONG_CONCLUSION", False, 100),
+            **record(9, "a", "HARNESS_ERROR", False, 0),
             "metrics": None,
-            "provider_refusal": True,
+            "spend_cap_stop": True,
+            "outcome": "spend_cap_stop",
         },
     ]
     rows = slide_assets._clean_success_rows(records, batch.grid_summary(records))
     by_scenario = {row["scenario"]: row for row in rows}
     successful = by_scenario["a"]
-    assert successful["n_runs"] == 6
-    assert successful["n_scored"] == 3
-    assert successful["n_clean_success"] == 2
-    assert successful["n_valid_success"] == 3
-    assert successful["pass^1"] == 1.0
-    assert successful["pass^3"] == 1.0
+    assert successful["n_runs"] == 4
+    assert successful["n_scored"] == 2
+    assert successful["n_clean_success"] == 1
+    assert successful["n_valid_success"] == 1
+    assert successful["n_refusal_abort"] == 1
+    assert successful["n_spend_cap_stop"] == 1
+    assert successful["pass^1"] == 0.5
+    assert successful["pass^3"] is None
     assert successful["pass^5"] is None
-    assert successful["mean_cost"] == 4.0
-    assert successful["clean_success_rate"] == 2 / 3
+    assert successful["mean_cost"] == 3.0
+    assert successful["clean_success_rate"] == 0.5
     assert successful["cost_of_pass"] == 6.0
 
     zero_rate = by_scenario["b"]
@@ -377,8 +502,10 @@ def test_pass_k_uses_valid_verdicts_and_cost_of_pass_uses_clean_success(
         _stamp(),
     )
 
-    assert plotted == [(2 / 3, 6.0, "o")]
-    assert slide_assets.COST_OF_PASS_CAPTION in texts
+    assert plotted == [(0.5, 6.0, "o")]
+    figure_copy = " ".join(text.replace("\n", " ") for text in texts)
+    assert slide_assets.COST_OF_PASS_CAPTION in figure_copy
+    assert slide_assets.SCIENCE_DENOMINATOR_CAPTION in figure_copy
     assert "1 cell(s) with clean success 0 omitted (cost_of_pass undefined)" in texts
     assert legend_titles == ["Variant", "Scenario"]
     assert 0 in axis_limits
@@ -440,15 +567,15 @@ def test_selection_rows_count_scored_cost_and_charged_purchases():
 
     row = slide_assets._experiment_selection_rows(records, scenario_data)[0]
     assert row["n_runs"] == 6
-    assert row["n_counted"] == 3
-    assert row["mean_cost"] == 4
+    assert row["n_counted"] == 2
+    assert row["mean_cost"] == 3
     assert row["budget"] == 8
-    assert row["bought E6"] == 2 / 3
-    assert row["bought E6 w/ params"] == 2 / 3
-    assert row["bought E3*"] == 2 / 3
-    assert row["bought E3* w/ params"] == 2 / 3
-    assert row["bought all decisive"] == 1 / 3
-    assert row["bought all decisive w/ params"] == 1 / 3
+    assert row["bought E6"] == 0.5
+    assert row["bought E6 w/ params"] == 0.5
+    assert row["bought E3*"] == 1.0
+    assert row["bought E3* w/ params"] == 1.0
+    assert row["bought all decisive"] == 0.5
+    assert row["bought all decisive w/ params"] == 0.5
 
 
 def test_selection_cost_plot_uses_horizontal_bars_and_integer_budget(tmp_path, monkeypatch):
@@ -504,12 +631,13 @@ def test_selection_cost_plot_uses_horizontal_bars_and_integer_budget(tmp_path, m
 
     assert len(horizontal_bars) == 1
     assert any("mean cost (budget 8)" in title for title in plot_titles)
-    assert any(
-        " ".join(text.splitlines()) == (
-            f"{slide_assets.SELECTION_CAPTION}. {slide_assets.SELECTION_LEGEND_CAPTION}"
-        )
-        for text in figure_texts
+    figure_caption = " ".join(
+        " ".join(str(text).splitlines()) for text in figure_texts
     )
+    normalized_caption = " ".join(figure_caption.split())
+    assert " ".join(slide_assets.SELECTION_CAPTION.split()) in normalized_caption
+    assert " ".join(slide_assets.SELECTION_LEGEND_CAPTION.split()) in normalized_caption
+    assert " ".join(slide_assets.SCIENCE_DENOMINATOR_CAPTION.split()) in normalized_caption
     assert {"bought (pale)", "w/ params (solid)"} <= set(figure_legend_labels)
 
 
@@ -857,11 +985,10 @@ def test_batch_stamp_reads_results_code_sha_from_records(tmp_path):
     assert "results SHA: source-commit-sha" in stamp["source"]
 
 
-def test_readme_documents_selection_evaluator_and_pass_k_caption():
+def test_readme_documents_selection_evaluator():
     readme = Path(slide_assets.__file__).with_name("README.md").read_text(
         encoding="utf-8",
     )
-    assert slide_assets.PASS_K_CAPTION in readme
     assert slide_assets.SELECTION_CAPTION in readme
     assert "private `_Ctx` and `eval_pred`" in readme
 
@@ -1031,12 +1158,14 @@ def test_raw_vs_clean_offsets_coincident_points_and_uses_two_legends(tmp_path, m
     annotations = []
     legend_titles = []
     limits = []
+    figure_texts = []
     original_errorbar = Axes.errorbar
     original_annotate = Axes.annotate
     original_set_ylim = Axes.set_ylim
     from matplotlib.figure import Figure
 
     original_legend = Figure.legend
+    original_text = Figure.text
 
     def capture_errorbar(self, *args, **kwargs):
         positions.append(float(args[0]))
@@ -1055,10 +1184,15 @@ def test_raw_vs_clean_offsets_coincident_points_and_uses_two_legends(tmp_path, m
         legend_titles.append(kwargs.get("title"))
         return original_legend(self, *args, **kwargs)
 
+    def capture_text(self, x, y, text, *args, **kwargs):
+        figure_texts.append(text)
+        return original_text(self, x, y, text, *args, **kwargs)
+
     monkeypatch.setattr(Axes, "errorbar", capture_errorbar)
     monkeypatch.setattr(Axes, "annotate", capture_annotate)
     monkeypatch.setattr(Axes, "set_ylim", capture_set_ylim)
     monkeypatch.setattr(Figure, "legend", capture_legend)
+    monkeypatch.setattr(Figure, "text", capture_text)
     slide_assets._plot_raw_vs_clean(tmp_path / "raw.png", rows, _stamp())
 
     assert positions[0] != positions[1]
@@ -1068,6 +1202,9 @@ def test_raw_vs_clean_offsets_coincident_points_and_uses_two_legends(tmp_path, m
     assert annotations == []
     assert legend_titles == ["Variant", "Scenario"]
     assert (0, 100) in limits
+    assert slide_assets.SCIENCE_DENOMINATOR_CAPTION in " ".join(
+        str(text).replace("\n", " ") for text in figure_texts
+    )
     boundary_rows = [
         {
             **rows[0],
@@ -1153,6 +1290,7 @@ def test_scripted_rows_are_filtered_from_success_assets_and_in_selection(tmp_pat
     ).read_text(encoding="utf-8")
     assert slide_assets.SELECTION_CAPTION in selection_markdown
     assert slide_assets.CONDITIONAL_FOOTNOTE in selection_markdown
+    assert slide_assets.SCIENCE_DENOMINATOR_CAPTION in selection_markdown
     assert "bought E3*" in selection_markdown
     assert "E6 w/ params = EV1 + EV2" in selection_markdown
     assert "random (scripted)" in figure_legend_labels
@@ -1161,13 +1299,15 @@ def test_scripted_rows_are_filtered_from_success_assets_and_in_selection(tmp_pat
     assert all("not meaningful" not in str(label) for label in figure_legend_labels)
 
 
-def _grid_record(scenario: str, variant: str, index: int, success: bool) -> dict:
+def _grid_record(
+    scenario: str, variant: str, index: int, success: bool, *, model="model-x",
+) -> dict:
     return {
         "job": {
             "episode_id": f"{index:08d}",
             "scenario": scenario,
             "variant": variant,
-            "model": "model-x",
+            "model": model,
         },
         "verdict": {"verdict": "VALID_SUCCESS" if success else "WRONG_CONCLUSION"},
         "metrics": {"clean_success": success, "final_score": 90 if success else 40},
@@ -1175,7 +1315,7 @@ def _grid_record(scenario: str, variant: str, index: int, success: bool) -> dict
     }
 
 
-def test_frontier_top3_excludes_scripted_and_preserves_grid_tie_order(tmp_path):
+def test_frontier_top3_excludes_scripted_and_preserves_tie_order(tmp_path):
     records = []
     cells = [
         ("a", "random", 100, 1),
@@ -1189,12 +1329,20 @@ def test_frontier_top3_excludes_scripted_and_preserves_grid_tie_order(tmp_path):
         for run in range(n):
             records.append(_grid_record(scenario, variant, index, run < successes))
             index += 1
-    grid_rows = batch.grid_summary(records)
-    top = slide_assets._top3_frontier(grid_rows)
+    for run in range(2):
+        records.append(_grid_record(
+            "a", "alpha", index, run == 0, model="model-y",
+        ))
+        index += 1
+    top = slide_assets._frontier_rows(records)
     assert all(row["variant"] != "random" for row in top)
     assert [(row["scenario"], row["variant"]) for row in top] == [
         ("a", "alpha"), ("a", "beta"), ("b", "gamma"),
     ]
+    alpha = next(row for row in top if row["variant"] == "alpha")
+    assert alpha["n_scored"] == 4
+    assert alpha["clean_success_rate"] == 0.5
+    assert alpha["best-of-n minus mean"] == 0.5
 
     markdown_path = tmp_path / "frontier.md"
     headers = [
@@ -1204,13 +1352,15 @@ def test_frontier_top3_excludes_scripted_and_preserves_grid_tie_order(tmp_path):
         markdown_path,
         "best-of-n minus mean",
         headers,
-        slide_assets._frontier_rows(grid_rows),
+        slide_assets._frontier_rows(records),
         _stamp(),
         footnote=slide_assets.SCRIPTED_FOOTNOTE,
+        extra_sections=[slide_assets.SCIENCE_DENOMINATOR_CAPTION],
     )
     text = markdown_path.read_text(encoding="utf-8")
     assert "best-of-n minus mean" in text
     assert slide_assets.SCRIPTED_FOOTNOTE in text
+    assert slide_assets.SCIENCE_DENOMINATOR_CAPTION in text
     table = text.split("\n\n", 1)[1].split("\n\n", 1)[0]
     assert "| random |" not in table
 

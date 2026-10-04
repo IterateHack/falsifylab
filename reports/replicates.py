@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import math
-import re
 import zlib
 from collections import defaultdict
 from statistics import fmean
@@ -14,14 +13,21 @@ from metrics import is_parse_failure_verdict
 from runner.modal_batch import HARNESS_ERROR_VERDICT, SCRIPTED_VARIANTS
 
 
-CAP_STOP_PATTERN = re.compile(r"did not conclude within \d+ turns")
+OUTCOME_CATEGORIES = (
+    "provider_refusal",
+    "spend_cap_stop",
+    "refusal_abort",
+    "harness_error",
+    "parse_failure",
+    "science",
+)
 BOOTSTRAP_RESAMPLES = 10000
 BOOTSTRAP_SEED = 0
 REPLICATE_HEADERS = (
     "model", "scenario", "variant", "n_runs", "n",
-    "n_provider_refusal", "n_refusal_abort", "n_cap_stop",
+    "n_provider_refusal", "n_refusal_abort", "n_spend_cap_stop",
     "n_harness_error", "n_parse_failure", "provider_refusal_rate",
-    "refusal_abort_rate", "refusal_rate", "cap_stop_rate",
+    "refusal_abort_rate", "refusal_rate", "spend_cap_stop_rate",
     "clean_success_mean", "clean_success_ci95", "mean_cost", "cost_of_pass",
     "cost_of_pass_ci95", "cost_of_pass_unbounded_share",
     "bootstrap_resamples", "bootstrap_seed",
@@ -30,20 +36,27 @@ REPLICATE_HEADERS = (
 
 def classify(record: dict) -> str:
     """Classify a batch record in the required exclusion-priority order."""
-    if record.get("provider_refusal"):
+    if record.get("provider_refusal", False):
         return "provider_refusal"
-    if record.get("aborted_on_refusals"):
+    if (
+        record.get("spend_cap_stop", False)
+        or record.get("outcome") == "spend_cap_stop"
+    ):
+        return "spend_cap_stop"
+    if record.get("aborted_on_refusals", False):
         return "refusal_abort"
 
-    verdict = record["verdict"]["verdict"]
+    verdict = (record.get("verdict") or {}).get("verdict")
     if verdict == HARNESS_ERROR_VERDICT:
-        message = (record.get("harness_error") or {}).get("message", "")
-        if CAP_STOP_PATTERN.search(message):
-            return "cap_stop"
         return "harness_error"
     if is_parse_failure_verdict(verdict):
         return "parse_failure"
     return "science"
+
+
+def science_records(records: list[dict]) -> list[dict]:
+    """Return science records in their original order."""
+    return [record for record in records if classify(record) == "science"]
 
 
 def _replicate_key(record: dict) -> tuple:
@@ -73,15 +86,13 @@ def _science_summary(
     cell_key: tuple[str, str, str], records: list[dict],
 ) -> dict:
     classified = [(record, classify(record)) for record in records]
-    science_records = [record for record, kind in classified if kind == "science"]
+    science = science_records(records)
     n_runs = len(records)
-    n = len(science_records)
+    n = len(science)
     counts = {
         kind: sum(classification == kind for _, classification in classified)
-        for kind in (
-            "provider_refusal", "refusal_abort", "cap_stop", "harness_error",
-            "parse_failure",
-        )
+        for kind in OUTCOME_CATEGORIES
+        if kind != "science"
     }
     rates = {
         kind: count / n_runs if n_runs else None
@@ -90,11 +101,11 @@ def _science_summary(
     if n:
         clean_values = np.asarray([
             record["metrics"]["clean_success"] is True
-            for record in science_records
+            for record in science
         ], dtype=float)
         costs = np.asarray([
             float(record["metrics"]["cost"])
-            for record in science_records
+            for record in science
         ], dtype=float)
         clean_success_mean = float(clean_values.mean())
         mean_cost = fmean(costs.tolist())
@@ -144,7 +155,7 @@ def _science_summary(
         "n": n,
         "n_provider_refusal": counts["provider_refusal"],
         "n_refusal_abort": counts["refusal_abort"],
-        "n_cap_stop": counts["cap_stop"],
+        "n_spend_cap_stop": counts["spend_cap_stop"],
         "n_harness_error": counts["harness_error"],
         "n_parse_failure": counts["parse_failure"],
         "provider_refusal_rate": provider_refusal_rate,
@@ -153,7 +164,7 @@ def _science_summary(
             provider_refusal_rate + refusal_abort_rate
             if n_runs else None
         ),
-        "cap_stop_rate": rates["cap_stop"],
+        "spend_cap_stop_rate": rates["spend_cap_stop"],
         "clean_success_mean": clean_success_mean,
         "clean_success_ci95": clean_success_ci95,
         "mean_cost": mean_cost,

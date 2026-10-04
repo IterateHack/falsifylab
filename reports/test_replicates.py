@@ -7,8 +7,10 @@ from reports import slide_assets
 from reports.replicates import (
     BOOTSTRAP_RESAMPLES,
     BOOTSTRAP_SEED,
+    OUTCOME_CATEGORIES,
     classify,
     replicate_rows,
+    science_records,
 )
 from runner import modal_batch
 
@@ -25,6 +27,8 @@ def _record(
     cost=2.0,
     provider_refusal=False,
     aborted_on_refusals=False,
+    spend_cap_stop=False,
+    outcome=None,
     harness_error=None,
 ):
     return {
@@ -38,6 +42,8 @@ def _record(
         "verdict": {"verdict": verdict},
         "provider_refusal": provider_refusal,
         "aborted_on_refusals": aborted_on_refusals,
+        "spend_cap_stop": spend_cap_stop,
+        "outcome": outcome,
         "harness_error": harness_error,
         "metrics": {"clean_success": clean, "cost": cost},
     }
@@ -51,28 +57,46 @@ def _row(records):
 
 
 def test_classify_all_categories_and_priority():
+    assert OUTCOME_CATEGORIES == (
+        "provider_refusal", "spend_cap_stop", "refusal_abort", "harness_error",
+        "parse_failure", "science",
+    )
     assert classify(_record()) == "science"
+    assert classify({"verdict": {"verdict": "VALID_SUCCESS"}}) == "science"
     assert classify(_record(provider_refusal=True)) == "provider_refusal"
+    assert classify(_record(spend_cap_stop=True)) == "spend_cap_stop"
+    assert classify(_record(outcome="spend_cap_stop")) == "spend_cap_stop"
     assert classify(_record(aborted_on_refusals=True)) == "refusal_abort"
     assert classify(_record(
         verdict=modal_batch.HARNESS_ERROR_VERDICT,
-        harness_error={"message": "Episode 4 did not conclude within 1 turns"},
-    )) == "cap_stop"
+        harness_error={"message": "Episode 4 did not conclude within 40 turns"},
+    )) == "harness_error"
     assert classify(_record(
         verdict=modal_batch.HARNESS_ERROR_VERDICT,
         harness_error={"message": "unexpected failure"},
     )) == "harness_error"
     assert classify(_record(verdict=PARSE_FAILURE_VERDICT)) == "parse_failure"
     assert classify(_record(
-        verdict=modal_batch.HARNESS_ERROR_VERDICT,
         provider_refusal=True,
-        aborted_on_refusals=True,
-        harness_error={"message": "did not conclude within 1 turns"},
+        spend_cap_stop=True,
     )) == "provider_refusal"
     assert classify(_record(
-        verdict=modal_batch.HARNESS_ERROR_VERDICT,
+        spend_cap_stop=True,
         aborted_on_refusals=True,
-    )) == "refusal_abort"
+    )) == "spend_cap_stop"
+
+
+def test_science_records_preserve_order_and_exclude_each_non_science_category():
+    records = [
+        _record(seed=0),
+        _record(seed=1, provider_refusal=True),
+        _record(seed=2, spend_cap_stop=True),
+        _record(seed=3, aborted_on_refusals=True),
+        _record(seed=4, verdict=modal_batch.HARNESS_ERROR_VERDICT),
+        _record(seed=5, verdict=PARSE_FAILURE_VERDICT),
+        _record(seed=6),
+    ]
+    assert science_records(records) == [records[0], records[-1]]
 
 
 def test_excluded_outcomes_change_rates_not_science_metrics():
@@ -94,22 +118,48 @@ def test_excluded_outcomes_change_rates_not_science_metrics():
             harness_error={"message": "other harness failure"},
         ),
         _record(seed=6, verdict=PARSE_FAILURE_VERDICT),
+        _record(seed=7, spend_cap_stop=True),
     ]
     science_row = _row(science)
     pooled_row = _row(science + excluded)
-    assert pooled_row["n_runs"] == 7
+    assert pooled_row["n_runs"] == 8
     assert pooled_row["n"] == science_row["n"] == 2
     assert pooled_row["n_provider_refusal"] == 1
     assert pooled_row["n_refusal_abort"] == 1
-    assert pooled_row["n_cap_stop"] == 1
-    assert pooled_row["n_harness_error"] == 1
+    assert pooled_row["n_spend_cap_stop"] == 1
+    assert pooled_row["n_harness_error"] == 2
     assert pooled_row["n_parse_failure"] == 1
-    assert pooled_row["provider_refusal_rate"] == pytest.approx(1 / 7)
-    assert pooled_row["refusal_abort_rate"] == pytest.approx(1 / 7)
-    assert pooled_row["refusal_rate"] == pytest.approx(2 / 7)
-    assert pooled_row["cap_stop_rate"] == pytest.approx(1 / 7)
+    assert pooled_row["provider_refusal_rate"] == pytest.approx(1 / 8)
+    assert pooled_row["refusal_abort_rate"] == pytest.approx(1 / 8)
+    assert pooled_row["refusal_rate"] == pytest.approx(2 / 8)
+    assert pooled_row["spend_cap_stop_rate"] == pytest.approx(1 / 8)
     for field in ("clean_success_mean", "mean_cost", "cost_of_pass"):
         assert pooled_row[field] == science_row[field]
+
+
+def test_replicate_science_metrics_exclude_aborts_and_spend_cap_stops():
+    records = [
+        _record(seed=0, verdict="VALID_SUCCESS", clean=True, cost=2.0),
+        _record(seed=1, verdict="WRONG_CONCLUSION", clean=False, cost=4.0),
+        _record(
+            seed=2,
+            verdict="VALID_SUCCESS",
+            clean=True,
+            cost=100.0,
+            aborted_on_refusals=True,
+        ),
+        {
+            **_record(seed=3, spend_cap_stop=True),
+            "metrics": None,
+        },
+    ]
+    row = _row(records)
+    assert row["n_runs"] == 4
+    assert row["n"] == 2
+    assert row["clean_success_mean"] == 0.5
+    assert row["mean_cost"] == 3.0
+    assert row["n_refusal_abort"] == 1
+    assert row["n_spend_cap_stop"] == 1
 
 
 def test_bootstrap_is_deterministic_order_independent_and_contains_point():
@@ -255,4 +305,5 @@ def test_replicate_assets_need_only_results_jsonl_and_pool_sources(tmp_path):
         encoding="utf-8",
     )
     assert slide_assets.REPLICATE_CAPTION in markdown
-    assert slide_assets.REPLICATE_DENOMINATOR_NOTE in markdown
+    assert "spend-cap-stop" in slide_assets.REPLICATE_CAPTION
+    assert "max_turns" not in slide_assets.REPLICATE_CAPTION
