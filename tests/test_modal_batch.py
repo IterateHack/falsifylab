@@ -825,6 +825,7 @@ def test_episode_and_batch_spend_caps_trip_independently(monkeypatch, tmp_path):
         return AnthropicClient(
             kwargs["model"],
             TokenLedger(2, 10, limit_usd=kwargs["spend_limit_usd"], log=None),
+            max_tokens=1,  # the pre-call reservation passes; the reported usage then trips the cap
             client=sdk,
         )
 
