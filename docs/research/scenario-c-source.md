@@ -496,9 +496,12 @@ not exist in it:
     which Table 1 marks "ND" for some compounds — i.e. not determined at all for those.
 11. **Replicate-level or statistical claims for the screens.** No n is stated for the primary
     HTS, the counter-screen, the Table 1 IC50s, the pharmacological profiling, Figure S1,
-    Figure S2 or Figure S8; no p-values, confidence intervals or error bars are reported
-    anywhere in the paper, and the triplicate data that are declared are labelled
-    "representative". Nothing supports a question about statistical significance of any
+    Figure S2 or Figure S8, and no measure of dispersion is given for any of them; no p-value
+    and no confidence interval appears anywhere in the paper. Where dispersion is reported it is
+    SD on declared triplicates — the Figure 2, 3 and 4 captions, the kinetic and Km constants in
+    §2.5, and Table 2's ΔTm values, whose footnote reads "Data are representative of three
+    independent triplicates. Where SD is not indicated, SD = 0" — and that triplicate data is
+    labelled "representative". Nothing supports a question about statistical significance of any
     difference, including the 1f-vs-2b accumulation difference.
 12. **Dose-, time- or kill-kinetics questions.** Accumulation and metabolomics were measured at
     a single 24 h time point at 5 µM and 50 µM; no time course, no MBC, no CFU kill curve, no
