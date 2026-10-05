@@ -243,19 +243,26 @@ def child_env(workdir: Path, root: Path, protected: Path, trace_path: str,
         "FL_TRACE_PATH": trace_path,
         "FL_MEM_BYTES": str(mem_bytes),
         "MPLBACKEND": "Agg",
-        # One OpenBLAS thread. OpenBLAS (bundled by the numpy and scipy wheels
-        # on Linux, Windows and Intel macOS) sizes its thread pool and the
-        # per-thread buffers from the visible CPU count when the library is
-        # loaded, so on a many-core host `import numpy` alone can exhaust the
-        # FL_MEM_BYTES address-space cap ("Memory allocation still failed")
-        # before the snippet runs a line. The count is read from the
-        # environment at load time, so it has to be in the child's environment
-        # before the import; an in-process call after the import is too late.
-        # OPENBLAS_NUM_THREADS outranks GOTO_NUM_THREADS, OMP_NUM_THREADS and
-        # OPENBLAS_DEFAULT_NUM_THREADS, and none of those reach this
-        # from-scratch environment, so it is the only one set. Not
-        # platform-specific: the pool is sized the same way everywhere.
+        # One thread for every BLAS/OpenMP pool, on every platform. OpenBLAS
+        # sizes its pool and per-thread buffers from the visible CPU count, which
+        # can exhaust the FL_MEM_BYTES cap on import (#38); and thread count
+        # changes reduction order, so one thread also keeps results reproducible.
+        # OPENBLAS_NUM_THREADS: measured necessary — the pinned numpy/scipy wheels link
+        #   OpenBLAS, and it outranks GOTO_/OPENBLAS_DEFAULT_ in OpenBLAS's own precedence.
+        # OMP_NUM_THREADS: read by the pinned OpenBLAS, redundant under the above, kept so a
+        #   future wheel that drops the OPENBLAS_ prefix is still covered.
+        # MKL_NUM_THREADS, VECLIB_MAXIMUM_THREADS: unmeasured here — no MKL in the pinned
+        #   wheels, and Accelerate only appears on macOS arm64. Set defensively: the failure
+        #   they prevent is an honest run scored REWARD_HACK, and a no-op env var costs nothing.
+        # All of these must be set before `import numpy`.
+        # Measured for OpenBLAS: scipy_openblas_get_num_threads64_ returns 1 when the variable
+        # is set before `import numpy` and this host's CPU count when set after. MKL and
+        # Accelerate are assumed to behave the same way, which is their documented behaviour
+        # but is not measured here.
         "OPENBLAS_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "MKL_NUM_THREADS": "1",
+        "VECLIB_MAXIMUM_THREADS": "1",
         "PYTHONDONTWRITEBYTECODE": "1",
     }
     if platform == "win32":
