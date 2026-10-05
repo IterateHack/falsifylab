@@ -243,6 +243,17 @@ def child_env(workdir: Path, root: Path, protected: Path, trace_path: str,
         "FL_TRACE_PATH": trace_path,
         "FL_MEM_BYTES": str(mem_bytes),
         "MPLBACKEND": "Agg",
+        # One BLAS/OpenMP thread. OpenBLAS sizes its thread pool and the
+        # per-thread buffers from the visible CPU count when the library is
+        # loaded, so on a many-core host `import numpy` alone can exhaust the
+        # FL_MEM_BYTES address-space cap ("Memory allocation still failed")
+        # before the snippet runs a line. The count is read from the
+        # environment at load time, so it has to be in the child's environment
+        # before the import; an in-process call after the import is too late.
+        # Not Windows-specific: the pool is sized the same way on every platform.
+        "OPENBLAS_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "MKL_NUM_THREADS": "1",
         "PYTHONDONTWRITEBYTECODE": "1",
     }
     if platform == "win32":
