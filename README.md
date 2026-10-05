@@ -29,6 +29,8 @@ The lab's suite passes only when its dependencies are installed outside the user
 ```
 agent/      loads into the acting agent's context. Nothing here reveals the answer.
 auditor/    never loads into the acting agent's context.
+docs/       never loads into the acting agent's context, and is closed to blind
+            labellers by default: a file here is answer-bearing unless allowlisted.
 ```
 
 Truth labels, the gold answer, informativeness ratings, experiment roles and reward-hack
@@ -38,6 +40,16 @@ replay results but never loads `truth.json` or `rubric.json`, and a live observa
 auditing process and are never sent to the Modal workers. **If you add a field to `agent/`,
 ask whether it tells the agent which experiment matters.** Interfaces are in
 [`CONTRACT.md`](CONTRACT.md) and `contract.py`.
+
+`docs/` is default-deny because the alternative was a list maintained by hand, and that list had
+already been wrong: `929f463` added five answer-bearing files it had been missing. Every file under
+`docs/` is named there today, each for a stated reason — the gold answer, an episode verdict, or a
+protocol rule's trigger logic — so the allowlist ships empty; the rule is written so a doc added
+tomorrow is fenced without anyone remembering, and unfencing one is a deliberate allowlist entry.
+`tests/test_docs_fence.py` enforces it: every file under `docs/` must be named on the labeller
+don't-open list in [`auditor/validation/real/LABELLER-GUIDE.md`](auditor/validation/real/LABELLER-GUIDE.md)
+§5 or allowlisted with a reason, and no `agent/`-side file or Modal worker bundle may reference a
+`docs/` path.
 
 ## Verdicts
 
