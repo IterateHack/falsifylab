@@ -224,7 +224,7 @@ class Notebook:
 
     def to_markdown(self) -> str:
         parts = [f"# Lab notebook - run `{self.run_id}`", "",
-                 "## Hypothesis", "", self.hypothesis.strip(), ""]
+                 "## Curriculum claim", "", self.hypothesis.strip(), ""]
         parts.append(self.calibration_summary_markdown())
         # Locked entries are blank pages in the UI; in the markdown they are just
         # noise, so only experiments that actually ran are rendered.

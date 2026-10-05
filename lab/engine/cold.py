@@ -1,6 +1,6 @@
 """The cold arm: what the model answers with no lab at all.
 
-It sees the hypothesis, the experiment's title and the required answer format.
+It sees the curriculum claim, the experiment's title and the required answer format.
 No task text, no data, no tools, no lessons. The answer is scored by the same
 scorer as every other arm, so a lab arm's score can be read against what prior
 knowledge alone achieves. If the lab without lessons scores below this, the
@@ -27,7 +27,7 @@ the only tool you have.
 """
 
 USER = """\
-Hypothesis under investigation:
+Curriculum claim:
 
 {hypothesis}
 

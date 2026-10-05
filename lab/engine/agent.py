@@ -24,9 +24,9 @@ from .tools import ToolContext, dispatch, tool_schemas
 
 SYSTEM_ATTEMPT = """\
 You are the resident scientist in a virtual laboratory, working through a \
-curriculum of experiments that together test one hypothesis.
+curriculum of experiments built around one claim.
 
-The hypothesis under test:
+The curriculum claim:
 {hypothesis}
 
 How this works, and it matters:

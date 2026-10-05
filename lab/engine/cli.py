@@ -213,7 +213,7 @@ def main() -> int:
     r.add_argument("--arm", choices=["lessons", "baseline", "cold", "placebo", "null"], default="lessons",
                    help="lessons: the lab with the required cards (default); "
                         "baseline: the lab with no cards; cold: no lab at all, the "
-                        "hypothesis and titles only; placebo / null: the lab with "
+                        "curriculum claim and titles only; placebo / null: the lab with "
                         "same-length cards that are irrelevant prose / meaningless "
                         "symbols")
     r.add_argument("--no-lessons", action="store_true",
