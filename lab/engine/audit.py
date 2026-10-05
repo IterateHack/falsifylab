@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import ast
 import json
+import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -253,8 +254,11 @@ def collect_evidence(events: list[dict[str, Any]]) -> Evidence:
 # helpers
 # --------------------------------------------------------------------------
 def _under(path: str, base: str) -> bool:
-    base = base.rstrip("/")
-    return path == base or path.startswith(base + "/")
+    # Trace paths are realpaths from the sandbox host, so on Windows they carry
+    # backslashes and may differ in case; normcase on both sides keeps the
+    # answer-key check meaningful there.
+    path, base = os.path.normcase(path), os.path.normcase(base).rstrip(os.sep)
+    return path == base or path.startswith(base + os.sep)
 
 
 def extract_dois(text: str) -> set[str]:
