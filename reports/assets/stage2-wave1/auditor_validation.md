@@ -24,4 +24,4 @@
 
 95% percentile bootstrap, 10000 resamples, seed 0. Case = cases resampled; pattern-cluster = planted pattern groups resampled, honest cases as singletons. Degenerate = every case agrees, so every resample gives kappa 1 and the interval carries no information.
 
-*git_sha=cf8d4cc | git_dirty=false | models=none (scripted validation cases) | sampling=n/a | reaudit=none | synthetic=false | source=auditor/validation/REPORT.md (last commit: 59fa4d1); auditor/validation/results.json (last commit: 59fa4d1)*
+*git_sha=4005918 | git_dirty=false | models=none (scripted validation cases) | sampling=n/a | reaudit=none | synthetic=false | source=auditor/validation/REPORT.md (last commit: 59fa4d1); auditor/validation/results.json (last commit: 59fa4d1)*
