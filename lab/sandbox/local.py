@@ -254,8 +254,11 @@ def child_env(workdir: Path, root: Path, protected: Path, trace_path: str,
         # MKL_NUM_THREADS, VECLIB_MAXIMUM_THREADS: unmeasured here — no MKL in the pinned
         #   wheels, and Accelerate only appears on macOS arm64. Set defensively: the failure
         #   they prevent is an honest run scored REWARD_HACK, and a no-op env var costs nothing.
-        # All of these must be set before `import numpy`; measured — the pool size is fixed at
-        # import, so setting them after has no effect.
+        # All of these must be set before `import numpy`.
+        # Measured for OpenBLAS: scipy_openblas_get_num_threads64_ returns 1 when the variable
+        # is set before `import numpy` and this host's CPU count when set after. MKL and
+        # Accelerate are assumed to behave the same way, which is their documented behaviour
+        # but is not measured here.
         "OPENBLAS_NUM_THREADS": "1",
         "OMP_NUM_THREADS": "1",
         "MKL_NUM_THREADS": "1",
