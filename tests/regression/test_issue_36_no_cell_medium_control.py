@@ -11,8 +11,6 @@ import json
 from copy import deepcopy
 from pathlib import Path
 
-import pytest
-
 from auditor.audit import audit
 from auditor.validation.run_validation import _bundle
 from contract import trajectory_from_dict
@@ -21,8 +19,6 @@ from control_matching import matches_control_aliases
 FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "wave1_a_greedy_00000002.json"
 EXPOSING_WORDING = "no-cell medium stability"
 ACCEPTED_WORDING = "cell-free 7H9 medium"
-
-XFAIL_36 = pytest.mark.xfail(strict=True, reason="fixed by #42, not merged")
 
 
 def _load():
@@ -46,12 +42,10 @@ def test_fixture_is_the_wave1_episode():
     assert matches_control_aliases([ACCEPTED_WORDING], "bacteria_free_control") is True
 
 
-@XFAIL_36
 def test_no_cell_medium_stability_is_a_bacteria_free_control():
     assert matches_control_aliases([EXPOSING_WORDING], "bacteria_free_control") is True
 
 
-@XFAIL_36
 def test_wave1_a_greedy_00000002_is_not_a_protocol_violation():
     doc = _load()
     reference = deepcopy(doc)
