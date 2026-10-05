@@ -165,8 +165,8 @@ it too" — an admission that the list cannot be trusted to be complete.
 
 **The fix is to extend the directory rule rather than the list**, so that `docs/research/` and
 `docs/*-design-history.md` are fenced by construction and scenario C's source file is covered the
-day it lands, without anybody remembering. That is filed separately from this proposal; it is a
-fence change, not a scenario C change, and it should not wait on scenario C.
+day it lands, without anybody remembering. That is filed separately from this proposal as #73; it
+is a fence change, not a scenario C change, and it should not wait on scenario C.
 
 Until the directory rule covers them, three things are needed and none exists yet:
 
