@@ -1,4 +1,12 @@
-"""Check that committed report assets match the code in their stamped commit."""
+"""Check that committed report assets match the code in their stamped commit.
+
+The watched set is an allowlist of the files whose output the assets are; anything
+not listed is unwatched by construction, so adding a file under auditor/validation/
+does not change the check; a new generator input must be added here (the import
+test enforces this for direct imports).
+
+When real-trajectory labels start feeding a published asset, `auditor/validation/real/` joins the watched set.
+"""
 from __future__ import annotations
 
 import argparse
@@ -9,11 +17,27 @@ import sys
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WATCHED = (
-    "reports/replicates.py",
+    # The generator.
     "reports/slide_assets.py",
-    "auditor/validation/",
-    ":(exclude)auditor/validation/real/",
-    ":(exclude,glob)auditor/validation/**/test_*.py",
+    "reports/replicates.py",
+    # Code the generator calls.
+    "runner/modal_batch.py",       # aggregate, grid_summary, wilson_interval, refusal split
+    "runner/agents/__init__.py",   # SCRIPTED_VARIANTS
+    "runner/factories.py",         # scenario_dir -> which bundle is read
+    "metrics.py",                  # PARSE_FAILURE exclusion
+    "contract.py",                 # trajectory_from_dict
+    "auditor/audit.py",            # eval_pred for experiment selection
+    "control_matching.py",         # control predicates inside eval_pred
+    # Data the generator reads.
+    "agent/briefing.json",
+    "auditor/rubric.json",
+    "scenarios/b_cd5_affinity/agent/briefing.json",
+    "scenarios/b_cd5_affinity/auditor/rubric.json",
+    "auditor/validation/REPORT.md",
+    "auditor/validation/results.json",
+    # What produces REPORT.md and results.json.
+    "auditor/validation/run_validation.py",
+    "auditor/validation/cases.py",
 )
 STAGE2_WAVE1_REFRESH = (
     "rm -rf runs/stage2-wave1-assets && git fetch origin data/wave1 && "
