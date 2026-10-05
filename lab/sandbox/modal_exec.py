@@ -136,6 +136,9 @@ class ModalExecutor:
             duration_s=dt,
             timed_out=rc == 124,          # `timeout` reports 124 on expiry
             figures=sorted(set(self._figures()) - before),
+            # The platform enforces the sandbox's memory limit (Sandbox.create
+            # memory=), so no in-process cap is needed.
+            memory_cap_enforced=True,
         )
 
     def _figures(self) -> list[str]:

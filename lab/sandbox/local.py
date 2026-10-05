@@ -15,39 +15,80 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from typing import Mapping
 
 from .base import ExecResult
 
 # Injected ahead of every snippet. Blocks outbound sockets and DNS so an
 # experiment cannot quietly fetch the answer, and caps address space.
 PREAMBLE = r'''
-import os, sys, socket, resource, builtins
+import os, sys, socket, builtins
+try:
+    import resource
+except ImportError:          # Windows has no resource module
+    resource = None
 
 # --- audit trace ---------------------------------------------------------
 # Interpreter audit hooks (PEP 578) report what the code actually did, whatever
-# it is called and however the path was built. Records go to a file descriptor
-# the parent opened, not to a path the snippet could just as easily open. This
-# is evidence, not a boundary: hooks cannot be removed, but a determined
-# adversary could still write to the descriptor, so the auditor treats the
-# trace as a record of attempts.
+# it is called and however the path was built. Records go to a trace file the
+# parent created outside the sandbox and names in FL_TRACE_PATH; it is opened
+# here before the hook is installed, so the open is not itself traced. A path
+# rather than an inherited descriptor because descriptor passing is POSIX-only.
+# This is evidence, not a boundary: hooks cannot be removed, but a determined
+# adversary could still write to the file, so the auditor treats the trace as
+# a record of attempts.
 _TRACE_EMIT = None
 
 
 def _install_trace():
     global _TRACE_EMIT
     import json as _json
-    fd = int(os.environ.get("FL_TRACE_FD", "-1"))
-    if fd < 0:
+    trace_path = os.environ.get("FL_TRACE_PATH", "")
+    if not trace_path:
         return
-    root = os.path.realpath(os.environ["FL_ROOT"])
+    out = open(trace_path, "a", encoding="utf-8")
+    # Comparisons use normcase so a Windows path differing only in case
+    # cannot slip past; the recorded path keeps its real spelling.
+    norm = os.path.normcase
+    root = norm(os.path.realpath(os.environ["FL_ROOT"]))
     # The repository holds the answer keys and scorers. Anything under it is
     # refused (and recorded); other paths outside the sandbox are only recorded.
-    protected = tuple(p for p in os.environ.get("FL_PROTECTED", "").split(os.pathsep) if p)
-    system = tuple({os.path.realpath(p) for p in
+    protected = tuple(norm(os.path.realpath(p)) for p in
+                      os.environ.get("FL_PROTECTED", "").split(os.pathsep) if p)
+    system = tuple({norm(os.path.realpath(p)) for p in
                     (sys.prefix, sys.base_prefix, sys.exec_prefix, sys.base_exec_prefix)})
     seen, state = set(), {"busy": False, "n": 0}
+    windows = sys.platform == "win32"
+    system32 = (norm(os.path.join(os.environ["SYSTEMROOT"], "System32"))
+                if windows and os.environ.get("SYSTEMROOT") else "")
+
+    def dll_target(name):
+        """What a ctypes load of `name` opens, and whether it is a system library.
+
+        A name with a directory part is opened at that path. A bare name is not
+        looked up in the working directory by the loader (ctypes' default
+        search on Windows, dlopen on POSIX), so resolving it against the cwd
+        mislabels `kernel32` as a file in the sandbox. A file of that name in
+        the working directory is still reported, because an explicit search
+        mode would load it; otherwise a bare name is a system library only if
+        System32 holds it, and anything else is reported as given.
+        """
+        if os.path.dirname(name):
+            return os.path.realpath(name), False
+        candidates = [name]
+        if windows and not os.path.splitext(name)[1]:
+            candidates.append(name + ".dll")
+        for cand in candidates:
+            if os.path.exists(cand):
+                return os.path.realpath(cand), False
+        if system32:
+            for cand in candidates:
+                if os.path.exists(os.path.join(system32, cand)):
+                    return os.path.join(system32, cand), True
+        return name, False
 
     def under(path, base):
+        path = norm(path)
         return path == base or path.startswith(base + os.sep)
 
     def emit(rec):
@@ -56,7 +97,8 @@ def _install_trace():
             return
         seen.add(key)
         state["n"] += 1
-        os.write(fd, (key + "\n").encode())
+        out.write(key + "\n")
+        out.flush()
 
     def hook(event, args):
         if state["busy"]:
@@ -95,8 +137,11 @@ def _install_trace():
                 raw = args[0]
                 if raw is None:        # dlopen(None) is the interpreter itself
                     return
-                path = os.path.realpath(os.fsdecode(raw)) if isinstance(raw, (str, bytes)) else str(raw)
-                if not any(under(path, b) for b in system):
+                if isinstance(raw, (str, bytes)):
+                    path, system_dll = dll_target(os.fsdecode(raw))
+                else:
+                    path, system_dll = str(raw), False
+                if not system_dll and not any(under(path, b) for b in system):
                     emit({"kind": "proc", "event": event, "target": path})
         except PermissionError:
             raise
@@ -109,11 +154,21 @@ def _install_trace():
     sys.addaudithook(hook)
 
 _install_trace()
+# The address-space cap is POSIX-only (setrlimit). Where it cannot be applied
+# the fact is recorded in the trace rather than dropped: a run without the cap
+# is not comparable to one with it, and the run record has to say so.
 _MEM_BYTES = int(os.environ.get("FL_MEM_BYTES", str(2 * 1024 ** 3)))
-try:
-    resource.setrlimit(resource.RLIMIT_AS, (_MEM_BYTES, _MEM_BYTES))
-except (ValueError, OSError):
-    pass
+if resource is None:
+    _MEM_CAP = "unavailable: no resource module on " + sys.platform
+else:
+    try:
+        resource.setrlimit(resource.RLIMIT_AS, (_MEM_BYTES, _MEM_BYTES))
+        _MEM_CAP = "enforced"
+    except (ValueError, OSError) as _exc:
+        _MEM_CAP = "failed: setrlimit %s on %s" % (type(_exc).__name__, sys.platform)
+if _TRACE_EMIT is not None:
+    _TRACE_EMIT({"kind": "limits", "memory_cap": _MEM_CAP,
+                 "memory_bytes": _MEM_BYTES, "platform": sys.platform})
 
 class _NetworkBlocked(OSError):
     """Raised instead of opening a socket: attempts are visible in stderr."""
@@ -162,7 +217,47 @@ sys.path.insert(0, os.environ["FL_WORKDIR"])
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
+# Variables a Windows Python child needs from the parent to start at all.
+# SYSTEMROOT is the known one (the interpreter fails to initialise without
+# it); the rest are what the stdlib reaches for on that platform. Nothing
+# here carries a secret.
+_WINDOWS_PASSTHROUGH = ("SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT", "TEMP", "TMP")
+
+
+def child_env(workdir: Path, root: Path, protected: Path, trace_path: str,
+              mem_bytes: int, platform: str = sys.platform,
+              source: Mapping[str, str] | None = None) -> dict[str, str]:
+    """The scrubbed environment the snippet runs in.
+
+    Built from scratch rather than copied, so ANTHROPIC_API_KEY and friends are
+    never inherited. `platform` and `source` are parameters so the Windows
+    branch can be exercised on a POSIX test machine.
+    """
+    src = os.environ if source is None else source
+    env = {
+        "PATH": src.get("PATH", "/usr/bin:/bin"),
+        "HOME": str(workdir),
+        "FL_WORKDIR": str(workdir),
+        "FL_ROOT": str(root),
+        "FL_PROTECTED": str(protected),
+        "FL_TRACE_PATH": trace_path,
+        "FL_MEM_BYTES": str(mem_bytes),
+        "MPLBACKEND": "Agg",
+        "PYTHONDONTWRITEBYTECODE": "1",
+    }
+    if platform == "win32":
+        env["USERPROFILE"] = str(workdir)
+        for key in _WINDOWS_PASSTHROUGH:
+            if key in src:
+                env[key] = src[key]
+    return env
+
+
 class LocalExecutor:
+    # Class attribute so a test can prepend to it (e.g. to make `resource`
+    # unimportable in the child) without touching the shipped preamble.
+    preamble = PREAMBLE
+
     def __init__(self, name: str = "sandbox", mem_bytes: int = 2 * 1024 ** 3,
                  python: str | None = None):
         self.name = name
@@ -245,31 +340,24 @@ class LocalExecutor:
     def run_python(self, code: str, timeout_s: int = 60) -> ExecResult:
         workdir = self.root / "work"
         script = workdir / "_snippet.py"
-        script.write_text(PREAMBLE + "\n" + code, encoding="utf-8")
+        script.write_text(self.preamble + "\n" + code, encoding="utf-8")
         before = _figure_set(workdir)
         t_start = time.time()
+        # The trace file lives outside the sandbox root, so the snippet has no
+        # legitimate reason to open it; the child appends by path.
         trace_fd, trace_path = tempfile.mkstemp(prefix="falsifylab-trace-")
-        env = {
-            "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-            "HOME": str(workdir),
-            "FL_WORKDIR": str(workdir),
-            "FL_ROOT": str(self.root),
-            "FL_PROTECTED": str(_REPO_ROOT),
-            "FL_TRACE_FD": str(trace_fd),
-            "FL_MEM_BYTES": str(self.mem_bytes),
-            "MPLBACKEND": "Agg",
-            "PYTHONDONTWRITEBYTECODE": "1",
-            # deliberately NOT inherited: ANTHROPIC_API_KEY and friends
-        }
+        os.close(trace_fd)
+        env = child_env(workdir, self.root, _REPO_ROOT, trace_path, self.mem_bytes)
         t0 = time.time()
         try:
             proc = subprocess.run(
                 [self.python, "-I", str(script)],
                 cwd=workdir, env=env, capture_output=True, text=True,
-                timeout=timeout_s, pass_fds=(trace_fd,),
+                timeout=timeout_s,
             )
             dt = time.time() - t0
             figs = sorted(_figure_set(workdir) - before)
+            trace, limits = _read_trace(trace_path)
             return ExecResult(
                 ok=proc.returncode == 0,
                 stdout=proc.stdout,
@@ -277,17 +365,18 @@ class LocalExecutor:
                 exit_code=proc.returncode,
                 duration_s=dt,
                 figures=figs,
-                trace=_read_trace(trace_path),
+                trace=trace,
                 files_written=_files_written(workdir, t_start),
+                **limits,
             )
         except subprocess.TimeoutExpired:
+            trace, limits = _read_trace(trace_path)
             return ExecResult(
                 ok=False, stdout="", stderr="", exit_code=-1,
                 duration_s=time.time() - t0, timed_out=True,
-                trace=_read_trace(trace_path),
+                trace=trace, **limits,
             )
         finally:
-            os.close(trace_fd)
             try:
                 os.unlink(trace_path)
             except OSError:
@@ -302,20 +391,40 @@ def _figure_set(workdir: Path) -> set[str]:
     }
 
 
-def _read_trace(path: str) -> list[dict]:
+def _read_trace(path: str) -> tuple[list[dict], dict]:
+    """The audit trace, and the sandbox's own report of the limits it applied.
+
+    The preamble writes one `kind: limits` record before any user code runs.
+    It is split out here so the trace handed to the auditor holds only what
+    the code did. No record at all means the child never got that far (or the
+    preamble was replaced), and the cap is reported as unconfirmed, not as
+    enforced.
+    """
     out: list[dict] = []
+    limits = {"memory_cap_enforced": None,
+              "limits_note": "memory cap not reported by the sandbox"}
     try:
         with open(path, encoding="utf-8", errors="replace") as fh:
             for line in fh:
                 line = line.strip()
-                if line:
-                    try:
-                        out.append(json.loads(line))
-                    except json.JSONDecodeError:
-                        pass
+                if not line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if rec.get("kind") == "limits":
+                    cap = str(rec.get("memory_cap", ""))
+                    limits = {
+                        "memory_cap_enforced": cap == "enforced",
+                        "limits_note": "" if cap == "enforced"
+                        else f"memory cap {cap}",
+                    }
+                else:
+                    out.append(rec)
     except OSError:
         pass
-    return out
+    return out, limits
 
 
 _TEXT_SUFFIXES = {".csv", ".tsv", ".json", ".txt", ".md", ".log"}

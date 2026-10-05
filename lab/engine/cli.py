@@ -29,8 +29,23 @@ def cmd_run(args: argparse.Namespace) -> int:
         mc.effort = args.effort
 
     print(f"running curriculum {args.curriculum} as {args.run_id}")
-    print(f"  backend={args.backend}  lessons={'off' if args.no_lessons else 'on'}")
+    arm = "baseline" if args.no_lessons else args.arm
+    print(f"  backend={args.backend}  arm={arm}")
     print(f"  models: loop={mc.loop_model} capstone={mc.capstone_model} effort={mc.effort}")
+
+    if arm == "cold":
+        from .cold import run_cold_curriculum
+        from .provider import AnthropicProvider
+        if args.only:
+            raise SystemExit("--only does not apply to the cold arm")
+        result = run_cold_curriculum(
+            provider=AnthropicProvider(), curriculum_root=args.curriculum,
+            run_id=args.run_id, runs_dir=args.runs_dir, backend=args.backend,
+            model_config=mc)
+        cal = result.notebook.calibration_summary()
+        print(f"\n  mean score {cal['mean_score']}  mean confidence {cal['mean_confidence']}")
+        print(f"notebook: {result.run_dir / 'notebook.md'}")
+        return 0
 
     result = run_curriculum(
         curriculum_root=args.curriculum,
@@ -38,7 +53,9 @@ def cmd_run(args: argparse.Namespace) -> int:
         runs_dir=args.runs_dir,
         backend=args.backend,
         model_config=mc,
-        use_lessons=not args.no_lessons,
+        use_lessons=arm in ("lessons", "placebo", "null"),
+        arm=arm,
+        filler=arm if arm in ("placebo", "null") else None,
         only=args.only.split(",") if args.only else None,
     )
     cal = result.notebook.calibration_summary()
@@ -77,6 +94,19 @@ def cmd_compare(args: argparse.Namespace) -> int:
         print(json.dumps(result, indent=2))
     else:
         print(render(result))
+    return 0
+
+
+def cmd_aggregate(args: argparse.Namespace) -> int:
+    from . import aggregate as agg
+
+    runs = agg.load_runs(args.paths)
+    summary = agg.summarise(runs)
+    if not (args.baseline and args.treatment):
+        print(json.dumps(summary, indent=2))
+        return 0
+    res = agg.compare_arms(runs, args.baseline, args.treatment, n_boot=args.boots)
+    print(json.dumps(res, indent=2) if args.json else agg.render(res))
     return 0
 
 
@@ -180,6 +210,12 @@ def main() -> int:
     r.add_argument("--run-id", default="run_001")
     r.add_argument("--runs-dir", default="runs")
     r.add_argument("--backend", default="local", choices=["local", "modal"])
+    r.add_argument("--arm", choices=["lessons", "baseline", "cold", "placebo", "null"], default="lessons",
+                   help="lessons: the lab with the required cards (default); "
+                        "baseline: the lab with no cards; cold: no lab at all, the "
+                        "hypothesis and titles only; placebo / null: the lab with "
+                        "same-length cards that are irrelevant prose / meaningless "
+                        "symbols")
     r.add_argument("--no-lessons", action="store_true",
                    help="control run: withhold lesson cards from later experiments")
     r.add_argument("--only", help="comma-separated experiment ids or orders")
@@ -202,6 +238,14 @@ def main() -> int:
     c.add_argument("--curriculum", default="curricula/glp1r")
     c.add_argument("--json", action="store_true")
     c.set_defaults(func=cmd_compare)
+
+    ag = sub.add_parser("aggregate", help="compare arms over many runs, with a CI")
+    ag.add_argument("paths", nargs="+", help="run dirs, or dirs of run dirs")
+    ag.add_argument("--baseline", help="arm to compare against, e.g. cold or baseline")
+    ag.add_argument("--treatment", help="arm under test, e.g. lessons")
+    ag.add_argument("--boots", type=int, default=10000)
+    ag.add_argument("--json", action="store_true")
+    ag.set_defaults(func=cmd_aggregate)
 
     au = sub.add_parser("audit", help="audit the path of a recorded run")
     au.add_argument("run_dir")

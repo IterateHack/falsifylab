@@ -207,6 +207,43 @@ def test_every_experiment_has_data_ground_truth_and_a_lesson(curriculum):
             assert d.exists()
 
 
+def _cards(curriculum, upto_order):
+    return [(e.id, e.title, f"card for {e.id}")
+            for e in curriculum.experiments if e.order < upto_order]
+
+
+def test_an_experiment_is_shown_only_the_cards_it_requires(curriculum):
+    from engine.agent import relevant_lessons
+    for e in curriculum.experiments:
+        shown = relevant_lessons(e, _cards(curriculum, e.order))
+        assert [c[0] for c in shown] == [
+            r for r in (x.id for x in curriculum.experiments)
+            if r in e.requires_lessons], e.id
+
+
+def test_exp3_is_not_shown_the_exp1_card(curriculum):
+    from engine.agent import relevant_lessons
+    e3 = curriculum.by_id("exp3_peptide_engineering")
+    shown = relevant_lessons(e3, _cards(curriculum, e3.order))
+    assert [c[0] for c in shown] == ["exp2_structure_contacts"]
+
+
+def test_an_experiment_with_no_required_lessons_is_shown_none(curriculum):
+    from engine.agent import lesson_block, relevant_lessons
+    e2 = curriculum.by_id("exp2_structure_contacts")
+    shown = relevant_lessons(e2, _cards(curriculum, e2.order))
+    assert shown == []
+    assert lesson_block(shown) == ""
+
+
+def test_lesson_block_puts_the_card_text_in_the_prompt():
+    from engine.agent import lesson_block
+    block = lesson_block([("exp2", "Structure", "  Check the chain IDs.  ")])
+    assert "Check the chain IDs." in block
+    assert "Structure (exp2)" in block
+    assert "read_lessons" in block
+
+
 def _open_gate(ctx) -> None:
     dispatch(ctx, "write_notebook_section", {
         "section": "hypothesis_and_prediction", "text": "prediction",
@@ -235,3 +272,59 @@ def test_a_second_writer_is_refused(tmp_path):
     reopened.close()
     assert not (tmp_path / "run" / "run.lock").exists()
     os.environ.pop("FL_UNUSED", None)
+
+
+def test_metered_provider_totals_tokens_per_model():
+    from types import SimpleNamespace as NS
+    from engine.provider import MeteredProvider, ScriptedProvider
+    resp = lambda i, o: NS(usage=NS(input_tokens=i, output_tokens=o,
+                                    cache_read_input_tokens=None))
+    inner = ScriptedProvider([resp(10, 5), resp(20, 7), NS()])
+    m = MeteredProvider(inner)
+    m.complete(model="a")
+    m.complete(model="a")
+    m.complete(model="b")          # a response with no usage is not counted
+    assert m.usage == {"a": {"calls": 2, "input_tokens": 30, "output_tokens": 12,
+                             "cache_read_input_tokens": 0,
+                             "cache_creation_input_tokens": 0}}
+
+
+_CARD = ("# Check the chain\n\nRead the **file** first:\n- one two three\n"
+         "- four five\n\n1. last step here\n")
+
+
+@pytest.mark.parametrize("kind", ["placebo", "null"])
+def test_filler_matches_the_card_in_shape_and_carries_no_topic(kind):
+    from engine.agent import filler_cards
+    (cid, title, text), = filler_cards([("exp2_structure_contacts", "Structure", _CARD)], kind)
+    assert (cid, title) == ("card_1", "Lesson card")        # neutral id and title
+    assert len(text.split("\n")) == len(_CARD.split("\n"))
+    for a, b in zip(_CARD.split("\n"), text.split("\n")):
+        assert len(a.split()) == len(b.split()), (a, b)      # same words per line
+        for mark in ("# ", "- ", "1. "):
+            assert a.startswith(mark) == b.startswith(mark)  # same markdown marks
+    assert "chain" not in text and "structure" not in text.lower()
+
+
+def test_null_filler_has_no_letters_and_filler_is_deterministic():
+    from engine.agent import filler_cards
+    card = [("e1", "T", _CARD)]
+    null = filler_cards(card, "null")[0][2]
+    assert not any(ch.isalpha() for ch in null)
+    assert filler_cards(card, "null") == filler_cards(card, "null")
+    assert filler_cards(card, "placebo") == filler_cards(card, "placebo")
+
+
+def test_unknown_filler_is_refused():
+    from engine.agent import filler_cards
+    with pytest.raises(ValueError):
+        filler_cards([("e1", "T", "x")], "bogus")
+
+
+def test_a_notebook_with_no_stated_confidence_still_renders():
+    from engine.notebook import Notebook
+    nb = Notebook(run_id="r", hypothesis="h")
+    e = NotebookEntry(experiment_id="e1", title="T", order=1)
+    nb.entries.append(e)
+    e.record_score({"score": 0.5, "max": 1.0, "details": {}})
+    assert "n/a" in nb.to_markdown()

@@ -50,6 +50,8 @@ export interface NotebookEntry {
   papers: string[];
   tool_calls_used: number;
   model: string;
+  /** Sandbox limits this host could not apply; non-empty means not comparable. */
+  unenforced_limits?: string[];
   audit?: Audit | null;
   markdown: string;
 }

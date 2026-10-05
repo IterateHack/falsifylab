@@ -10,7 +10,7 @@ from statistics import fmean
 import numpy as np
 
 from metrics import is_parse_failure_verdict
-from runner.modal_batch import HARNESS_ERROR_VERDICT, SCRIPTED_VARIANTS
+from runner.modal_batch import HARNESS_ERROR_VERDICT, SCRIPTED_VARIANTS, is_provider_refusal
 
 
 OUTCOME_CATEGORIES = (
@@ -28,7 +28,8 @@ REPLICATE_HEADERS = (
     "n_provider_refusal", "n_refusal_abort", "n_spend_cap_stop",
     "n_harness_error", "n_parse_failure", "provider_refusal_rate",
     "refusal_abort_rate", "refusal_rate", "spend_cap_stop_rate",
-    "clean_success_mean", "clean_success_ci95", "mean_cost", "cost_of_pass",
+    "clean_success_mean", "clean_success_ci95", "clean_success_ci95_degenerate",
+    "mean_cost", "cost_of_pass",
     "cost_of_pass_ci95", "cost_of_pass_unbounded_share",
     "bootstrap_resamples", "bootstrap_seed",
 )
@@ -36,7 +37,7 @@ REPLICATE_HEADERS = (
 
 def classify(record: dict) -> str:
     """Classify a batch record in the required exclusion-priority order."""
-    if record.get("provider_refusal", False):
+    if is_provider_refusal(record):
         return "provider_refusal"
     if (
         record.get("spend_cap_stop", False)
@@ -120,6 +121,7 @@ def _science_summary(
         cost_of_pass = None
 
     clean_success_ci95 = None
+    clean_success_ci95_degenerate = None
     cost_of_pass_ci95 = None
     cost_of_pass_unbounded_share = None
     if n:
@@ -142,7 +144,12 @@ def _science_summary(
             cost_of_pass_unbounded_share = float(
                 np.isinf(sampled_cost_of_pass).mean(),
             )
-            clean_success_ci95 = _percentile_bounds(sampled_clean_means)
+            # Every resample of an all-0 or all-1 sample is identical, so the
+            # interval collapses to a point and carries no information.
+            successes = int(clean_values.sum())
+            clean_success_ci95_degenerate = successes in (0, n)
+            if not clean_success_ci95_degenerate:
+                clean_success_ci95 = _percentile_bounds(sampled_clean_means)
             cost_of_pass_ci95 = _percentile_bounds(sampled_cost_of_pass)
 
     provider_refusal_rate = rates["provider_refusal"]
@@ -167,6 +174,7 @@ def _science_summary(
         "spend_cap_stop_rate": rates["spend_cap_stop"],
         "clean_success_mean": clean_success_mean,
         "clean_success_ci95": clean_success_ci95,
+        "clean_success_ci95_degenerate": clean_success_ci95_degenerate,
         "mean_cost": mean_cost,
         "cost_of_pass": cost_of_pass,
         "cost_of_pass_ci95": cost_of_pass_ci95,
