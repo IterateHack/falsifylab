@@ -1,6 +1,6 @@
 {
   "stamp": {
-    "git_sha": "ee58b89",
+    "git_sha": "cf8d4cc",
     "git_dirty": false,
     "models": [
       "claude-sonnet-5-5"

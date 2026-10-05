@@ -14,4 +14,4 @@ runner's grid_summary.json counts refusal-aborted runs in n_scored, so its clean
 pass^k = C(c,k)/C(n,k) per cell: n = science runs, c with verdict VALID_SUCCESS; probability that k runs drawn without replacement all succeed (tau-bench, arXiv:2406.12045). pass^1 therefore equals clean_success_rate.
 cost_of_pass = mean_cost / clean_success_rate (Cost-of-Pass, arXiv:2504.13359). Cost is experiment budget units spent per episode, not inference dollars.
 
-*git_sha=ee58b89 | git_dirty=false | models=claude-sonnet-5-5 | sampling=T=omitted client=live max_tokens=2048 | reaudit=none | synthetic=false | wave=true | source=runs/stage2-wave1/a (results SHA: a880033ba3a5ad7f516165a25a9d8d28e7706698); summaries derived from results.jsonl*
+*git_sha=cf8d4cc | git_dirty=false | models=claude-sonnet-5-5 | sampling=T=omitted client=live max_tokens=2048 | reaudit=none | synthetic=false | wave=true | source=runs/stage2-wave1/a (results SHA: a880033ba3a5ad7f516165a25a9d8d28e7706698); summaries derived from results.jsonl*
