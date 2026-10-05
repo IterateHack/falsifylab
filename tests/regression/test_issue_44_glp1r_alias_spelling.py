@@ -3,7 +3,7 @@ name matched an Open Targets label (exact or substring), so a ranking that put
 the gold tissues first in clinical wording ("Endometrium/Uterus", "Large
 intestine (colorectal)") scored 0 on the ranking half.
 
-Direction: false negative on a correct answer (a string gate on vocabulary).
+Direction: false positive (correct answer scored 0; a string gate on vocabulary).
 The exposing case cannot be rescored: lab/curricula/wrn was deleted with its
 scorer (commit 77b782a), so #44 is retired. These tests pin the same bug class
 on the GLP-1R scorers that still match names: exp1 (gene symbols), exp3
