@@ -30,6 +30,7 @@ _REPORT = """\
 |---|---|---|---|
 | overall | 8 | 87.5% | 0.750 |
 | explicit patterns only | 6 | 100.0% | 1.000 |
+| scenario A | 4 | 75.0% | 0.731 |
 """
 
 _REPORT_RESULTS = {
@@ -68,6 +69,25 @@ _REPORT_RESULTS = {
                 "ci95": None,
                 "degenerate": True,
                 "n_clusters": 5,
+                "resamples": 10000,
+                "seed": 0,
+            },
+        },
+        "scenario_a": {
+            "n": 4,
+            "observed_agreement": 0.75,
+            "kappa": 0.7308,
+            "case_bootstrap": {
+                "ci95": [0.4, 1.0],
+                "degenerate": False,
+                "n_clusters": 4,
+                "resamples": 10000,
+                "seed": 0,
+            },
+            "pattern_cluster_bootstrap": {
+                "ci95": [0.3, 1.0],
+                "degenerate": False,
+                "n_clusters": 3,
                 "resamples": 10000,
                 "seed": 0,
             },
@@ -1681,7 +1701,7 @@ def test_validation_assets_check_results_and_render_degenerate_intervals(tmp_pat
         report_kappas, results_path,
     )
     assert [row["subset"] for row in kappa_rows] == [
-        "overall", "explicit patterns only",
+        "overall", "explicit patterns only", "scenario A",
     ]
     explicit = kappa_rows[1]
     assert explicit["case_ci95"] is None
@@ -1704,6 +1724,18 @@ def test_validation_assets_check_results_and_render_degenerate_intervals(tmp_pat
     assert slide_assets._kappa_caption(kappa_rows) in markdown
     assert "case bootstrap 95% CI" in markdown
     assert "pattern-cluster bootstrap 95% CI" in markdown
+    scenario_a_row = next(
+        row for row in markdown.splitlines() if row.startswith("| scenario A |")
+    )
+    assert "| scenario A | 4 | 0.750 | 0.731 |" in scenario_a_row
+    csv_rows = list(csv.DictReader(
+        (output / "auditor_validation.csv").open(encoding="utf-8"),
+    ))
+    scenario_a_csv_row = next(
+        row for row in csv_rows
+        if row["type"] == "kappa" and row["subset"] == "scenario A"
+    )
+    assert scenario_a_csv_row["kappa"] == "0.7308"
 
     mismatched = json.loads(results_path.read_text(encoding="utf-8"))
     mismatched["cohens_kappa"]["overall"]["n"] = 9
@@ -1871,8 +1903,10 @@ def test_validation_parser_checks_headers_and_real_report_structure(tmp_path):
             "false-alarm rate": "25%",
         },
     ]
-    assert [row["subset"] for row in kappas] == ["overall", "explicit patterns only"]
-    assert [float(row["kappa"]) for row in kappas] == [0.75, 1.0]
+    assert [row["subset"] for row in kappas] == [
+        "overall", "explicit patterns only", "scenario A",
+    ]
+    assert [float(row["kappa"]) for row in kappas] == [0.75, 1.0, 0.731]
 
     report_path.write_text(_REPORT.split("## Cohen's kappa", 1)[0], encoding="utf-8")
     with pytest.raises(ValueError, match="Cohen's kappa"):

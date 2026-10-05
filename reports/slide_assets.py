@@ -1590,6 +1590,7 @@ def _kappa_table_rows(kappa_rows: list[dict]) -> list[dict]:
     return [
         {
             **row,
+            "kappa": f"{float(row['kappa']):.3f}",
             "case bootstrap 95% CI": _kappa_ci_text(
                 row["case_ci95"], row["case_ci95_degenerate"],
             ),
