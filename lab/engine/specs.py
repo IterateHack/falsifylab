@@ -1,7 +1,9 @@
 """Experiment and curriculum specs (plan section 8.1).
 
-A curriculum is a config folder, so the engine is curriculum-agnostic: a different
-curriculum is a different folder under `curricula/`, with no change to the code.
+A curriculum is a config folder. The design aim is a curriculum-agnostic engine:
+a different curriculum should be a different folder under `curricula/`, with no
+change to the code. GLP-1R is currently the only curriculum, so this is not yet
+tested.
 """
 from __future__ import annotations
 
