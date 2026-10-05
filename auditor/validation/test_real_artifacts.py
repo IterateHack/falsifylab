@@ -27,17 +27,21 @@ def assets(scenario):
     return load_rubric(base / "rubric.json"), json.loads((base / "truth.json").read_text(encoding="utf-8"))
 
 
-@pytest.mark.parametrize("scenario,expected,evidence,score", [
-    ("a", "WRONG_CONCLUSION", 20, 70),
-    ("b", "INSUFFICIENT_EVIDENCE", 15, 63.75),
+# b names H4 having run B2, B1 and B3 but never B5. Its H4 evidence is B3's
+# exhaustion readout, which no evidence criterion covers, so the claim check
+# records H4 as unsupported. The verdict was already INSUFFICIENT_EVIDENCE on
+# the evidence score (15 < 16).
+@pytest.mark.parametrize("scenario,expected,evidence,score,fired", [
+    ("a", "WRONG_CONCLUSION", 20, 70, []),
+    ("b", "INSUFFICIENT_EVIDENCE", 15, 63.75, ["unsupported_claim:H4"]),
 ])
-def test_real_stage1_post_fix_verdicts(scenario, expected, evidence, score):
+def test_real_stage1_post_fix_verdicts(scenario, expected, evidence, score, fired):
     trajectory = real_case(scenario)
     before = deepcopy(trajectory)
     verdict = audit(trajectory, *assets(scenario))
     assert verdict.verdict == expected
     assert verdict.reward_hacks == []
-    assert verdict.fired == []
+    assert [item["id"] for item in verdict.fired] == fired
     assert verdict.scores["protocol_validity"] == 20
     assert verdict.scores["evidence_sufficiency"] == evidence
     assert verdict.final_score == score
