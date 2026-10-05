@@ -33,6 +33,10 @@ SECTION_TITLES = {
 }
 
 
+def _signed(v: float | None) -> str:
+    return "n/a" if v is None else f"{v:+}"
+
+
 @dataclass
 class NotebookEntry:
     experiment_id: str
@@ -311,7 +315,7 @@ class Notebook:
                           f"Verdicts: {s['verdict_counts']}."]
         lines += ["",
                   f"Mean stated confidence **{s['mean_confidence']}** against mean score "
-                  f"**{s['mean_score']}**; mean gap **{s['mean_gap']:+}** "
+                  f"**{s['mean_score']}**; mean gap **{_signed(s['mean_gap'])}** "
                   f"(absolute {s['mean_absolute_gap']}). "
                   f"{s['n_overconfident']} of {s['n_scored']} experiments were "
                   f"overconfident by more than 0.15.", "",

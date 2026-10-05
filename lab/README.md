@@ -1,7 +1,7 @@
 # FalsifyLab
 
 A virtual laboratory where an AI scientist works through a curriculum of
-experiments testing one biological hypothesis. For each experiment it gets **one
+experiments on real data. For each experiment it gets **one
 attempt**: it writes its prediction and a numeric confidence *before* any data
 tool unlocks, runs real analysis in an isolated sandbox, is scored by a
 deterministic scorer it cannot reach, and is then taught the correct approach
@@ -13,10 +13,24 @@ wrong, and why I was confident anyway"*.
 
 ![the lab](docs/scene.png)
 
-## The hypothesis
+## Scope
 
-**H1: GLP-1R is a genetically supported, druggable obesity target, and oral
-non-peptide agonism is feasible.**
+The project has one scientific hypothesis: scenario A, the PptT / *M. tuberculosis*
+programme - why an optimisation campaign produced the most potent PptT inhibitor
+reported and no antibacterial. Scenario B (CAR-T binder affinity versus
+durability) is a second biology used to test whether the auditor's rules hold
+outside the hypothesis they were written for, not a second claim.
+
+This lab is a separate instrument with its own engine, scorers and verdict
+implementation, and no code integration with the root auditor. Its curriculum is
+GLP-1R. That is an implementation choice, not a second scientific hypothesis, and
+no result from the lab is offered as evidence about the PptT question.
+
+## The curriculum: GLP-1R
+
+The six experiments build an evidence-weighted case for one claim about GLP-1R: it
+is a genetically supported, druggable obesity target, and oral non-peptide
+agonism is feasible.
 
 | # | Experiment | Agent task | Scored on | Needs lessons from |
 |---|---|---|---|---|
@@ -25,20 +39,11 @@ non-peptide agonism is feasible.**
 | 3 | Peptide engineering | Rank nine analogues by duration, explain why | Duration-class ordering + mechanism rubric | 2 |
 | 4 | Potency | Fit dose-response curves, rank by consensus EC50 | Fit error in log units + rank correlation | 3 |
 | 5 | Small-molecule feasibility | Choose an assay model, predict whether a non-peptide agonist works | Rubric, with a penalty for the rodent trap | 2, 4 |
-| 6 | Capstone | An evidence-weighted verdict on H1 | Rubric against the ATTAIN-1 phase 3 result | 1-5 |
+| 6 | Capstone | An evidence-weighted verdict on the claim | Rubric against the ATTAIN-1 phase 3 result | 1-5 |
 
-The curriculum is a config folder, not code, so the engine is
-hypothesis-agnostic. That claim is tested rather than asserted: `curricula/wrn/`
-is a second hypothesis - **WRN helicase as a synthetic-lethal target in MSI-high
-cancers** - built on 21,108 real DepMap CRISPR measurements, with its own
-scorers and lesson cards and **no change to anything under `engine/` or
-`sandbox/`**.
-
-```bash
-./.venv/bin/python -m curricula.wrn.fetch
-./.venv/bin/python -m engine.cli validate --curriculum curricula/wrn
-./.venv/bin/python -m engine.cli run --curriculum curricula/wrn --run-id wrn_run
-```
+The curriculum is a config folder, not code: the engine reads specs, scorers,
+ground truth and lesson cards from `curricula/<id>/`, so a different curriculum is a
+different folder.
 
 ## Quick start
 
@@ -46,7 +51,7 @@ scorers and lesson cards and **no change to anything under `engine/` or
 python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
 ./.venv/bin/python -m curricula.glp1r.fetch      # build datasets from primary sources
 ./.venv/bin/python -m engine.cli validate        # check specs, data, scorers, lessons
-./.venv/bin/python -m pytest -q                  # 52 tests
+./.venv/bin/python -m pytest -q                  # 92 tests
 
 export ANTHROPIC_API_KEY=...
 ./.venv/bin/python -m engine.cli run --run-id my_run
@@ -189,15 +194,48 @@ at n=1 per arm - experiment 1 needs no lessons and still moved +0.14, which is
 just run-to-run variance. `compare` says so itself rather than quoting the
 favourable number. Several runs per arm would be needed to claim more.
 
+These numbers predate the relevance fix: the engine then showed the agent every
+earned card, not only the ones an experiment names in `requires_lessons`. They are
+not comparable to runs made now, which is why the next section exists.
+
+## Measuring improvement
+
+`docs/evaluation-plan.md` is the protocol. The short version: one run is a draw,
+so improvement is a difference between *arms* over many runs, read against a
+floor.
+
+| `--arm` | The agent gets | Answers |
+|---|---|---|
+| `cold` | hypothesis, title and answer format only. No data, tools or lessons | What prior knowledge alone scores - the true floor |
+| `baseline` | the lab, no lesson cards | What the apparatus adds |
+| `placebo` | the lab, same-length cards of irrelevant prose | Is it just more context? |
+| `null` | the lab, same-length cards of meaningless symbols | Is it just the format? |
+| `lessons` | the lab, the cards each experiment requires | The treatment |
+
+```bash
+for i in 1 2 3 4 5; do
+  ./.venv/bin/python -m engine.cli run --arm cold --run-id cold_$i --runs-dir runs/eval
+  ./.venv/bin/python -m engine.cli run --arm lessons --run-id lessons_$i --runs-dir runs/eval
+done
+./.venv/bin/python -m engine.cli aggregate runs/eval --baseline cold --treatment lessons
+```
+
+`aggregate` reports the difference in mean score with a bootstrap 95% interval,
+a permutation p-value and Cohen's d, and warns below five runs per arm. Every run
+writes `run_meta.json` (its arm) and `usage.json` (tokens per model).
+
+Not yet done: the held-out validation and test experiments the plan calls for.
+Until they exist, any gain measured on the current six experiments is a gain on
+the experiments the cards were written from.
+
 ## Repository layout
 
 ```
 engine/       event log, specs, agent loop, tool gating, scoring, audit, replay, notebook, CLI
 evals/        the audit eval suite: scripted agents with known right verdicts
 sandbox/      Executor contract; local and Modal backends
-curricula/    one folder per hypothesis: specs, scorers, ground truth, lessons, audit specs, fetch
-              glp1r/ the six-experiment GLP-1R curriculum (H1)
-              wrn/   a second hypothesis, to prove the engine is agnostic (H2)
+curricula/    one folder per curriculum: specs, scorers, ground truth, lessons, audit specs, fetch
+              glp1r/ the six-experiment GLP-1R curriculum, the lab's only one
 api/          FastAPI (replay + SSE) and the Modal deployment
 web/          Vite + React pixel lab and notebook overlay
 art/          generates every spritesheet with Pillow
@@ -219,14 +257,6 @@ Running the curriculum against Claude Sonnet 5 (Opus 5 for the capstone):
   parsing the mmCIF and never submitted, scoring zero. That is an artefact of the
   harness, not a finding about the science, so budgets now reserve their last two
   calls for submission and every tool result reports the remaining budget.
-- Twice, a low score turned out to be **our** bug rather than the agent's. On the
-  WRN curriculum it scored 0.62 for discarding a five-cell-line tissue as
-  underpowered - which was correct, and which our ground truth had ranked second
-  - and for writing "tissue is a surrogate variable" where the rubric only looked
-  for the word "proxy". Both are fixed, and the same answer now scores 0.99. A
-  rubric that penalises a right answer for its vocabulary is worse than no rubric,
-  which is why every scorer has a test asserting the trap costs points and the
-  correct answer does not.
 
 Both results are in `runs/`, and the notebook is readable as markdown at
 `runs/<id>/notebook.md`.
@@ -237,7 +267,7 @@ Both results are in `runs/`, and the notebook is readable as markdown at
   data-analysis outputs rather than recall wherever possible, the notebook
   records prior knowledge claimed, and the control run exists to quantify it -
   but a model that already knows about Trp33 cannot unknow it.
-- **n=1 per arm.** Treat deltas under about 0.1 between runs as noise.
+- **n=1 per arm in the committed runs.** Treat deltas under about 0.1 between those runs as noise. `aggregate` exists to replace them.
 - **Three data soft spots** - transcribed half-lives, Open Targets release
   dependence, and simulated dose-response points over real potencies - are listed
   in `docs/references.md`.
