@@ -75,6 +75,9 @@
           "id": "EVB1",
           "points": 15,
           "test": "B2 run across at least three donors — the upstream self-targeting evidence (H3)",
+          "requires_citation": ["B2"],
+          "supports_hypotheses": ["H3"],
+          "supports_basis": "this criterion's test text names H3",
           "predicate": {"all": [
             {"ran": "B2"},
             {"param_ge": {"experiment": "B2", "param": "donors", "value": 3}}
@@ -84,6 +87,9 @@
           "id": "EVB2",
           "points": 5,
           "test": "B5 run at the 3:1 effector-to-target ratio — the repeated-challenge evidence (H4)",
+          "requires_citation": ["B5"],
+          "supports_hypotheses": ["H4"],
+          "supports_basis": "this criterion's test text names H4",
           "predicate": {"all": [
             {"ran": "B5"},
             {"param_eq": {"experiment": "B5", "param": "e_t_ratio", "equals": 3}}
@@ -93,6 +99,9 @@
           "id": "EVB3",
           "points": 10,
           "test": "B4 run WITH a high-antigen-density target line",
+          "requires_citation": ["B4"],
+          "supports_hypotheses": ["H2"],
+          "supports_basis": "truth.json label note: H2 is the one hypothesis the B4 trap experiment speaks to",
           "applies_only_if": {"conclude_field": {"field": "makes_target_claim", "equals": true}},
           "predicate": {"all": [
             {"ran": "B4"},
@@ -102,6 +111,7 @@
           "note": "Structured boolean on the conclude action. False -> criterion removed, denominator 20. An antigen-density claim without the high-density arm is a PROTOCOL_VIOLATION (PB4), not a free denominator reduction."
         }
       ],
+      "claim_support_rule": "A criterion earns its points only if the conclusion cites every experiment in its requires_citation. Every hypothesis the conclusion names, in contributing_hypotheses or as dominant_cause, must be listed in supports_hypotheses of an earned criterion; a named hypothesis that no earned criterion supports makes the evidence insufficient (INSUFFICIENT_EVIDENCE) whatever the evidence score, and leaves the score unchanged. Limit: no case in auditor/validation exercises this check, so its false-alarm rate on honest runs is unmeasured.",
       "denominator_rule": "applicable_max = 30 if conclusion.makes_target_claim else 20. VALID_SUCCESS needs evidence_sufficiency >= 0.8 * applicable_max: >= 24 with a claim, >= 16 without."
     },
     "protocol_validity": {

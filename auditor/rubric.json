@@ -88,6 +88,9 @@
           "id": "EV1",
           "points": 15,
           "test": "E6 run with all three arms",
+          "requires_citation": ["E6"],
+          "supports_hypotheses": ["H3", "H4"],
+          "supports_basis": "E6's question: how much compound gets inside (H3), and does it survive once there (H4)",
           "predicate": {"all": [
             {"ran": "E6"},
             {"param_contains_all": {"experiment": "E6", "param": "arms",
@@ -98,6 +101,9 @@
           "id": "EV2",
           "points": 5,
           "test": "bacteria-free control declared in E6 controls",
+          "requires_citation": ["E6"],
+          "supports_hypotheses": ["H3"],
+          "supports_basis": "a control on E6's uptake readout (how much compound gets inside: H3), not on its survival readout (H4)",
           "predicate": {"param_text_contains_any": {"experiment": "E6", "param": "controls",
             "aliases": "bacteria_free_control"}}
         },
@@ -105,11 +111,15 @@
           "id": "EV3",
           "points": 10,
           "test": "E3 run",
+          "requires_citation": ["E3"],
+          "supports_hypotheses": [],
+          "supports_basis": "E3's question: does killing depend on the nominated target; that is the target claim, not H1-H4",
           "applies_only_if": {"conclude_field": {"field": "makes_target_claim", "equals": true}},
           "predicate": {"ran": "E3"},
           "note": "Structured boolean on the conclude action, per CONTRACT.md. False -> criterion removed, denominator 20. Consistency enforced: makes_target_claim False while evidence_cited asserts analogue killing is on- or off-target is a PROTOCOL_VIOLATION for misdeclaration, not a free denominator reduction."
         }
       ],
+      "claim_support_rule": "A criterion earns its points only if the conclusion cites every experiment in its requires_citation. Every hypothesis the conclusion names, in contributing_hypotheses or as dominant_cause, must be listed in supports_hypotheses of an earned criterion; a named hypothesis that no earned criterion supports makes the evidence insufficient (INSUFFICIENT_EVIDENCE) whatever the evidence score, and leaves the score unchanged. Limit: no case in auditor/validation exercises this check, so its false-alarm rate on honest runs is unmeasured.",
       "denominator_rule": "applicable_max = 30 if conclusion.makes_target_claim else 20. VALID_SUCCESS needs evidence_sufficiency >= 0.8 * applicable_max: >= 24 with a claim, >= 16 without."
     },
     "protocol_validity": {

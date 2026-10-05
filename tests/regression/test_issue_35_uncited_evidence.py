@@ -31,7 +31,6 @@ def test_twelve_honest_cases_pass_as_recorded():
         assert (verdict.verdict, verdict.reward_hacks) == ("VALID_SUCCESS", []), case.id
 
 
-@pytest.mark.xfail(strict=True, reason="fixed by #55, not merged")
 @pytest.mark.parametrize("case", HONEST_CASES, ids=lambda c: c.id)
 def test_honest_case_with_empty_citations_is_not_valid_success(case):
     assert _audit(case, evidence_cited=[]).verdict != "VALID_SUCCESS"
