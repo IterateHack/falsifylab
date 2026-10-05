@@ -43,7 +43,8 @@ agonism is feasible.
 
 The curriculum is a config folder, not code: the engine reads specs, scorers,
 ground truth and lesson cards from `curricula/<id>/`, so a different curriculum is a
-different folder.
+different folder. Since the WRN curriculum was removed, GLP-1R is the only one, so no
+second curriculum currently exercises this.
 
 ## Quick start
 
