@@ -1,4 +1,4 @@
-"""PR #PRNUM: on Windows the sandbox trace hook resolved a ctypes load of a bare
+"""PR #65: on Windows the sandbox trace hook resolved a ctypes load of a bare
 system DLL name against the working directory, so `ctypes.WinDLL("kernel32")`
 inside ordinary library code was recorded as `<sandbox>/work/kernel32`, not a
 system path, and emitted as a `proc` record. `lab/engine/audit.py` maps every
