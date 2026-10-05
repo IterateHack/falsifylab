@@ -130,7 +130,7 @@ still unvalidated. Runs recorded before the path was logged are shown as
         |
         +--> Sandbox B: scorer + ground truth. The agent never gets a handle on it
         |
-        +--> lesson cards, appended to what later experiments can read
+        +--> lesson cards, shown only to the experiments that require them
 ```
 
 **The gate.** Until the notebook holds `hypothesis_and_prediction` (with a
@@ -143,7 +143,9 @@ that nothing under `private/` is ever reachable from the agent's sandbox.
 
 **Teaching after the fact.** The lesson card is shown only after the score is
 fixed, so it can never influence the attempt it grades. The agent then writes
-what it got wrong, and that lesson becomes available to later experiments.
+what it got wrong. The experiment's lesson card then goes only to the later
+experiments that name it in `requires_lessons`, and the engine puts those cards in
+their first prompt. The agent's own notes go to the notebook and are not fed back.
 
 **The event log is the single source of truth.** The notebook and the animation
 are both views over it. Replay is the demo default; live mode streams over SSE.
@@ -183,9 +185,10 @@ code carries neither the API layer nor the Anthropic SDK.
 executed - the development machine had no Modal credentials. The local backend is
 the tested one, and both Modal modules say so at the top of the file.
 
-## The control run
+## The first control run (n=1, historical)
 
-The claim that lessons help is testable, so it is tested:
+The claim that lessons help is testable, so it is tested. This was the first
+attempt, one run per arm:
 
 ```bash
 ./.venv/bin/python -m engine.cli run --run-id control_no_lessons --no-lessons
@@ -254,10 +257,25 @@ Not yet done: the held-out validation and test experiments the plan calls for.
 Until they exist, any gain measured on the current six experiments is a gain on
 the experiments the cards were written from.
 
+### What has been measured so far
+
+No multi-run comparison of the arms is in the tree. The only sourced figures are
+three capstone (experiment 6) scores: **0.95** cold, from a one-off script rather
+than `--arm cold` (Opus 5, n=4 parsed answers of 5 samples, range 0.875-1.00;
+records on the `evidence/cold-capstone` branch, restored from the repository
+root with `git fetch origin evidence/cold-capstone && git restore --source
+origin/evidence/cold-capstone -- cold_capstone`), **0.79** in the lab without
+cards and **1.00** with them (one committed run each, `replays/control` and
+`replays/demo`, both before the relevance fix). The single runs carry no interval.
+The measurement that would replace them - every `--arm` on all six experiments,
+n>=3 per cell, seed recorded, records on a data branch, intervals reported - is
+[#67](https://github.com/IterateHack/falsifylab/issues/67).
+
 ## Repository layout
 
 ```
-engine/       event log, specs, agent loop, tool gating, scoring, audit, replay, notebook, CLI
+engine/       event log, specs, agent loop, tool gating, scoring, audit, replay, notebook,
+              the cold arm, the multi-run aggregator, token metering, CLI
 evals/        the audit eval suite: scripted agents with known right verdicts
 sandbox/      Executor contract; local and Modal backends
 curricula/    one folder per curriculum: specs, scorers, ground truth, lessons, audit specs, fetch
@@ -267,12 +285,13 @@ api/          FastAPI (replay + SSE) and the Modal deployment
 web/          Vite + React pixel lab and notebook overlay
 art/          generates every spritesheet with Pillow
 devin/        curriculum-engineering playbook and session launcher
-docs/         reference verification, dataset provenance, credits
+docs/         evaluation plan, reference verification, dataset provenance, credits
 ```
 
 ## What we found
 
-Running the curriculum against Claude Sonnet 5 (Opus 5 for the capstone):
+Running the curriculum against Claude Sonnet 5 (Opus 5 for the capstone), in the
+first single run, before the relevance fix:
 
 - It scored well - mean **0.90** across six experiments - and it was
   **systematically underconfident**, with a mean calibration gap of **-0.30**.
@@ -292,8 +311,10 @@ Both results are in `runs/`, and the notebook is readable as markdown at
 
 - **Pretraining leakage is real.** These are famous results. Scoring targets
   data-analysis outputs rather than recall wherever possible, the notebook
-  records prior knowledge claimed, and the control run exists to quantify it -
-  but a model that already knows about Trp33 cannot unknow it.
+  records prior knowledge claimed, and the cold arm (`--arm cold`) exists to
+  quantify it, though no multi-run cold measurement is in the tree yet
+  ([#67](https://github.com/IterateHack/falsifylab/issues/67)). A model that
+  already knows about Trp33 cannot unknow it.
 - **n=1 per arm in the committed runs.** Treat deltas under about 0.1 between those runs as noise. `aggregate` exists to replace them.
 - **Three data soft spots** - transcribed half-lives, Open Targets release
   dependence, and simulated dose-response points over real potencies - are listed
