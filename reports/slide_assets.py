@@ -65,7 +65,12 @@ SCIENCE_DENOMINATOR_CAPTION = (
     "Science runs only: provider refusals, refusal-aborted, spend-cap-stopped, "
     "harness-error and PARSE_FAILURE runs are excluded and counted separately."
 )
-WILSON_CI_CAPTION = "Wilson 95% CIs shown only when n ≥ 2 science runs."
+WILSON_CI_CAPTION = (
+    "Wilson 95% CIs shown only when n ≥ 2 science runs. "
+    "clean_success_ci95_degenerate is true for a cell with one science run: an "
+    "interval from one run carries no information, so none is drawn. It is empty "
+    "only for a cell with no science runs (n_scored = 0)."
+)
 GRID_DENOMINATOR_NOTE = (
     "runner's grid_summary.json counts refusal-aborted runs in n_scored, so its "
     "clean_success_rate differs from this table's (and with it clean_success_ci95, "
@@ -80,6 +85,8 @@ REPLICATE_CAPTION = (
     "cell has 0 or n clean successes: every resample of an all-0 or all-1 sample is "
     "identical, so the bootstrap interval collapses to a point and carries no "
     "information. Use the Wilson interval in clean_success_ci for those cells. "
+    "In these assets clean_success_ci95_degenerate is also true for a one-run cell "
+    "(n = 1): every resample is that run. It is empty only when n = 0. "
     "cost_of_pass = mean_cost / clean_success_mean (Cost-of-Pass, arXiv:2504.13359); "
     "the upper bound is null when resamples with zero successes make it unbounded. "
     "Cost is experiment budget units, not inference dollars."
@@ -90,6 +97,12 @@ PATTERN_HEADER = (
     "pattern", "provenance", "detected / planted", "recall", "FP / honest", "FPR",
 )
 KAPPA_HEADER = ("subset", "n", "observed agreement", "kappa")
+KAPPA_SUBSET_LABELS = {
+    "overall": "overall",
+    "explicit_only": "explicit patterns only",
+    "scenario_a": "scenario A",
+    "scenario_b": "scenario B",
+}
 DERIVED_SUMMARIES = (
     "derived from results.jsonl (runner.modal_batch.aggregate/grid_summary)"
 )
@@ -121,6 +134,16 @@ def _git_stamp(repo_root: Path) -> tuple[str, bool]:
         ["git", "status", "--porcelain"], cwd=repo_root, text=True,
     ).strip())
     return f"{sha}-dirty" if dirty else sha, dirty
+
+
+def _portable_path(path: Path, repo_root: Path) -> str:
+    path = Path(path)
+    if not path.is_absolute():
+        return path.as_posix()
+    try:
+        return path.resolve().relative_to(Path(repo_root).resolve()).as_posix()
+    except ValueError:
+        return str(path)
 
 
 def _sampling_summary(records: list[dict]) -> list[str]:
@@ -171,7 +194,10 @@ def build_batch_stamp(
         if record.get("job", {}).get("model") is not None
     })
     sampling = _sampling_summary(records)
-    source = f"{batch_dir} (results SHA: {results_sha})"
+    source = (
+        f"{_portable_path(batch_dir, Path(repo_root))} "
+        f"(results SHA: {results_sha})"
+    )
     if summaries_derived:
         source += "; summaries derived from results.jsonl"
     synthetic = any(
@@ -209,14 +235,21 @@ def build_validation_stamp(
     git_stamp: tuple[str, bool] | None = None,
 ) -> dict:
     report_path = Path(report_path)
+    results_path = report_path.with_name("results.json")
     git_sha, dirty = git_stamp or _git_stamp(Path(repo_root))
-    commit = _last_touching_commit(report_path, Path(repo_root))
+    report_commit = _last_touching_commit(report_path, Path(repo_root))
+    results_commit = _last_touching_commit(results_path, Path(repo_root))
     return {
         "git_sha": git_sha,
         "git_dirty": dirty,
         "models": "none (scripted validation cases)",
         "sampling": "n/a",
-        "source": f"{report_path} (last commit: {commit})",
+        "source": (
+            f"{_portable_path(report_path, Path(repo_root))} "
+            f"(last commit: {report_commit}); "
+            f"{_portable_path(results_path, Path(repo_root))} "
+            f"(last commit: {results_commit})"
+        ),
         "reaudit": None,
         "synthetic": synthetic,
     }
@@ -329,6 +362,8 @@ def _write_markdown(
 def _csv_value(value):
     if value is None:
         return ""
+    if isinstance(value, bool):
+        return str(value).lower()
     if isinstance(value, (dict, list, tuple)):
         return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
     return value
@@ -459,6 +494,9 @@ def _clean_success_rows(records: list[dict], grid_rows: list[dict]) -> list[dict
             "pass^5": _pass_k(n_scored, n_valid_success, 5),
             "n_valid_success": n_valid_success,
             "clean_success_ci95": ci95,
+            "clean_success_ci95_degenerate": (
+                True if n_scored == 1 else False if n_scored >= 2 else None
+            ),
             "mean_cost": mean_cost,
             "cost_of_pass": (
                 mean_cost / rate
@@ -647,6 +685,17 @@ def _plot_clean_success(path: Path, rows: list[dict], stamp: dict) -> None:
                 [high - row["clean_success_rate"]],
             ]
         axes.errorbar(index, row["clean_success_rate"], **errorbar_kwargs)
+        if row.get("n_scored") == 1:
+            axes.annotate(
+                "n=1, no CI",
+                (index, row["clean_success_rate"]),
+                xytext=(0, 5),
+                textcoords="offset points",
+                ha="center",
+                va="bottom",
+                fontsize=7,
+                color="#777777",
+            )
     axes.set_title("Clean success rate with 95% Wilson intervals", fontsize=14)
     axes.set_ylabel("Clean success rate", fontsize=10)
     axes.set_ylim(-0.05, 1.05)
@@ -1459,6 +1508,111 @@ def parse_validation_report(path: Path) -> tuple[list[dict], list[dict]]:
     return patterns, kappa_rows
 
 
+def _validation_kappa_rows(
+    report_rows: list[dict], results_path: Path,
+) -> list[dict]:
+    if not results_path.is_file():
+        raise FileNotFoundError(
+            f"Validation results file is missing: {results_path} "
+            "(expected results.json beside REPORT.md)"
+        )
+    results_doc = json.loads(results_path.read_text(encoding="utf-8"))
+    result_subsets = results_doc.get("cohens_kappa")
+    if not isinstance(result_subsets, dict):
+        raise ValueError(f"{results_path} is missing its cohens_kappa block")
+
+    report_subsets = {row["subset"]: row for row in report_rows}
+    result_rows = {
+        key: value
+        for key, value in result_subsets.items()
+        if isinstance(value, dict)
+        and {"n", "observed_agreement", "kappa"} <= value.keys()
+    }
+    display_subsets = {
+        KAPPA_SUBSET_LABELS.get(key, key): (key, value)
+        for key, value in result_rows.items()
+    }
+    if set(report_subsets) != set(display_subsets):
+        mismatch = sorted(set(report_subsets) ^ set(display_subsets))[0]
+        raise ValueError(
+            f"Kappa subset {mismatch}: REPORT.md and results.json disagree; "
+            "rerun python -m auditor.validation.run_validation"
+        )
+
+    rows = []
+    for subset_key, display_name in KAPPA_SUBSET_LABELS.items():
+        if display_name not in report_subsets:
+            continue
+        result = result_rows[subset_key]
+        report_row = report_subsets[display_name]
+        n = result["n"]
+        observed_agreement = result["observed_agreement"]
+        kappa = result["kappa"]
+        agrees = (
+            int(report_row["n"]) == n
+            and f"{kappa:.3f}" == report_row["kappa"]
+            and f"{observed_agreement * 100:.1f}%"
+            == report_row["observed agreement"]
+        )
+        if not agrees:
+            raise ValueError(
+                f"Kappa subset {display_name}: REPORT.md and results.json disagree; "
+                "rerun python -m auditor.validation.run_validation"
+            )
+        case_bootstrap = result["case_bootstrap"]
+        pattern_bootstrap = result["pattern_cluster_bootstrap"]
+        rows.append({
+            "subset": display_name,
+            "n": n,
+            "observed agreement": observed_agreement,
+            "kappa": kappa,
+            "case_ci95": case_bootstrap["ci95"],
+            "case_ci95_degenerate": case_bootstrap["degenerate"],
+            "case_n_clusters": case_bootstrap["n_clusters"],
+            "pattern_cluster_ci95": pattern_bootstrap["ci95"],
+            "pattern_cluster_ci95_degenerate": pattern_bootstrap["degenerate"],
+            "pattern_cluster_n_clusters": pattern_bootstrap["n_clusters"],
+            "bootstrap_resamples": case_bootstrap["resamples"],
+            "bootstrap_seed": case_bootstrap["seed"],
+        })
+    return rows
+
+
+def _kappa_ci_text(ci95, degenerate: bool) -> str:
+    if degenerate:
+        return "degenerate (all cases agree)"
+    if ci95 is None:
+        return "—"
+    return f"[{float(ci95[0]):.3f}, {float(ci95[1]):.3f}]"
+
+
+def _kappa_table_rows(kappa_rows: list[dict]) -> list[dict]:
+    return [
+        {
+            **row,
+            "case bootstrap 95% CI": _kappa_ci_text(
+                row["case_ci95"], row["case_ci95_degenerate"],
+            ),
+            "pattern-cluster bootstrap 95% CI": _kappa_ci_text(
+                row["pattern_cluster_ci95"],
+                row["pattern_cluster_ci95_degenerate"],
+            ),
+        }
+        for row in kappa_rows
+    ]
+
+
+def _kappa_caption(kappa_rows: list[dict]) -> str:
+    resamples = kappa_rows[0]["bootstrap_resamples"]
+    seed = kappa_rows[0]["bootstrap_seed"]
+    return (
+        f"95% percentile bootstrap, {resamples} resamples, seed {seed}. "
+        "Case = cases resampled; pattern-cluster = planted pattern groups "
+        "resampled, honest cases as singletons. Degenerate = every case agrees, "
+        "so every resample gives kappa 1 and the interval carries no information."
+    )
+
+
 def _validation_markdown(
     patterns: list[dict], kappa_rows: list[dict], stamp: dict,
 ) -> str:
@@ -1466,7 +1620,10 @@ def _validation_markdown(
         "pattern", "provenance", "detected/planted", "recall",
         "false alarms (FP / honest)", "false-alarm rate",
     ]
-    kappa_headers = ["subset", "n", "observed agreement", "kappa"]
+    kappa_headers = [
+        "subset", "n", "observed agreement", "kappa",
+        "case bootstrap 95% CI", "pattern-cluster bootstrap 95% CI",
+    ]
     lines = [
         "# Auditor validation",
         "",
@@ -1474,7 +1631,9 @@ def _validation_markdown(
         "",
         KAPPA_HEADING,
         "",
-        *_markdown_table(kappa_headers, kappa_rows),
+        *_markdown_table(kappa_headers, _kappa_table_rows(kappa_rows)),
+        "",
+        _kappa_caption(kappa_rows),
         "",
         f"*{_stamp_line(stamp)}*",
         "",
@@ -1495,8 +1654,9 @@ def _plot_validation(
     path: Path, patterns: list[dict], kappa_rows: list[dict], stamp: dict,
 ) -> None:
     figure = _figure(stamp)
+    figure.set_size_inches(12, 7.5)
     pattern_axes, kappa_axes = figure.subplots(
-        2, 1, gridspec_kw={"height_ratios": [3, 1]},
+        2, 1, gridspec_kw={"height_ratios": [3, 2]},
     )
     figure.suptitle("Auditor recall and false alarms", fontsize=14, y=0.985)
     pattern_axes.axis("off")
@@ -1520,33 +1680,47 @@ def _plot_validation(
 
     kappa_axes.axis("off")
     kappa_axes.set_title("Cohen's kappa", fontsize=12, pad=3)
-    kappa_headers = ["subset", "n", "observed agreement", "kappa"]
+    kappa_headers = [
+        "subset", "n", "observed agreement", "kappa",
+        "case bootstrap 95% CI", "pattern-cluster bootstrap 95% CI",
+    ]
     kappa_table = kappa_axes.table(
         cellText=[
             [_display_cell(header, row.get(header)) for header in kappa_headers]
-            for row in kappa_rows
+            for row in _kappa_table_rows(kappa_rows)
         ],
         colLabels=kappa_headers,
         cellLoc="center",
-        bbox=[0.01, 0.02, 0.98, 0.9],
+        bbox=[0.01, 0.24, 0.98, 0.65],
+        colWidths=[0.21, 0.06, 0.14, 0.08, 0.25, 0.26],
     )
     kappa_table.auto_set_font_size(False)
-    kappa_table.set_fontsize(9)
+    kappa_table.set_fontsize(8)
+    kappa_axes.text(
+        0.5,
+        0.04,
+        textwrap.fill(_kappa_caption(kappa_rows), width=150),
+        ha="center",
+        va="bottom",
+        fontsize=6,
+        transform=kappa_axes.transAxes,
+    )
     figure.subplots_adjust(
-        left=0.04, right=0.96, bottom=0.2, top=0.9, hspace=0.12,
+        left=0.04, right=0.96, bottom=0.18, top=0.9, hspace=0.12,
     )
     _save_figure(figure, path, stamp)
 
 
 def _asset_entry(
     path: Path, output_root: Path, stamp: dict, source_files: list[Path], *,
-    summaries: str | None = None,
+    summaries: str | None = None, repo_root: Path = REPO_ROOT,
 ) -> dict:
     entry = {
         "path": path.relative_to(output_root).as_posix(),
         "stamp": stamp,
         "source_files": [
-            str(source) for source in source_files if Path(source).is_file()
+            _portable_path(source, repo_root)
+            for source in source_files if Path(source).is_file()
         ],
     }
     if summaries is not None:
@@ -1591,7 +1765,8 @@ def generate_batch_assets(
         "n_parse_failure", "n_provider_refusal", "n_refusal_abort",
         "n_spend_cap_stop", "n_scored", "n_clean_success", "clean_success_rate",
         "pass^1", "pass^3", "pass^5", "n_valid_success",
-        "clean_success_ci95", "mean_cost", "cost_of_pass",
+        "clean_success_ci95", "clean_success_ci95_degenerate",
+        "mean_cost", "cost_of_pass",
     ]
     ci_csv = output_dir / "clean_success_ci.csv"
     ci_md = output_dir / "clean_success_ci.md"
@@ -1706,6 +1881,7 @@ def generate_batch_assets(
     return [
         _asset_entry(
             path, output_root, stamp, source_files, summaries=summaries_source,
+            repo_root=repo_root,
         )
         for path in (
             ci_png, ci_csv, ci_md, raw_png, cost_of_pass_png,
@@ -1714,7 +1890,7 @@ def generate_batch_assets(
     ] + [
         _asset_entry(
             path, output_root, stamp, selection_source_files,
-            summaries=summaries_source,
+            summaries=summaries_source, repo_root=repo_root,
         )
         for path in (selection_png, selection_md, selection_csv)
     ]
@@ -1726,7 +1902,9 @@ def generate_validation_assets(
 ) -> list[dict]:
     report_path = Path(report_path)
     output_root = Path(output_root)
-    patterns, kappa_rows = parse_validation_report(report_path)
+    patterns, report_kappa_rows = parse_validation_report(report_path)
+    results_path = report_path.with_name("results.json")
+    kappa_rows = _validation_kappa_rows(report_kappa_rows, results_path)
     stamp = build_validation_stamp(
         report_path,
         synthetic=synthetic,
@@ -1740,20 +1918,23 @@ def generate_validation_assets(
     csv_headers = [
         "type", "pattern", "provenance", "detected/planted", "recall",
         "false alarms (FP / honest)", "false-alarm rate", "subset", "n",
-        "observed agreement", "kappa",
+        "observed agreement", "kappa", "case_ci95", "case_ci95_degenerate",
+        "case_n_clusters", "pattern_cluster_ci95",
+        "pattern_cluster_ci95_degenerate", "pattern_cluster_n_clusters",
+        "bootstrap_resamples", "bootstrap_seed",
     ]
     _write_csv(csv_path, csv_headers, _validation_csv_rows(patterns, kappa_rows), stamp)
     _plot_validation(png_path, patterns, kappa_rows, stamp)
-    source_files = [report_path]
+    source_files = [report_path, results_path]
     return [
-        _asset_entry(path, output_root, stamp, source_files)
+        _asset_entry(path, output_root, stamp, source_files, repo_root=repo_root)
         for path in (md_path, csv_path, png_path)
     ]
 
 
 def _pooled_replicate_stamp(
     batch_dirs: list[Path], records_by_dir: list[list[dict]], *,
-    wave: bool, git_stamp: tuple[str, bool],
+    wave: bool, git_stamp: tuple[str, bool], repo_root: Path,
 ) -> dict:
     models = set()
     sampling = set()
@@ -1773,7 +1954,9 @@ def _pooled_replicate_stamp(
         ))
         code_shas = sorted(_code_shas(records))
         sha_text = ", ".join(code_shas) if code_shas else "not recorded"
-        sources.append(f"{batch_dir} (results SHA: {sha_text})")
+        sources.append(
+            f"{_portable_path(batch_dir, repo_root)} (results SHA: {sha_text})"
+        )
     return {
         "git_sha": git_stamp[0],
         "git_dirty": git_stamp[1],
@@ -1802,11 +1985,15 @@ def generate_replicate_assets(
     ]
     records = [record for batch_records in records_by_dir for record in batch_records]
     rows, excluded_variants = replicate_rows(records)
+    for row in rows:
+        if row["n"] == 1 and row["clean_success_ci95_degenerate"] is None:
+            row["clean_success_ci95_degenerate"] = True
     stamp = _pooled_replicate_stamp(
         batch_dirs,
         records_by_dir,
         wave=wave,
         git_stamp=git_stamp,
+        repo_root=Path(repo_root),
     )
     output_dir = output_root / "replicates"
     output_dir.mkdir(parents=True, exist_ok=False)
@@ -1844,7 +2031,7 @@ def generate_replicate_assets(
     )
     source_files = [batch_dir / "results.jsonl" for batch_dir in batch_dirs]
     return [
-        _asset_entry(path, output_root, stamp, source_files)
+        _asset_entry(path, output_root, stamp, source_files, repo_root=repo_root)
         for path in (json_path, csv_path, md_path)
     ]
 

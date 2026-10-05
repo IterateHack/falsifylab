@@ -20,3 +20,18 @@ Markdown and PNG rates and regret use three decimals, with confidence intervals 
 Experiment-selection captions explain: "bought = ran the experiment; w/ params = the evidence-sufficiency rules for that experiment also pass, evaluated with the auditor's predicate evaluator (auditor.audit.eval_pred)". The Markdown table lists the criterion IDs for each experiment's parameter rules.
 
 The `reports/` pipeline reads rubrics and imports the auditor's private `_Ctx` and `eval_pred` on the evaluation side only; nothing under `runner/` or `agents/` imports `reports/`.
+
+## Committed assets
+
+Refresh the committed wave-1 slide assets from the repository root:
+
+```sh
+rm -rf runs/stage2-wave1-assets
+git fetch origin data/wave1
+git restore --source origin/data/wave1 -- runs/stage2-wave1
+python -m reports.slide_assets --wave runs/stage2-wave1/a --wave runs/stage2-wave1/b --output runs/stage2-wave1-assets
+rm -rf reports/assets/stage2-wave1
+mv runs/stage2-wave1-assets reports/assets/stage2-wave1
+```
+
+Run the refresh from a clean tree at a commit containing the code change, then commit the generated assets. `python -m reports.asset_freshness` and the root test suite fail when the generating code has changed since an asset manifest's stamped commit.
