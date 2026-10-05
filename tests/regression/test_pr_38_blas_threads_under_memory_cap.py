@@ -35,6 +35,8 @@ from sandbox import local  # noqa: E402
 from sandbox.local import LocalExecutor, child_env  # noqa: E402
 
 MIB = 1024 ** 2
+THREAD_VARS = ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS",
+               "VECLIB_MAXIMUM_THREADS")
 SNIPPET = "import numpy\nprint('imported', numpy.__version__)\n"
 
 
@@ -65,7 +67,8 @@ def _imports(cap_mib: int, pinned: bool) -> bool:
         if not pinned:
             def unpinned_env(*args, **kwargs):
                 env = child_env(*args, **kwargs)
-                env.pop("OPENBLAS_NUM_THREADS", None)
+                for var in THREAD_VARS:
+                    env.pop(var, None)
                 return env
             mp.setattr(local, "child_env", unpinned_env)
         with LocalExecutor(name="pr38", mem_bytes=cap_mib * MIB) as ex:
@@ -84,11 +87,11 @@ def _pinned_floor_mib(lo: int = 64, hi: int = 1024, step: int = 4) -> int:
     return hi
 
 
-def test_child_env_sets_the_openblas_thread_limit_on_every_platform(tmp_path):
+def test_child_env_sets_every_thread_limit_on_every_platform(tmp_path):
     for platform in ("linux", "darwin", "win32"):
         env = child_env(tmp_path, tmp_path, tmp_path, "trace", 2 * 1024 ** 3,
                         platform=platform, source={})
-        assert env["OPENBLAS_NUM_THREADS"] == "1", platform
+        assert {v: env.get(v) for v in THREAD_VARS} == dict.fromkeys(THREAD_VARS, "1"), platform
 
 
 def test_unpinned_thread_pool_breaks_a_cap_the_pinned_import_fits():
