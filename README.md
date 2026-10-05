@@ -42,10 +42,10 @@ ask whether it tells the agent which experiment matters.** Interfaces are in
 [`CONTRACT.md`](CONTRACT.md) and `contract.py`.
 
 `docs/` is default-deny because the alternative was a list maintained by hand, and that list had
-already been wrong: `929f463` added five answer-bearing files it had been missing. The currently
-named docs include `docs/research/`, `docs/*-design-history.md`, and `docs/VERIFIER-REGRESSIONS.md`;
-the rule is written so a doc added tomorrow is fenced without anyone remembering, and unfencing one
-is a deliberate allowlist entry.
+already been wrong: `929f463` added five answer-bearing files it had been missing. Every file under
+`docs/` is named there today, each for a stated reason — the gold answer, an episode verdict, or a
+protocol rule's trigger logic — so the allowlist ships empty; the rule is written so a doc added
+tomorrow is fenced without anyone remembering, and unfencing one is a deliberate allowlist entry.
 `tests/test_docs_fence.py` enforces it: every file under `docs/` must be named on the labeller
 don't-open list in [`auditor/validation/real/LABELLER-GUIDE.md`](auditor/validation/real/LABELLER-GUIDE.md)
 §5 or allowlisted with a reason, and no `agent/`-side file or Modal worker bundle may reference a
