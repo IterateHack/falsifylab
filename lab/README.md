@@ -51,7 +51,7 @@ different folder.
 python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
 ./.venv/bin/python -m curricula.glp1r.fetch      # build datasets from primary sources
 ./.venv/bin/python -m engine.cli validate        # check specs, data, scorers, lessons
-./.venv/bin/python -m pytest -q                  # 92 tests
+./.venv/bin/python -m pytest -q                  # 105 tests
 
 export ANTHROPIC_API_KEY=...
 ./.venv/bin/python -m engine.cli run --run-id my_run
@@ -140,6 +140,16 @@ their first prompt. The agent's own notes go to the notebook and are not fed bac
 
 **The event log is the single source of truth.** The notebook and the animation
 are both views over it. Replay is the demo default; live mode streams over SSE.
+
+## Running on Windows
+
+The local sandbox runs on Windows, with one gap. The trace, the answer-key
+refusal and the network block work as on POSIX. The memory cap does not: it is
+`setrlimit`, which Windows lacks. The sandbox records that on every
+`run_python` result, the `tool_result` events carry `memory_cap_enforced: false`
+and the notebook entry says "sandbox limits not enforced on this host". A run
+made that way is not comparable to the recorded runs and must not be presented
+as one. `--backend modal` runs the code in a Linux sandbox and has no such gap.
 
 ## Running on Modal
 
@@ -231,34 +241,19 @@ Not yet done: the held-out validation and test experiments the plan calls for.
 Until they exist, any gain measured on the current six experiments is a gain on
 the experiments the cards were written from.
 
-### First look at the arms (2026-10-04)
+### What has been measured so far
 
-The first small set run with the relevance fix: 3 cold, 2 baseline, 2 lessons.
-Mean score per experiment (0 to 1):
-
-| Experiment | Cold | Baseline | Lessons |
-|---|---|---|---|
-| 1 Genetic support | 0.04 | 0.84 | 0.80 |
-| 2 Peptide-receptor structure | 0.34 | 1.00 | 1.00 |
-| 3 Peptide engineering | 0.93 | 0.95 | 0.95 |
-| 4 Potency | 0.00 | 0.93 | 0.92 |
-| 5 Small-molecule feasibility | 0.75 | 0.75 | 0.85 |
-| 6 Capstone | 0.78 | 0.88 | 1.00 |
-| **Mean** | **0.47** | **0.89** | **0.92** |
-
-- **The lab adds a lot over memory alone** (+0.42 over cold), almost all of it on
-  the data-analysis experiments (1, 2, 4).
-- **Memory alone is strong on the reasoning experiments** (3, 5, 6), so those
-  partly measure recall.
-- **Lessons versus no lessons: no detectable difference** (+0.03). The gains sit
-  on experiments 5 and 6, which depend on earlier lessons, but two runs per arm
-  cannot establish that.
-- **Do not quote the intervals.** With two or three runs a bootstrap interval is
-  a resample of a handful of numbers, and a permutation p cannot go below 0.1
-  (2 vs 3 runs) or 0.17 (2 vs 2). `aggregate` flags this on its result line.
-- **Cost:** a lab run is about 1.1M input and 0.1M output tokens on Sonnet plus a
-  small Opus capstone; a cold run is about 4k in and 11k out. No prompt caching is
-  used. Token counts only: `usage.json` records tokens, not prices.
+No multi-run comparison of the arms is in the tree. The only sourced figures are
+three capstone (experiment 6) scores: **0.95** cold, from a one-off script rather
+than `--arm cold` (Opus 5, n=4 parsed answers of 5 samples, range 0.875-1.00;
+records on the `evidence/cold-capstone` branch, restored from the repository
+root with `git fetch origin evidence/cold-capstone && git restore --source
+origin/evidence/cold-capstone -- cold_capstone`), **0.79** in the lab without
+cards and **1.00** with them (one committed run each, `replays/control` and
+`replays/demo`, both before the relevance fix). The single runs carry no interval.
+The measurement that would replace them - every `--arm` on all six experiments,
+n>=3 per cell, seed recorded, records on a data branch, intervals reported - is
+[#67](https://github.com/IterateHack/falsifylab/issues/67).
 
 ## Repository layout
 
@@ -299,9 +294,10 @@ Both results are in `runs/`, and the notebook is readable as markdown at
 
 - **Pretraining leakage is real.** These are famous results. Scoring targets
   data-analysis outputs rather than recall wherever possible, the notebook
-  records prior knowledge claimed, and the cold arm now quantifies it: with no data
-  at all the model scores 0.93 on peptide engineering and 0.75 on small-molecule
-  feasibility. A model that already knows about Trp33 cannot unknow it.
+  records prior knowledge claimed, and the cold arm (`--arm cold`) exists to
+  quantify it, though no multi-run cold measurement is in the tree yet
+  ([#67](https://github.com/IterateHack/falsifylab/issues/67)). A model that
+  already knows about Trp33 cannot unknow it.
 - **n=1 per arm in the committed runs.** Treat deltas under about 0.1 between those runs as noise. `aggregate` exists to replace them.
 - **Three data soft spots** - transcribed half-lives, Open Targets release
   dependence, and simulated dose-response points over real potencies - are listed

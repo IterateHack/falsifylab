@@ -54,6 +54,14 @@ class NotebookEntry:
     tool_calls_used: int = 0
     model: str = ""
     audit: dict[str, Any] | None = None   # engine/audit.py report, set after scoring
+    # Sandbox limits the contract promises but this host could not apply (the
+    # memory cap on Windows). Rendered on the page: such a run is not
+    # comparable to the recorded ones and must never pass for one.
+    unenforced_limits: list[str] = field(default_factory=list)
+
+    def note_unenforced_limit(self, note: str) -> None:
+        if note not in self.unenforced_limits:
+            self.unenforced_limits.append(note)
 
     def set(self, section: str, text: str) -> None:
         if section not in SECTION_TITLES:
@@ -143,6 +151,11 @@ class NotebookEntry:
         if self.model:
             out.append(f"*Model: {self.model}. Tool calls used: {self.tool_calls_used}.*")
             out.append("")
+        if self.unenforced_limits:
+            out.append("**Sandbox limits not enforced on this host: "
+                       + "; ".join(self.unenforced_limits)
+                       + ". This run is not comparable to the recorded runs.**")
+            out.append("")
         for i, key in enumerate(SECTION_ORDER, start=1):
             body = self.sections.get(key, "").strip()
             if not body:
@@ -182,6 +195,7 @@ class NotebookEntry:
             "papers": self.papers,
             "tool_calls_used": self.tool_calls_used,
             "model": self.model,
+            "unenforced_limits": list(self.unenforced_limits),
             "answer": _jsonable(self.answer),
             "audit": self.audit,
             "markdown": self.to_markdown(),
