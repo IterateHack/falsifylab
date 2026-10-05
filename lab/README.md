@@ -20,11 +20,19 @@ programme - why an optimisation campaign produced the most potent PptT inhibitor
 reported and no antibacterial. Scenario B (CAR-T binder affinity versus
 durability) is a second biology used to test whether the auditor's rules hold
 outside the hypothesis they were written for, not a second claim.
+Scenario A's source is Singh et al., *Sci. Adv.* 10:eadj6406, 2024. Its question,
+and the known limitations of its answer key, are in the [root README](../README.md).
+An independent literature check of that key is in
+[`docs/research/scenario-a-gold-check.md`](../docs/research/scenario-a-gold-check.md).
+The survey behind its PR4 control rule is in
+[`docs/research/control-aliases.md`](../docs/research/control-aliases.md).
 
 This lab is a separate instrument with its own engine, scorers and verdict
 implementation, and no code integration with the root auditor. Its curriculum is
 GLP-1R. That is an implementation choice, not a second scientific hypothesis, and
-no result from the lab is offered as evidence about the PptT question.
+no result from the lab is offered as evidence about the PptT question. What the
+curriculum's science rests on, and how its answer keys were produced, is in
+[`curricula/glp1r/PROVENANCE.md`](curricula/glp1r/PROVENANCE.md).
 
 ## The curriculum: GLP-1R
 
@@ -138,6 +146,13 @@ what it got wrong, and that lesson becomes available to later experiments.
 
 **The event log is the single source of truth.** The notebook and the animation
 are both views over it. Replay is the demo default; live mode streams over SSE.
+The committed replays are kept as recorded. `replays/control` was committed at
+[`85c6904`](https://github.com/IterateHack/falsifylab/commit/85c69040403451738c4608133c04276a3bc92f19)
+and `replays/demo` at
+[`d56727e`](https://github.com/IterateHack/falsifylab/commit/d56727ec6f7fbcf56cc23e5ecefcfab886797e66)
+(their event logs carry no code SHA). The system prompt's wording changed after them
+("the hypothesis under test" is now "the curriculum claim"), so neither replays what
+the current code would produce.
 
 ## Running on Windows
 
@@ -216,7 +231,7 @@ floor.
 
 | `--arm` | The agent gets | Answers |
 |---|---|---|
-| `cold` | hypothesis, title and answer format only. No data, tools or lessons | What prior knowledge alone scores - the true floor |
+| `cold` | curriculum claim, title and answer format only. No data, tools or lessons | What prior knowledge alone scores - the true floor |
 | `baseline` | the lab, no lesson cards | What the apparatus adds |
 | `placebo` | the lab, same-length cards of irrelevant prose | Is it just more context? |
 | `null` | the lab, same-length cards of meaningless symbols | Is it just the format? |
@@ -245,7 +260,8 @@ engine/       event log, specs, agent loop, tool gating, scoring, audit, replay,
 evals/        the audit eval suite: scripted agents with known right verdicts
 sandbox/      Executor contract; local and Modal backends
 curricula/    one folder per curriculum: specs, scorers, ground truth, lessons, audit specs, fetch
-              glp1r/ the six-experiment GLP-1R curriculum, the lab's only one
+              glp1r/ the six-experiment GLP-1R curriculum, the lab's only one;
+                     scientific provenance in glp1r/PROVENANCE.md
 api/          FastAPI (replay + SSE) and the Modal deployment
 web/          Vite + React pixel lab and notebook overlay
 art/          generates every spritesheet with Pillow

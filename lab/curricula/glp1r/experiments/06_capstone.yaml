@@ -15,7 +15,7 @@ inputs:
 audit: audit/exp6.yaml
 limits: {max_tool_calls: 16, timeout_s: 420, max_python_seconds: 30}
 task: |
-  Write an evidence-weighted verdict on the headline hypothesis:
+  Write an evidence-weighted verdict on the curriculum claim, H1:
 
     "GLP-1R is a genetically supported, druggable obesity target, and oral
      non-peptide agonism is feasible."
