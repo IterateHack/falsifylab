@@ -227,6 +227,64 @@ These numbers predate the relevance fix: the engine then showed the agent every
 earned card, not only the ones an experiment names in `requires_lessons`. They are
 not comparable to runs made now, which is why the next section exists.
 
+## Cold-answer check: the capstone partly measures recall
+
+Three capstone (experiment 6) scores, each on the curriculum's own scorer
+(`scorers/exp6.py`), each resting on a different n:
+
+| Condition | Capstone score | n | Records |
+|---|---|---|---|
+| Cold: no lab, no data, no tools, no cards | **0.95** (range 0.875-1.00) | 4 parsed answers of 5 samples | `evidence/cold-capstone` branch |
+| The lab, no lesson cards | **0.79** | 1 run | `replays/control` |
+| The lab with lesson cards | **1.00** | 1 run | `replays/demo` |
+
+The claim is the comparison, not the 0.95. The lab without its cards (data,
+tools, the agent loop) does not lift the capstone above what the model answers
+from memory, and may cost it: 0.79 against 0.95. So the capstone partly measures
+recall. Read the mean-0.90 headline below as a check that the pipeline runs end
+to end, not as a capability result. The two lab figures are single committed
+runs with no interval, and both predate the relevance fix above, so the ordering
+is a direction to test, not an estimate.
+
+**The cold figure.** Per sample: 0.875, 1.00, 1.00, 0.917. A fifth sample
+(sample 4) returned JSON with a trailing comma; it counts as a parse failure and
+is left out of the mean. With only that comma removed it scores 0.79, reported
+here separately and not averaged in. Stated confidence across the four was
+0.82-0.85 (mean 0.83), against 0.75 with cards and 0.68 without in the two lab
+runs.
+
+**What the cold model saw.** The hypothesis, the six experiment titles, the
+capstone's question and its answer format, with the only edits being the removal
+of the sentences that refer to lessons or earlier results. No data, no tools, no
+cards. This is a one-off check, not `--arm cold`, which shows only an
+experiment's title and answer format. Model and call settings match the lab's
+capstone: `claude-opus-5`, adaptive thinking, effort `high`, `max_tokens` 16000,
+no tools.
+
+**The scorer.** The curriculum's own `exp6` scorer and `private/exp6.json`, at
+`aa18672`. The evidence branch records that, before any API call, both scorers
+(this one and the since-removed WRN one) were checked to return 0.0 for an empty
+answer and 1.0 for a gold answer. The scorer and its ground truth are unchanged
+on main since `aa18672`, and re-scoring the four parsed answers on main
+reproduces every per-sample score.
+
+**The records.** `runs/` is gitignored, so these live on a branch. From the
+repository root:
+
+```bash
+git fetch origin evidence/cold-capstone && git restore --source origin/evidence/cold-capstone -- cold_capstone
+```
+
+`cold_capstone/cold_results.json` holds every raw reply, parsed answer, stated
+confidence and scorer breakdown, so re-scoring needs no API call.
+`cold_capstone/cold_test.py` is the script; its `LAB` path at the top is the
+author's Windows checkout and must point at `lab/` before it runs. The branch is
+records only and is not for merging.
+
+Experiments 1, 2 and 4 have numeric scorers and were not tested this way.
+Experiments 3 and 5 are phrase-matched like the capstone and were not tested
+either.
+
 ## Measuring improvement
 
 `docs/evaluation-plan.md` is the protocol. The short version: one run is a draw,
@@ -299,6 +357,8 @@ first single run, before the relevance fix:
   claimed less certainty than its results earned. The notebook measures the gap
   in whichever direction it falls, and the teaching phase produced genuinely
   specific self-criticism about *why* the confidence was miscalibrated.
+  The capstone part of that 0.90 is reachable without the lab (see the
+  cold-answer check above), so read the 0.90 as a pipeline check.
 - On the first run of experiment 2 the agent spent its entire 25-call budget
   parsing the mmCIF and never submitted, scoring zero. That is an artefact of the
   harness, not a finding about the science, so budgets now reserve their last two
