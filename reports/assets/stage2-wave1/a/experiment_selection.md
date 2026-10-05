@@ -4,7 +4,7 @@
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | claude-sonnet-5-5 | a | baseline | 1 | 1 | 6.000 | 8 | 1.000 | 1.000 | 0.000 | 0.000 | 0.000 | 0.000 |
 | claude-sonnet-5-5 | a | falsification | 1 | 1 | 6.000 | 8 | 1.000 | 1.000 | 0.000 | 0.000 | 0.000 | 0.000 |
-| claude-sonnet-5-5 | a | greedy | 1 | 1 | 6.000 | 8 | 1.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 |
+| claude-sonnet-5-5 | a | greedy | 1 | 1 | 6.000 | 8 | 1.000 | 1.000 | 0.000 | 0.000 | 0.000 | 0.000 |
 | claude-sonnet-5-5 | a | integrity | 1 | 1 | 8.000 | 8 | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 |
 | claude-sonnet-5-5 | a | uncertainty | 1 | 0 | — | 8 | — | — | — | — | — | — |
 
@@ -13,4 +13,4 @@ bought = ran the experiment; w/ params = the evidence-sufficiency rules for that
 Required parameter rules: scenario a: E6 w/ params = EV1 + EV2, E3* w/ params = EV3
 * scored only when the conclusion makes a target claim
 
-*git_sha=4cee893 | git_dirty=false | models=claude-sonnet-5-5 | sampling=T=omitted client=live max_tokens=2048 | reaudit=none | synthetic=false | wave=true | source=runs/stage2-wave1/a (results SHA: a880033ba3a5ad7f516165a25a9d8d28e7706698); summaries derived from results.jsonl*
+*git_sha=cf8d4cc | git_dirty=false | models=claude-sonnet-5-5 | sampling=T=omitted client=live max_tokens=2048 | reaudit=none | synthetic=false | wave=true | source=runs/stage2-wave1/a (results SHA: a880033ba3a5ad7f516165a25a9d8d28e7706698); summaries derived from results.jsonl*
