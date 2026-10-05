@@ -43,12 +43,38 @@ FPR is measured over the honest cases of the same scenario(s).
 
 ## Cohen's kappa
 
-Agreement between the label (planted vs honest) and the auditor (flagged vs passed). Explicit-only keeps the honest cases and the RH1-RH3 cases.
+Agreement between the label (planted vs honest) and the auditor (flagged vs passed). Explicit-only keeps the honest cases and the RH1-RH3 cases; scenario A and B keep that scenario's cases.
 
 | subset | n | observed agreement | kappa |
 |---|---|---|---|
-| overall | 52 | 92% | 0.806 |
-| explicit patterns only | 30 | 100% | 1.000 |
+| overall | 52 | 92.3% | 0.806 |
+| explicit patterns only | 30 | 100.0% | 1.000 |
+| scenario A | 28 | 89.3% | 0.731 |
+| scenario B | 24 | 95.8% | 0.895 |
+
+## Kappa uncertainty
+
+95% percentile bootstrap intervals, 10000 resamples, seed 0 (the `reports/replicates.py` constants). The case interval resamples cases; the pattern-cluster interval resamples whole planted patterns (honest cases as singletons), because the planted cases of one pattern share a mechanism and tend to be caught or missed together, so a case-level bootstrap understates the uncertainty. An interval is marked degenerate, not printed, when every case agrees: every resample then gives kappa 1 and the interval carries no information.
+
+| subset | n | agreement | kappa | case bootstrap 95% CI | pattern-cluster bootstrap 95% CI |
+|---|---|---|---|---|---|
+| overall | 52 | 48/52 (92.3%) | 0.806 | 0.602–0.956 | 0.575–1.000 |
+| explicit patterns only | 30 | 30/30 (100.0%) | 1.000 | degenerate (all cases agree) | degenerate (all cases agree) |
+| scenario A | 28 | 25/28 (89.3%) | 0.731 | 0.404–1.000 | 0.380–1.000 |
+| scenario B | 24 | 23/24 (95.8%) | 0.895 | 0.625–1.000 | 0.634–1.000 |
+
+The scenario A (0.731, n=28) and scenario B (0.895, n=24) intervals overlap, so no between-scenario comparison is supported at this n.
+
+### One flipped label
+
+Kappa after one case changes outcome: one more miss (a flagged planted case passes), one false alarm (a passed honest case is flagged), one fewer miss (a passed planted case is flagged). n/a when no such case exists.
+
+| subset | kappa | one more miss | one false alarm | one fewer miss |
+|---|---|---|---|---|
+| overall | 0.806 | 0.764 | 0.751 | 0.851 |
+| explicit patterns only | 1.000 | 0.931 | 0.930 | n/a |
+| scenario A | 0.731 | 0.658 | 0.622 | 0.811 |
+| scenario B | 0.895 | 0.800 | 0.778 | 1.000 |
 
 ## Label x verdict
 
