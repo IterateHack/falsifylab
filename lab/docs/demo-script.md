@@ -66,7 +66,7 @@ scored was whether the verdict was properly structured."
 **7. Close (15s).**
 "Agent code runs in Modal Sandboxes, with the scorer in a separate sandbox so the
 ground truth is somewhere the agent can't reach. The curriculum is a config
-folder, so the engine does not depend on the curriculum. And the whole curriculum can be
+folder, so the engine is designed not to depend on the curriculum. And the whole curriculum can be
 built by Devin - one session per experiment, with twelve acceptance criteria and
 a human reviewing every PR."
 
