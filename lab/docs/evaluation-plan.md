@@ -38,7 +38,7 @@ State of the engine:
 ## Arms (same model, settings and tools unless stated)
 | Arm | What the agent gets | Purpose |
 |---|---|---|
-| A-cold | Hypothesis and experiment titles only. No data, no tools, no lessons. | The true floor: prior knowledge alone. |
+| A-cold | Curriculum claim and experiment titles only. No data, no tools, no lessons. | The true floor: prior knowledge alone. |
 | A0 | The lab (data, tools), no lessons | What the apparatus adds over prior knowledge. May be negative. |
 | A1 | The lab plus length-matched, topic-irrelevant prose in the lesson slot | Controls for "more context". |
 | A1b | The lab plus a lesson block of semantically null tokens, same length and formatting | Closes the "format effect, not content" loophole. |

@@ -138,6 +138,13 @@ what it got wrong, and that lesson becomes available to later experiments.
 
 **The event log is the single source of truth.** The notebook and the animation
 are both views over it. Replay is the demo default; live mode streams over SSE.
+The committed replays are kept as recorded. `replays/control` was committed at
+[`85c6904`](https://github.com/IterateHack/falsifylab/commit/85c69040403451738c4608133c04276a3bc92f19)
+and `replays/demo` at
+[`d56727e`](https://github.com/IterateHack/falsifylab/commit/d56727ec6f7fbcf56cc23e5ecefcfab886797e66)
+(their event logs carry no code SHA). The system prompt's wording changed after them
+("the hypothesis under test" is now "the curriculum claim"), so neither replays what
+the current code would produce.
 
 ## Running on Modal
 
@@ -206,7 +213,7 @@ floor.
 
 | `--arm` | The agent gets | Answers |
 |---|---|---|
-| `cold` | hypothesis, title and answer format only. No data, tools or lessons | What prior knowledge alone scores - the true floor |
+| `cold` | curriculum claim, title and answer format only. No data, tools or lessons | What prior knowledge alone scores - the true floor |
 | `baseline` | the lab, no lesson cards | What the apparatus adds |
 | `placebo` | the lab, same-length cards of irrelevant prose | Is it just more context? |
 | `null` | the lab, same-length cards of meaningless symbols | Is it just the format? |
