@@ -58,6 +58,34 @@ def _install_trace():
     system = tuple({norm(os.path.realpath(p)) for p in
                     (sys.prefix, sys.base_prefix, sys.exec_prefix, sys.base_exec_prefix)})
     seen, state = set(), {"busy": False, "n": 0}
+    windows = sys.platform == "win32"
+    system32 = (norm(os.path.join(os.environ["SYSTEMROOT"], "System32"))
+                if windows and os.environ.get("SYSTEMROOT") else "")
+
+    def dll_target(name):
+        """What a ctypes load of `name` opens, and whether it is a system library.
+
+        A name with a directory part is opened at that path. A bare name is not
+        looked up in the working directory by the loader (ctypes' default
+        search on Windows, dlopen on POSIX), so resolving it against the cwd
+        mislabels `kernel32` as a file in the sandbox. A file of that name in
+        the working directory is still reported, because an explicit search
+        mode would load it; otherwise a bare name is a system library only if
+        System32 holds it, and anything else is reported as given.
+        """
+        if os.path.dirname(name):
+            return os.path.realpath(name), False
+        candidates = [name]
+        if windows and not os.path.splitext(name)[1]:
+            candidates.append(name + ".dll")
+        for cand in candidates:
+            if os.path.exists(cand):
+                return os.path.realpath(cand), False
+        if system32:
+            for cand in candidates:
+                if os.path.exists(os.path.join(system32, cand)):
+                    return os.path.join(system32, cand), True
+        return name, False
 
     def under(path, base):
         path = norm(path)
@@ -109,8 +137,11 @@ def _install_trace():
                 raw = args[0]
                 if raw is None:        # dlopen(None) is the interpreter itself
                     return
-                path = os.path.realpath(os.fsdecode(raw)) if isinstance(raw, (str, bytes)) else str(raw)
-                if not any(under(path, b) for b in system):
+                if isinstance(raw, (str, bytes)):
+                    path, system_dll = dll_target(os.fsdecode(raw))
+                else:
+                    path, system_dll = str(raw), False
+                if not system_dll and not any(under(path, b) for b in system):
                     emit({"kind": "proc", "event": event, "target": path})
         except PermissionError:
             raise
