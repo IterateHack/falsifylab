@@ -500,6 +500,48 @@ def test_provider_refusal_is_typed_and_charged():
     create.assert_called_once()
 
 
+REFUSAL_STOP_DETAILS = {
+    "type": "refusal",
+    "category": "reasoning_extraction",
+    "explanation": "asked to reproduce internal reasoning",
+}
+
+
+def _sdk_message(stop_reason, stop_details=None, text=""):
+    types = pytest.importorskip("anthropic.types")
+    return types.Message(
+        id="msg_test", type="message", role="assistant", model="claude-sonnet-5-5",
+        content=[{"type": "text", "text": text}] if text else [],
+        stop_reason=stop_reason, stop_details=stop_details,
+        usage={"input_tokens": 120, "output_tokens": 0},
+    )
+
+
+def test_provider_refusal_captures_sdk_stop_details_on_every_call():
+    from runner.model_clients import ProviderRefusal
+
+    create = Mock(side_effect=[
+        _sdk_message("refusal", REFUSAL_STOP_DETAILS),
+        _sdk_message("refusal", REFUSAL_STOP_DETAILS),
+    ])
+    client = AnthropicClient("claude-sonnet-5-5", TokenLedger(2, 10, log=None),
+                             provider_retries=1,
+                             client=SimpleNamespace(messages=SimpleNamespace(create=create)))
+    with pytest.raises(ProviderRefusal, match="reasoning_extraction") as exc:
+        client.complete("system", [{"role": "user", "content": "hello"}])
+    assert [entry["stop_details"] for entry in client.call_log] == [REFUSAL_STOP_DETAILS] * 2
+    assert exc.value.provider_stop == {"stop_reason": "refusal", "stop_details": REFUSAL_STOP_DETAILS}
+
+
+def test_completed_call_logs_null_stop_details():
+    create = Mock(return_value=_sdk_message("end_turn", text="reply"))
+    client = AnthropicClient("claude-sonnet-5-5", TokenLedger(2, 10, log=None),
+                             client=SimpleNamespace(messages=SimpleNamespace(create=create)))
+    assert client.complete("system", [{"role": "user", "content": "hello"}]) == "reply"
+    assert client.call_log[0]["stop_reason"] == "end_turn"
+    assert client.call_log[0]["stop_details"] is None
+
+
 def test_provider_refusal_retries_once_and_charges_each_attempt():
     from runner.model_clients import ProviderRefusal
 
@@ -570,7 +612,7 @@ def test_limit_failures_still_record_usage_in_both_ledgers(limit):
     episode = TokenLedger(2, 10, limit_usd=0.001 if limit == "episode" else 1.0, log=None)
     stage = TokenLedger(2, 10, limit_usd=0.001 if limit == "stage" else 1.0, log=None)
     client = AnthropicClient(
-        "claude-sonnet-5-5", episode, stage_ledger=stage, provider_retries=0,
+        "claude-sonnet-5-5", episode, stage_ledger=stage, provider_retries=0, max_tokens=1,
         client=SimpleNamespace(messages=SimpleNamespace(create=Mock(return_value=response))),
     )
     with pytest.raises(SpendLimitExceeded):
@@ -589,7 +631,7 @@ def test_provider_refusal_ends_episode_without_parse_abstention(tmp_path, after_
                 self.seen.append(messages)
                 return _buy_reply("E6", E6_PARAMETERS)
             self.ledger.record(100, 0)
-            raise ProviderRefusal("provider refused")
+            raise ProviderRefusal("provider refused", stop_details=REFUSAL_STOP_DETAILS)
 
     path = tmp_path / "refused.json"
     out = io.StringIO()
@@ -601,6 +643,9 @@ def test_provider_refusal_ends_episode_without_parse_abstention(tmp_path, after_
     assert code == 4
     assert record["outcome"] == "provider_refusal"
     assert record["provider_refusal"] is True
+    assert record["provider_stop"] == {
+        "stop_reason": "refusal", "stop_details": REFUSAL_STOP_DETAILS,
+    }
     assert record["clean_success"] is False
     assert record["refusal_count"] == 0
     assert record["agent_stats"]["parse_failures"] == 0
@@ -608,3 +653,73 @@ def test_provider_refusal_ends_episode_without_parse_abstention(tmp_path, after_
     assert record["verdict"]["verdict"] != "PARSE_FAILURE"
     assert len(record["trajectory"]["turns"]) == int(after_purchase)
     assert "provider_refusal" in out.getvalue()
+
+
+def _usage_response(input_tokens, output_tokens):
+    return SimpleNamespace(
+        content=[SimpleNamespace(text="ok")],
+        usage=SimpleNamespace(input_tokens=input_tokens, output_tokens=output_tokens),
+        stop_reason="end_turn",
+    )
+
+
+@pytest.mark.parametrize("limit", ["episode", "stage"])
+def test_call_whose_worst_case_could_cross_a_limit_is_not_made(limit):
+    create = Mock(return_value=_usage_response(10, 5))
+    episode = TokenLedger(2, 10, limit_usd=0.02 if limit == "episode" else 1.0, log=None)
+    stage = TokenLedger(2, 10, limit_usd=0.02 if limit == "stage" else 1.0, log=None)
+    client = AnthropicClient(
+        "claude-sonnet-5-5", episode, stage_ledger=stage, max_tokens=2048,
+        client=SimpleNamespace(messages=SimpleNamespace(create=create)),
+    )
+    with pytest.raises(SpendLimitExceeded, match="STOP before call 1"):
+        client.complete("system", [{"role": "user", "content": "call"}])
+    create.assert_not_called()
+    assert episode.calls == stage.calls == 0
+    assert client.call_log == []
+
+
+def test_reserved_calls_keep_episode_spend_within_its_limit():
+    # Usage at its worst case: every reply uses all of max_tokens and the input
+    # is as large as the prompt bytes allow.
+    def worst_case_create(*, system, messages, max_tokens, **_):
+        prompt = [system] + [message["content"] for message in messages]
+        input_tokens = sum(len(text.encode("utf-8")) + 16 for text in prompt)
+        return _usage_response(input_tokens, max_tokens)
+
+    ledger = TokenLedger(2, 10, limit_usd=0.05, log=None)
+    client = AnthropicClient(
+        "claude-sonnet-5-5", ledger, max_tokens=500,
+        client=SimpleNamespace(messages=SimpleNamespace(create=Mock(side_effect=worst_case_create))),
+    )
+    messages = []
+    with pytest.raises(SpendLimitExceeded, match="STOP before call"):
+        for turn in range(100):
+            messages.append({"role": "user", "content": "observation " * 50})
+            messages.append({"role": "assistant", "content": client.complete("system", messages)})
+    assert ledger.calls > 1
+    assert ledger.cost_usd <= ledger.limit_usd
+
+
+def test_input_bound_extends_the_last_reported_input_or_bounds_the_whole_prompt():
+    from runner.model_clients import MESSAGE_FRAMING_TOKENS, InputTokenBound
+
+    bound = InputTokenBound()
+    first = [{"role": "user", "content": "abc"}]
+    assert bound.bound("sys", first) == 3 + 3 + 2 * MESSAGE_FRAMING_TOKENS
+    bound.observe("sys", first, 7)
+    assert bound.bound("sys", first) == 7
+    extended = first + [{"role": "assistant", "content": "é"}]
+    assert bound.bound("sys", extended) == 7 + 2 + MESSAGE_FRAMING_TOKENS
+    rewritten = [{"role": "user", "content": "xyz"}]
+    assert bound.bound("sys", rewritten) == 3 + 3 + 2 * MESSAGE_FRAMING_TOKENS
+
+
+def test_dry_run_client_reserves_before_each_call():
+    from runner.model_clients import DryRunClient
+
+    ledger = TokenLedger(2, 10, limit_usd=0.0001, log=None)
+    client = DryRunClient("claude-sonnet-5-5", ledger, hypothesis_ids=["H1"])
+    with pytest.raises(SpendLimitExceeded, match="STOP before call 1"):
+        client.complete("system", [{"role": "user", "content": "call"}])
+    assert ledger.calls == 0

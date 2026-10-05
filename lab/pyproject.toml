@@ -5,5 +5,5 @@ description = "A virtual lab where an AI scientist is scored on its own predicti
 requires-python = ">=3.11"
 
 [tool.pytest.ini_options]
-testpaths = ["curricula/glp1r/tests", "curricula/wrn/tests", "engine/tests", "evals"]
+testpaths = ["curricula/glp1r/tests", "engine/tests", "evals"]
 pythonpath = ["."]

@@ -1,7 +1,7 @@
 # FalsifyLab
 
 A virtual laboratory where an AI scientist works through a curriculum of
-experiments testing one biological hypothesis. For each experiment it gets **one
+experiments on real data. For each experiment it gets **one
 attempt**: it writes its prediction and a numeric confidence *before* any data
 tool unlocks, runs real analysis in an isolated sandbox, is scored by a
 deterministic scorer it cannot reach, and is then taught the correct approach
@@ -13,10 +13,24 @@ wrong, and why I was confident anyway"*.
 
 ![the lab](docs/scene.png)
 
-## The hypothesis
+## Scope
 
-**H1: GLP-1R is a genetically supported, druggable obesity target, and oral
-non-peptide agonism is feasible.**
+The project has one scientific hypothesis: scenario A, the PptT / *M. tuberculosis*
+programme - why an optimisation campaign produced the most potent PptT inhibitor
+reported and no antibacterial. Scenario B (CAR-T binder affinity versus
+durability) is a second biology used to test whether the auditor's rules hold
+outside the hypothesis they were written for, not a second claim.
+
+This lab is a separate instrument with its own engine, scorers and verdict
+implementation, and no code integration with the root auditor. Its curriculum is
+GLP-1R. That is an implementation choice, not a second scientific hypothesis, and
+no result from the lab is offered as evidence about the PptT question.
+
+## The curriculum: GLP-1R
+
+The six experiments build an evidence-weighted case for one claim about GLP-1R: it
+is a genetically supported, druggable obesity target, and oral non-peptide
+agonism is feasible.
 
 | # | Experiment | Agent task | Scored on | Needs lessons from |
 |---|---|---|---|---|
@@ -25,20 +39,11 @@ non-peptide agonism is feasible.**
 | 3 | Peptide engineering | Rank nine analogues by duration, explain why | Duration-class ordering + mechanism rubric | 2 |
 | 4 | Potency | Fit dose-response curves, rank by consensus EC50 | Fit error in log units + rank correlation | 3 |
 | 5 | Small-molecule feasibility | Choose an assay model, predict whether a non-peptide agonist works | Rubric, with a penalty for the rodent trap | 2, 4 |
-| 6 | Capstone | An evidence-weighted verdict on H1 | Rubric against the ATTAIN-1 phase 3 result | 1-5 |
+| 6 | Capstone | An evidence-weighted verdict on the claim | Rubric against the ATTAIN-1 phase 3 result | 1-5 |
 
-The curriculum is a config folder, not code, so the engine is
-hypothesis-agnostic. That claim is tested rather than asserted: `curricula/wrn/`
-is a second hypothesis - **WRN helicase as a synthetic-lethal target in MSI-high
-cancers** - built on 21,108 real DepMap CRISPR measurements, with its own
-scorers and lesson cards and **no change to anything under `engine/` or
-`sandbox/`**.
-
-```bash
-./.venv/bin/python -m curricula.wrn.fetch
-./.venv/bin/python -m engine.cli validate --curriculum curricula/wrn
-./.venv/bin/python -m engine.cli run --curriculum curricula/wrn --run-id wrn_run
-```
+The curriculum is a config folder, not code: the engine reads specs, scorers,
+ground truth and lesson cards from `curricula/<id>/`, so a different curriculum is a
+different folder.
 
 ## Quick start
 
@@ -46,7 +51,7 @@ scorers and lesson cards and **no change to anything under `engine/` or
 python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
 ./.venv/bin/python -m curricula.glp1r.fetch      # build datasets from primary sources
 ./.venv/bin/python -m engine.cli validate        # check specs, data, scorers, lessons
-./.venv/bin/python -m pytest -q                  # 52 tests
+./.venv/bin/python -m pytest -q                  # 105 tests
 
 export ANTHROPIC_API_KEY=...
 ./.venv/bin/python -m engine.cli run --run-id my_run
@@ -134,6 +139,16 @@ what it got wrong, and that lesson becomes available to later experiments.
 **The event log is the single source of truth.** The notebook and the animation
 are both views over it. Replay is the demo default; live mode streams over SSE.
 
+## Running on Windows
+
+The local sandbox runs on Windows, with one gap. The trace, the answer-key
+refusal and the network block work as on POSIX. The memory cap does not: it is
+`setrlimit`, which Windows lacks. The sandbox records that on every
+`run_python` result, the `tool_result` events carry `memory_cap_enforced: false`
+and the notebook entry says "sandbox limits not enforced on this host". A run
+made that way is not comparable to the recorded runs and must not be presented
+as one. `--backend modal` runs the code in a Linux sandbox and has no such gap.
+
 ## Running on Modal
 
 ```bash
@@ -189,28 +204,97 @@ at n=1 per arm - experiment 1 needs no lessons and still moved +0.14, which is
 just run-to-run variance. `compare` says so itself rather than quoting the
 favourable number. Several runs per arm would be needed to claim more.
 
-## Cold-answer check: the capstone measures recall
+These numbers predate the relevance fix: the engine then showed the agent every
+earned card, not only the ones an experiment names in `requires_lessons`. They are
+not comparable to runs made now, which is why the next section exists.
 
-Opus 5, answering the GLP-1R capstone cold, scores **0.95** on the curriculum's
-own scorer (`scorers/exp6.py`). It is given only the hypothesis statement and
-the six experiment titles: no data, no tools, no lesson cards. The 0.95 is the
-mean of the four answers that parsed, out of five samples; the fifth was
-malformed JSON and counts as a parse failure. The lab run scored **1.00** with
-lessons and **0.79** without. Cold confidence averaged **0.83**, against the
-**0.75** the scientist stated before the capstone in the lab.
+## Cold-answer check: the capstone partly measures recall
 
-So the capstone measures recall rather than capability. Read the mean-0.90
-headline below as a check that the pipeline runs end to end, not as a capability
-result.
+Three capstone (experiment 6) scores, each on the curriculum's own scorer
+(`scorers/exp6.py`), each resting on a different n:
+
+| Condition | Capstone score | n | Records |
+|---|---|---|---|
+| Cold: no lab, no data, no tools, no cards | **0.95** (range 0.875-1.00) | 4 parsed answers of 5 samples | `evidence/cold-capstone` branch |
+| The lab, no lesson cards | **0.79** | 1 run | `replays/control` |
+| The lab with lesson cards | **1.00** | 1 run | `replays/demo` |
+
+The claim is the comparison, not the 0.95. The lab without its cards (data,
+tools, the agent loop) does not lift the capstone above what the model answers
+from memory, and may cost it: 0.79 against 0.95. So the capstone partly measures
+recall. Read the mean-0.90 headline below as a check that the pipeline runs end
+to end, not as a capability result. The two lab figures are single committed
+runs with no interval, and both predate the relevance fix above, so the ordering
+is a direction to test, not an estimate.
+
+**The cold figure.** Per sample: 0.875, 1.00, 1.00, 0.917. A fifth sample
+(sample 4) returned JSON with a trailing comma; it counts as a parse failure and
+is left out of the mean. With only that comma removed it scores 0.79, reported
+here separately and not averaged in. Stated confidence across the four was
+0.82-0.85 (mean 0.83), against 0.75 with cards and 0.68 without in the two lab
+runs.
+
+**What the cold model saw.** The hypothesis, the six experiment titles, the
+capstone's question and its answer format, with the only edits being the removal
+of the sentences that refer to lessons or earlier results. No data, no tools, no
+cards. This is a one-off check, not `--arm cold`, which shows only an
+experiment's title and answer format. Model and call settings match the lab's
+capstone: `claude-opus-5`, adaptive thinking, effort `high`, `max_tokens` 16000,
+no tools.
+
+**The scorer.** The curriculum's own `exp6` scorer and `private/exp6.json`, at
+`aa18672`. The evidence branch records that, before any API call, both scorers
+(this one and the since-removed WRN one) were checked to return 0.0 for an empty
+answer and 1.0 for a gold answer. The scorer and its ground truth are unchanged
+on main since `aa18672`, and re-scoring the four parsed answers on main
+reproduces every per-sample score.
+
+**The records.** `runs/` is gitignored, so these live on a branch. From the
+repository root:
+
+```bash
+git fetch origin evidence/cold-capstone && git restore --source origin/evidence/cold-capstone -- cold_capstone
+```
+
+`cold_capstone/cold_results.json` holds every raw reply, parsed answer, stated
+confidence and scorer breakdown, so re-scoring needs no API call.
+`cold_capstone/cold_test.py` is the script; its `LAB` path at the top is the
+author's Windows checkout and must point at `lab/` before it runs. The branch is
+records only and is not for merging.
 
 Experiments 1, 2 and 4 have numeric scorers and were not tested this way.
 Experiments 3 and 5 are phrase-matched like the capstone and were not tested
 either.
 
-Model and call settings match the lab's capstone (`claude-opus-5`, adaptive
-thinking, effort high). The prompt drops only the capstone's references to
-lessons and earlier results. The prompts, raw answers, scores and script are in
-[`evidence/cold-capstone`](https://github.com/IterateHack/falsifylab/tree/4562f18ddba80cf8dc2d7e6d79de64dba949c024/cold_capstone).
+## Measuring improvement
+
+`docs/evaluation-plan.md` is the protocol. The short version: one run is a draw,
+so improvement is a difference between *arms* over many runs, read against a
+floor.
+
+| `--arm` | The agent gets | Answers |
+|---|---|---|
+| `cold` | hypothesis, title and answer format only. No data, tools or lessons | What prior knowledge alone scores - the true floor |
+| `baseline` | the lab, no lesson cards | What the apparatus adds |
+| `placebo` | the lab, same-length cards of irrelevant prose | Is it just more context? |
+| `null` | the lab, same-length cards of meaningless symbols | Is it just the format? |
+| `lessons` | the lab, the cards each experiment requires | The treatment |
+
+```bash
+for i in 1 2 3 4 5; do
+  ./.venv/bin/python -m engine.cli run --arm cold --run-id cold_$i --runs-dir runs/eval
+  ./.venv/bin/python -m engine.cli run --arm lessons --run-id lessons_$i --runs-dir runs/eval
+done
+./.venv/bin/python -m engine.cli aggregate runs/eval --baseline cold --treatment lessons
+```
+
+`aggregate` reports the difference in mean score with a bootstrap 95% interval,
+a permutation p-value and Cohen's d, and warns below five runs per arm. Every run
+writes `run_meta.json` (its arm) and `usage.json` (tokens per model).
+
+Not yet done: the held-out validation and test experiments the plan calls for.
+Until they exist, any gain measured on the current six experiments is a gain on
+the experiments the cards were written from.
 
 ## Repository layout
 
@@ -218,9 +302,8 @@ lessons and earlier results. The prompts, raw answers, scores and script are in
 engine/       event log, specs, agent loop, tool gating, scoring, audit, replay, notebook, CLI
 evals/        the audit eval suite: scripted agents with known right verdicts
 sandbox/      Executor contract; local and Modal backends
-curricula/    one folder per hypothesis: specs, scorers, ground truth, lessons, audit specs, fetch
-              glp1r/ the six-experiment GLP-1R curriculum (H1)
-              wrn/   a second hypothesis, to prove the engine is agnostic (H2)
+curricula/    one folder per curriculum: specs, scorers, ground truth, lessons, audit specs, fetch
+              glp1r/ the six-experiment GLP-1R curriculum, the lab's only one
 api/          FastAPI (replay + SSE) and the Modal deployment
 web/          Vite + React pixel lab and notebook overlay
 art/          generates every spritesheet with Pillow
@@ -244,14 +327,6 @@ Running the curriculum against Claude Sonnet 5 (Opus 5 for the capstone):
   parsing the mmCIF and never submitted, scoring zero. That is an artefact of the
   harness, not a finding about the science, so budgets now reserve their last two
   calls for submission and every tool result reports the remaining budget.
-- Twice, a low score turned out to be **our** bug rather than the agent's. On the
-  WRN curriculum it scored 0.62 for discarding a five-cell-line tissue as
-  underpowered - which was correct, and which our ground truth had ranked second
-  - and for writing "tissue is a surrogate variable" where the rubric only looked
-  for the word "proxy". Both are fixed, and the same answer now scores 0.99. A
-  rubric that penalises a right answer for its vocabulary is worse than no rubric,
-  which is why every scorer has a test asserting the trap costs points and the
-  correct answer does not.
 
 Both results are in `runs/`, and the notebook is readable as markdown at
 `runs/<id>/notebook.md`.
@@ -262,7 +337,7 @@ Both results are in `runs/`, and the notebook is readable as markdown at
   data-analysis outputs rather than recall wherever possible, the notebook
   records prior knowledge claimed, and the control run exists to quantify it -
   but a model that already knows about Trp33 cannot unknow it.
-- **n=1 per arm.** Treat deltas under about 0.1 between runs as noise.
+- **n=1 per arm in the committed runs.** Treat deltas under about 0.1 between those runs as noise. `aggregate` exists to replace them.
 - **Three data soft spots** - transcribed half-lives, Open Targets release
   dependence, and simulated dose-response points over real potencies - are listed
   in `docs/references.md`.

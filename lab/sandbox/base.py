@@ -22,6 +22,13 @@ class ExecResult:
     # Backends that cannot provide them (Modal, so far) leave them empty.
     trace: list[dict] = field(default_factory=list)
     files_written: dict[str, str] = field(default_factory=dict)
+    # Whether the memory cap the contract promises was actually applied. True
+    # when the backend applied it, False when it could not (the local backend
+    # on Windows: no setrlimit), None when it did not report. `limits_note`
+    # says why. A run without the cap is not comparable to the recorded runs,
+    # so this goes into the event log and the notebook rather than being lost.
+    memory_cap_enforced: bool | None = None
+    limits_note: str = ""
 
     def as_tool_result(self, max_chars: int = 6000) -> str:
         parts = []
