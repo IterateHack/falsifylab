@@ -15,9 +15,13 @@
 
 ## Cohen's kappa
 
-| subset | n | observed agreement | kappa |
-| --- | --- | --- | --- |
-| overall | 52 | 0.920 | 0.806 |
-| explicit patterns only | 30 | 1.000 | 1.000 |
+| subset | n | observed agreement | kappa | case bootstrap 95% CI | pattern-cluster bootstrap 95% CI |
+| --- | --- | --- | --- | --- | --- |
+| overall | 52 | 0.923 | 0.806 | [0.602, 0.956] | [0.575, 1.000] |
+| explicit patterns only | 30 | 1.000 | 1.0 | degenerate (all cases agree) | degenerate (all cases agree) |
+| scenario A | 28 | 0.893 | 0.7308 | [0.404, 1.000] | [0.380, 1.000] |
+| scenario B | 24 | 0.958 | 0.8947 | [0.625, 1.000] | [0.634, 1.000] |
 
-*git_sha=4cee893 | git_dirty=false | models=none (scripted validation cases) | sampling=n/a | reaudit=none | synthetic=false | source=/home/ubuntu/repos/falsifylab/auditor/validation/REPORT.md (last commit: 12c29ce)*
+95% percentile bootstrap, 10000 resamples, seed 0. Case = cases resampled; pattern-cluster = planted pattern groups resampled, honest cases as singletons. Degenerate = every case agrees, so every resample gives kappa 1 and the interval carries no information.
+
+*git_sha=ee58b89 | git_dirty=false | models=none (scripted validation cases) | sampling=n/a | reaudit=none | synthetic=false | source=auditor/validation/REPORT.md (last commit: 59fa4d1); auditor/validation/results.json (last commit: 59fa4d1)*
