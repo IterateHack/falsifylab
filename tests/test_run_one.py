@@ -500,6 +500,48 @@ def test_provider_refusal_is_typed_and_charged():
     create.assert_called_once()
 
 
+REFUSAL_STOP_DETAILS = {
+    "type": "refusal",
+    "category": "reasoning_extraction",
+    "explanation": "asked to reproduce internal reasoning",
+}
+
+
+def _sdk_message(stop_reason, stop_details=None, text=""):
+    types = pytest.importorskip("anthropic.types")
+    return types.Message(
+        id="msg_test", type="message", role="assistant", model="claude-sonnet-5-5",
+        content=[{"type": "text", "text": text}] if text else [],
+        stop_reason=stop_reason, stop_details=stop_details,
+        usage={"input_tokens": 120, "output_tokens": 0},
+    )
+
+
+def test_provider_refusal_captures_sdk_stop_details_on_every_call():
+    from runner.model_clients import ProviderRefusal
+
+    create = Mock(side_effect=[
+        _sdk_message("refusal", REFUSAL_STOP_DETAILS),
+        _sdk_message("refusal", REFUSAL_STOP_DETAILS),
+    ])
+    client = AnthropicClient("claude-sonnet-5-5", TokenLedger(2, 10, log=None),
+                             provider_retries=1,
+                             client=SimpleNamespace(messages=SimpleNamespace(create=create)))
+    with pytest.raises(ProviderRefusal, match="reasoning_extraction") as exc:
+        client.complete("system", [{"role": "user", "content": "hello"}])
+    assert [entry["stop_details"] for entry in client.call_log] == [REFUSAL_STOP_DETAILS] * 2
+    assert exc.value.provider_stop == {"stop_reason": "refusal", "stop_details": REFUSAL_STOP_DETAILS}
+
+
+def test_completed_call_logs_null_stop_details():
+    create = Mock(return_value=_sdk_message("end_turn", text="reply"))
+    client = AnthropicClient("claude-sonnet-5-5", TokenLedger(2, 10, log=None),
+                             client=SimpleNamespace(messages=SimpleNamespace(create=create)))
+    assert client.complete("system", [{"role": "user", "content": "hello"}]) == "reply"
+    assert client.call_log[0]["stop_reason"] == "end_turn"
+    assert client.call_log[0]["stop_details"] is None
+
+
 def test_provider_refusal_retries_once_and_charges_each_attempt():
     from runner.model_clients import ProviderRefusal
 
@@ -589,7 +631,7 @@ def test_provider_refusal_ends_episode_without_parse_abstention(tmp_path, after_
                 self.seen.append(messages)
                 return _buy_reply("E6", E6_PARAMETERS)
             self.ledger.record(100, 0)
-            raise ProviderRefusal("provider refused")
+            raise ProviderRefusal("provider refused", stop_details=REFUSAL_STOP_DETAILS)
 
     path = tmp_path / "refused.json"
     out = io.StringIO()
@@ -601,6 +643,9 @@ def test_provider_refusal_ends_episode_without_parse_abstention(tmp_path, after_
     assert code == 4
     assert record["outcome"] == "provider_refusal"
     assert record["provider_refusal"] is True
+    assert record["provider_stop"] == {
+        "stop_reason": "refusal", "stop_details": REFUSAL_STOP_DETAILS,
+    }
     assert record["clean_success"] is False
     assert record["refusal_count"] == 0
     assert record["agent_stats"]["parse_failures"] == 0

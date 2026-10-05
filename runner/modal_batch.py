@@ -148,9 +148,13 @@ class EpisodeRun:
     trajectory: Trajectory
     refusals: list[Refusal]
     aborted_on_refusals: bool
-    provider_refusal: bool = False
+    provider_stop: dict | None = None
     spend_cap_stop: bool = False
     spend_cap_stop_reason: str | None = None
+
+    @property
+    def provider_refusal(self) -> bool:
+        return is_refusal_stop(self.provider_stop)
 
     @property
     def outcome(self) -> str:
@@ -161,6 +165,29 @@ class EpisodeRun:
     @property
     def refusal_count(self) -> int:
         return len(self.refusals)
+
+
+def is_refusal_stop(provider_stop: Mapping | None) -> bool:
+    return provider_stop is not None and provider_stop.get("stop_reason") == "refusal"
+
+
+def last_provider_stop(call_log: Iterable[Mapping] | None) -> dict | None:
+    """The provider's stop information for the episode's final model call."""
+    entries = list(call_log or [])
+    if not entries:
+        return None
+    return {"stop_reason": entries[-1].get("stop_reason"),
+            "stop_details": entries[-1].get("stop_details")}
+
+
+def is_provider_refusal(record: Mapping) -> bool:
+    """Classify from the captured ``provider_stop``. Records written before it
+    was captured (stage 2 wave 1) have no ``provider_stop`` and fall back to
+    their stored ``provider_refusal`` flag."""
+    provider_stop = record.get("provider_stop")
+    if provider_stop is not None:
+        return is_refusal_stop(provider_stop)
+    return bool(record.get("provider_refusal", False))
 
 
 def make_env(*, seed: int) -> Env:
@@ -269,10 +296,11 @@ def run_episode(job: EpisodeJob, env_factory: Callable, agent_factory: Callable,
     for agent_call in range(max_turns):
         try:
             action = agent.act(deepcopy(observation), deepcopy(env.state))
-        except ProviderRefusal:
+        except ProviderRefusal as exc:
             if log is not None:
-                log("[provider] episode ended: provider_refusal")
-            return EpisodeRun(trajectory, refusals, aborted_on_refusals=False, provider_refusal=True)
+                log(f"[provider] episode ended: provider_refusal {exc.provider_stop}")
+            return EpisodeRun(trajectory, refusals, aborted_on_refusals=False,
+                              provider_stop=exc.provider_stop)
         except SpendLimitExceeded as exc:
             if log is not None:
                 log(f"[spend] episode ended: {exc}")
@@ -347,6 +375,7 @@ def _harness_error_result(
             "sampling": _sampling_payload(client, mode),
             "tokens": client.ledger.snapshot(),
             "model_call_log": client.call_log,
+            "provider_stop": last_provider_stop(client.call_log),
         })
     elif job.variant in SCRIPTED_VARIANTS:
         result["sampling"] = None
@@ -411,11 +440,15 @@ def remote_episode(job: EpisodeJob, env_factory: str, agent_factory: str,
                 "model_call_log": client.call_log,
                 "worker": _worker_info(),
             })
+        provider_stop = episode.provider_stop or last_provider_stop(
+            client.call_log if client is not None else None
+        )
         result.update({
             "trajectory": asdict(episode.trajectory),
             "refusals": [asdict(refusal) for refusal in episode.refusals],
             "aborted_on_refusals": episode.aborted_on_refusals,
-            "provider_refusal": episode.provider_refusal,
+            "provider_stop": provider_stop,
+            "provider_refusal": is_refusal_stop(provider_stop),
             "spend_cap_stop": episode.spend_cap_stop,
             "spend_cap_stop_reason": episode.spend_cap_stop_reason,
             "outcome": episode.outcome,
@@ -492,11 +525,11 @@ def split_parse_failure_records(rows: list[dict]) -> tuple[list[dict], list[dict
 
 
 def split_science_records(rows: list[dict]) -> tuple[list[dict], list[dict], list[dict], list[dict]]:
-    provider_refusals = [r for r in rows if r.get("provider_refusal", False)]
+    provider_refusals = [r for r in rows if is_provider_refusal(r)]
     spend_cap_stops = [r for r in rows if r.get("spend_cap_stop", False)]
     scored, parse_failures = split_parse_failure_records([
         r for r in rows
-        if not r.get("provider_refusal", False) and not r.get("spend_cap_stop", False)
+        if not is_provider_refusal(r) and not r.get("spend_cap_stop", False)
     ])
     return scored, parse_failures, provider_refusals, spend_cap_stops
 
@@ -764,7 +797,7 @@ def write_clean_chart(records: list[dict], path: Path) -> None:
 
 def build_record(job: EpisodeJob, trajectory: Trajectory, verdict: Verdict, truth: Mapping, *,
                  refusals: list, aborted_on_refusals: bool, extra: Mapping) -> dict:
-    provider_refusal = bool(extra.get("provider_refusal", False))
+    provider_refusal = is_provider_refusal(extra)
     spend_cap_stop = bool(
         extra.get("spend_cap_stop", extra.get("outcome") == "spend_cap_stop")
     )
@@ -775,6 +808,7 @@ def build_record(job: EpisodeJob, trajectory: Trajectory, verdict: Verdict, trut
         "refusals": refusals,
         "refusal_count": len(refusals),
         "aborted_on_refusals": aborted_on_refusals,
+        "provider_stop": extra.get("provider_stop"),
         "provider_refusal": provider_refusal,
         "spend_cap_stop": spend_cap_stop,
         "spend_cap_stop_reason": extra.get("spend_cap_stop_reason"),
@@ -801,6 +835,7 @@ def build_harness_error_record(job: EpisodeJob, error: Mapping, extra: Mapping) 
         "refusals": [],
         "refusal_count": 0,
         "aborted_on_refusals": False,
+        "provider_stop": extra.get("provider_stop"),
         "provider_refusal": False,
         "spend_cap_stop": False,
         "spend_cap_stop_reason": None,
@@ -852,7 +887,12 @@ def write_results_readme(output: Path, *, episode_spend_limit_usd: float | None,
         "call log, and any partial trajectory, but have no science metrics and are "
         "excluded from scored rates. `PARSE_FAILURE` rows are also excluded from "
         "science metrics; `HARNESS_ERROR` rows retain the worker failure and no "
-        "trajectory.\n",
+        "trajectory.\n\n"
+        "`provider_stop` holds the provider's `stop_reason` and `stop_details` for the "
+        "episode's final model call (every call's are in `model_call_log`); "
+        "`provider_refusal` is classified from it. It is null when no model was called. "
+        "Records written before it was captured have no `provider_stop` and keep their "
+        "stored `provider_refusal` flag.\n",
         encoding="utf-8",
     )
 

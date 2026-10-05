@@ -25,7 +25,7 @@ from typing import Callable, Optional
 
 from contract import Trajectory, Verdict
 from runner.factories import make_agent, make_env, make_scripted_agent, scenario_dir
-from runner.modal_batch import EpisodeJob, run_episode
+from runner.modal_batch import EpisodeJob, is_refusal_stop, last_provider_stop, run_episode
 from runner.model_clients import (
     API_KEY_ENV, DEFAULT_PROVIDER_RETRIES, DEFAULT_SPEND_LIMIT_USD, DEFAULT_TEMPERATURE,
     AnthropicClient, SpendLimitExceeded, TokenLedger, price_for, sampling_settings,
@@ -163,6 +163,7 @@ def main(argv: Optional[list[str]] = None, client_factory: Optional[Callable] = 
             "conclusion metrics above are not meaningful. Compare experiment selection only.")
     say(format_tokens(ledger, agent))
 
+    provider_stop = episode_run.provider_stop or last_provider_stop(getattr(client, "call_log", None))
     if args.out is not None:
         record = {
             "job": asdict(job),
@@ -172,7 +173,8 @@ def main(argv: Optional[list[str]] = None, client_factory: Optional[Callable] = 
             "verdict": asdict(verdict),
             "clean_success": verdict.verdict == "VALID_SUCCESS" and episode_run.outcome == "completed",
             "sampling": sampling,
-            "provider_refusal": episode_run.provider_refusal,
+            "provider_stop": provider_stop,
+            "provider_refusal": is_refusal_stop(provider_stop),
             "outcome": episode_run.outcome,
             "budget": {"requested": args.budget, "bundle": bundle_budget},
             "refusals": [asdict(refusal) for refusal in episode_run.refusals],
