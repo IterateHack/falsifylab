@@ -20,11 +20,19 @@ programme - why an optimisation campaign produced the most potent PptT inhibitor
 reported and no antibacterial. Scenario B (CAR-T binder affinity versus
 durability) is a second biology used to test whether the auditor's rules hold
 outside the hypothesis they were written for, not a second claim.
+Scenario A's source is Singh et al., *Sci. Adv.* 10:eadj6406, 2024. Its question,
+and the known limitations of its answer key, are in the [root README](../README.md).
+An independent literature check of that key is in
+[`docs/research/scenario-a-gold-check.md`](../docs/research/scenario-a-gold-check.md).
+The survey behind its PR4 control rule is in
+[`docs/research/control-aliases.md`](../docs/research/control-aliases.md).
 
 This lab is a separate instrument with its own engine, scorers and verdict
 implementation, and no code integration with the root auditor. Its curriculum is
 GLP-1R. That is an implementation choice, not a second scientific hypothesis, and
-no result from the lab is offered as evidence about the PptT question.
+no result from the lab is offered as evidence about the PptT question. What the
+curriculum's science rests on, and how its answer keys were produced, is in
+[`curricula/glp1r/PROVENANCE.md`](curricula/glp1r/PROVENANCE.md).
 
 ## The curriculum: GLP-1R
 
@@ -242,7 +250,8 @@ engine/       event log, specs, agent loop, tool gating, scoring, audit, replay,
 evals/        the audit eval suite: scripted agents with known right verdicts
 sandbox/      Executor contract; local and Modal backends
 curricula/    one folder per curriculum: specs, scorers, ground truth, lessons, audit specs, fetch
-              glp1r/ the six-experiment GLP-1R curriculum, the lab's only one
+              glp1r/ the six-experiment GLP-1R curriculum, the lab's only one;
+                     scientific provenance in glp1r/PROVENANCE.md
 api/          FastAPI (replay + SSE) and the Modal deployment
 web/          Vite + React pixel lab and notebook overlay
 art/          generates every spritesheet with Pillow
