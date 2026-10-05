@@ -28,9 +28,81 @@ _REPORT = """\
 ## Cohen's kappa
 | subset | n | observed agreement | kappa |
 |---|---|---|---|
-| overall | 8 | 88% | 0.750 |
-| explicit patterns only | 6 | 100% | 1.000 |
+| overall | 8 | 87.5% | 0.750 |
+| explicit patterns only | 6 | 100.0% | 1.000 |
+| scenario A | 4 | 75.0% | 0.731 |
 """
+
+_REPORT_RESULTS = {
+    "cohens_kappa": {
+        "overall": {
+            "n": 8,
+            "observed_agreement": 0.875,
+            "kappa": 0.75,
+            "case_bootstrap": {
+                "ci95": [0.6023, 0.9556],
+                "degenerate": False,
+                "n_clusters": 8,
+                "resamples": 10000,
+                "seed": 0,
+            },
+            "pattern_cluster_bootstrap": {
+                "ci95": [0.5745, 1.0],
+                "degenerate": False,
+                "n_clusters": 6,
+                "resamples": 10000,
+                "seed": 0,
+            },
+        },
+        "explicit_only": {
+            "n": 6,
+            "observed_agreement": 1.0,
+            "kappa": 1.0,
+            "case_bootstrap": {
+                "ci95": None,
+                "degenerate": True,
+                "n_clusters": 6,
+                "resamples": 10000,
+                "seed": 0,
+            },
+            "pattern_cluster_bootstrap": {
+                "ci95": None,
+                "degenerate": True,
+                "n_clusters": 5,
+                "resamples": 10000,
+                "seed": 0,
+            },
+        },
+        "scenario_a": {
+            "n": 4,
+            "observed_agreement": 0.75,
+            "kappa": 0.7308,
+            "case_bootstrap": {
+                "ci95": [0.4, 1.0],
+                "degenerate": False,
+                "n_clusters": 4,
+                "resamples": 10000,
+                "seed": 0,
+            },
+            "pattern_cluster_bootstrap": {
+                "ci95": [0.3, 1.0],
+                "degenerate": False,
+                "n_clusters": 3,
+                "resamples": 10000,
+                "seed": 0,
+            },
+        },
+    },
+}
+
+
+def _write_report_results(report_path: Path) -> Path:
+    results_path = report_path.with_name("results.json")
+    results_path.write_text(
+        json.dumps(_REPORT_RESULTS),
+        encoding="utf-8",
+    )
+    return results_path
 
 
 def _load_records(batch_dir: Path) -> list[dict]:
@@ -82,8 +154,31 @@ def test_synthetic_cli_creates_all_stamped_assets_and_manifest(tmp_path, capsys)
         "replicates/replicate_summary.md",
     }
     manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
+    assert str(slide_assets.REPO_ROOT) not in json.dumps(manifest)
+    assert all(
+        str(slide_assets.REPO_ROOT) not in path.read_text(encoding="utf-8")
+        for path in output.rglob("*")
+        if path.is_file() and path.suffix in {".csv", ".md"}
+    )
     entries = manifest["assets"]
     assert {entry["path"] for entry in entries} == expected
+    validation_rows = list(csv.DictReader(
+        (output / "auditor_validation.csv").open(encoding="utf-8"),
+    ))
+    validation_kappas = [
+        row for row in validation_rows if row["type"] == "kappa"
+    ]
+    assert [row["subset"] for row in validation_kappas] == [
+        "overall", "explicit patterns only", "scenario A", "scenario B",
+    ]
+    assert validation_kappas[0]["n"] == "52"
+    assert validation_kappas[0]["observed agreement"] == "0.9231"
+    assert validation_kappas[0]["kappa"] == "0.806"
+    validation_markdown = (
+        output / "auditor_validation.md"
+    ).read_text(encoding="utf-8")
+    assert "degenerate (all cases agree)" in validation_markdown
+    assert "[0.602, 0.956]" in validation_markdown
     assert not (output / "_synthetic_input" / "REPORT.md").exists()
     replicate_entry = next(
         entry for entry in entries
@@ -137,8 +232,10 @@ def test_synthetic_cli_creates_all_stamped_assets_and_manifest(tmp_path, capsys)
         is_validation = entry["path"].startswith("auditor_validation.")
         assert stamp["synthetic"] is not is_validation
         if is_validation:
-            assert str(slide_assets.DEFAULT_VALIDATION) in stamp["source"]
-            assert str(slide_assets.DEFAULT_VALIDATION) in entry["source_files"]
+            assert "auditor/validation/REPORT.md" in stamp["source"]
+            assert "auditor/validation/REPORT.md" in entry["source_files"]
+            assert "auditor/validation/results.json" in stamp["source"]
+            assert "auditor/validation/results.json" in entry["source_files"]
             assert "SYNTHETIC DATA" not in slide_assets._stamp_line(stamp)
         else:
             assert "SYNTHETIC DATA" in slide_assets._stamp_line(stamp)
@@ -168,6 +265,7 @@ def test_synthetic_cli_creates_all_stamped_assets_and_manifest(tmp_path, capsys)
 def test_synthetic_accepts_and_honors_explicit_validation_path(tmp_path, monkeypatch, capsys):
     validation_path = tmp_path / "REPORT.md"
     validation_path.write_text(_REPORT, encoding="utf-8")
+    _write_report_results(validation_path)
     output = tmp_path / "slides"
     captured = {}
 
@@ -334,6 +432,55 @@ def test_wave_cli_stamps_wave_and_batch_mode_watermarks_non_wave(tmp_path, capsy
     assert slide_assets._watermark(batch_summary["stamp"]) == "NOT WAVE DATA"
 
 
+def test_replicate_assets_mark_single_run_cells_degenerate_only_in_assets(tmp_path):
+    batch_dir = tmp_path / "wave"
+    batch_dir.mkdir()
+    records = [
+        {
+            "job": {
+                "model": "model-x",
+                "scenario": "a",
+                "variant": "single",
+                "seed": 0,
+                "repeat": 0,
+            },
+            "verdict": {"verdict": "VALID_SUCCESS"},
+            "metrics": {"clean_success": True, "cost": 2.0},
+        },
+        {
+            "job": {
+                "model": "model-x",
+                "scenario": "a",
+                "variant": "empty",
+                "seed": 0,
+                "repeat": 0,
+            },
+            "verdict": {"verdict": "PARSE_FAILURE"},
+            "metrics": None,
+        },
+    ]
+    (batch_dir / "results.jsonl").write_text(
+        "".join(json.dumps(record) + "\n" for record in records),
+        encoding="utf-8",
+    )
+    output = tmp_path / "assets"
+    slide_assets.generate_replicate_assets(
+        [batch_dir], output, git_stamp=("test-sha", False),
+    )
+
+    summary = json.loads(
+        (output / "replicates" / "replicate_summary.json").read_text(
+            encoding="utf-8",
+        ),
+    )
+    rows = {row["variant"]: row for row in summary["rows"]}
+    assert rows["single"]["n"] == 1
+    assert rows["single"]["clean_success_ci95"] is None
+    assert rows["single"]["clean_success_ci95_degenerate"] is True
+    assert rows["empty"]["n"] == 0
+    assert rows["empty"]["clean_success_ci95_degenerate"] is None
+
+
 def test_clean_success_rows_match_grid_and_reject_tampering(tmp_path):
     batch_dir, _ = create_synthetic_inputs(tmp_path / "inputs")
     records = _load_records(batch_dir)
@@ -397,6 +544,7 @@ def test_wilson_intervals_are_suppressed_below_two_science_runs(tmp_path, monkey
     single = single_rows[0]
     assert single["n_scored"] == 1
     assert single["clean_success_ci95"] is None
+    assert single["clean_success_ci95_degenerate"] is True
 
     tampered_grid = [dict(single_grid[0])]
     tampered_grid[0]["clean_success_ci95"] = [0.0, 1.0]
@@ -410,21 +558,29 @@ def test_wilson_intervals_are_suppressed_below_two_science_runs(tmp_path, monkey
     two_rows = slide_assets._clean_success_rows(two_records, two_grid)
     assert two_rows[0]["n_scored"] == 2
     assert two_rows[0]["clean_success_ci95"] == two_grid[0]["clean_success_ci95"]
+    assert two_rows[0]["clean_success_ci95_degenerate"] is False
 
     calls = []
     figure_texts = []
+    annotations = []
     original_errorbar = Axes.errorbar
+    original_annotate = Axes.annotate
     original_figure_text = Figure.text
 
     def capture_errorbar(self, *args, **kwargs):
         calls.append((args, dict(kwargs)))
         return original_errorbar(self, *args, **kwargs)
 
+    def capture_annotate(self, text, *args, **kwargs):
+        annotations.append(text)
+        return original_annotate(self, text, *args, **kwargs)
+
     def capture_figure_text(self, x, y, text, *args, **kwargs):
         figure_texts.append(text)
         return original_figure_text(self, x, y, text, *args, **kwargs)
 
     monkeypatch.setattr(Axes, "errorbar", capture_errorbar)
+    monkeypatch.setattr(Axes, "annotate", capture_annotate)
     monkeypatch.setattr(Figure, "text", capture_figure_text)
     for label, rows, records in (
         ("single", single_rows, [record]),
@@ -440,9 +596,12 @@ def test_wilson_intervals_are_suppressed_below_two_science_runs(tmp_path, monkey
             plot_rows = score_rows if name == "raw" else rows
             plot_path = tmp_path / f"{label}-{name}.png"
             plot(plot_path, plot_rows, _stamp())
-            assert slide_assets.WILSON_CI_CAPTION in " ".join(
-                str(text) for text in figure_texts[previous_text_count:]
+            caption = " ".join(
+                " ".join(str(text).splitlines())
+                for text in figure_texts[previous_text_count:]
             )
+            assert " ".join(slide_assets.WILSON_CI_CAPTION.split()) in \
+                " ".join(caption.split())
 
     single_calls, two_calls = calls[:3], calls[3:]
     assert len(single_calls) == len(two_calls) == 3
@@ -453,6 +612,7 @@ def test_wilson_intervals_are_suppressed_below_two_science_runs(tmp_path, monkey
     assert "yerr" in two_calls[0][1]
     assert "xerr" in two_calls[1][1]
     assert "xerr" in two_calls[2][1]
+    assert annotations == ["n=1, no CI"]
 
 
 def test_pass_k_combinatorics_follow_counted_run_trials():
@@ -840,6 +1000,7 @@ def test_zero_science_provider_refusal_is_annotated_without_bars(
     )
     expected_label = "n=0 (1 provider refusal)"
     assert slide_assets._no_science_label(clean_rows[0]) == expected_label
+    assert clean_rows[0]["clean_success_ci95_degenerate"] is None
     assert slide_assets._no_science_label(selection_rows[0]) == expected_label
 
     errorbars = []
@@ -1303,10 +1464,12 @@ def test_generate_assets_stamps_clean_repo_before_writing_inside_it(tmp_path):
     subprocess.run(["git", "init", "--quiet", str(repo)], check=True)
     report_path = repo / "REPORT.md"
     report_path.write_text(_REPORT, encoding="utf-8")
+    _write_report_results(report_path)
     subprocess.run(
         [
             "git", "-C", str(repo), "-c", "user.name=Test",
             "-c", "user.email=test@example.com", "add", "REPORT.md",
+            "results.json",
         ],
         check=True,
     )
@@ -1329,6 +1492,9 @@ def test_generate_assets_stamps_clean_repo_before_writing_inside_it(tmp_path):
     )
     assert all(entry["stamp"]["git_dirty"] is False for entry in assets)
     assert all("-dirty" not in entry["stamp"]["git_sha"] for entry in assets)
+    for path in (repo / "slides").rglob("*"):
+        if path.is_file() and path.suffix in {".json", ".csv", ".md"}:
+            assert str(repo) not in path.read_text(encoding="utf-8")
 
 
 def test_number_formatting_is_display_only(tmp_path):
@@ -1517,9 +1683,73 @@ def test_validation_figure_title_is_updated(tmp_path, monkeypatch):
     monkeypatch.setattr(Figure, "suptitle", capture_suptitle)
     report_path = tmp_path / "REPORT.md"
     report_path.write_text(_REPORT, encoding="utf-8")
-    patterns, kappas = slide_assets.parse_validation_report(report_path)
+    _write_report_results(report_path)
+    patterns, report_kappas = slide_assets.parse_validation_report(report_path)
+    kappas = slide_assets._validation_kappa_rows(
+        report_kappas, report_path.with_name("results.json"),
+    )
     slide_assets._plot_validation(tmp_path / "validation.png", patterns, kappas, _stamp())
     assert titles == ["Auditor recall and false alarms"]
+
+
+def test_validation_assets_check_results_and_render_degenerate_intervals(tmp_path):
+    report_path = tmp_path / "REPORT.md"
+    report_path.write_text(_REPORT, encoding="utf-8")
+    results_path = _write_report_results(report_path)
+    patterns, report_kappas = slide_assets.parse_validation_report(report_path)
+    kappa_rows = slide_assets._validation_kappa_rows(
+        report_kappas, results_path,
+    )
+    assert [row["subset"] for row in kappa_rows] == [
+        "overall", "explicit patterns only", "scenario A",
+    ]
+    explicit = kappa_rows[1]
+    assert explicit["case_ci95"] is None
+    assert explicit["case_ci95_degenerate"] is True
+    assert slide_assets._kappa_ci_text(
+        explicit["case_ci95"], explicit["case_ci95_degenerate"],
+    ) == "degenerate (all cases agree)"
+    assert slide_assets._kappa_ci_text(None, False) == "—"
+    assert slide_assets._kappa_ci_text(
+        [0.6023, 0.9556], False,
+    ) == "[0.602, 0.956]"
+
+    output = tmp_path / "assets"
+    output.mkdir()
+    slide_assets.generate_validation_assets(
+        report_path, output, git_stamp=("test-sha", False),
+    )
+    markdown = (output / "auditor_validation.md").read_text(encoding="utf-8")
+    assert "degenerate (all cases agree)" in markdown
+    assert slide_assets._kappa_caption(kappa_rows) in markdown
+    assert "case bootstrap 95% CI" in markdown
+    assert "pattern-cluster bootstrap 95% CI" in markdown
+    scenario_a_row = next(
+        row for row in markdown.splitlines() if row.startswith("| scenario A |")
+    )
+    assert "| scenario A | 4 | 0.750 | 0.731 |" in scenario_a_row
+    csv_rows = list(csv.DictReader(
+        (output / "auditor_validation.csv").open(encoding="utf-8"),
+    ))
+    scenario_a_csv_row = next(
+        row for row in csv_rows
+        if row["type"] == "kappa" and row["subset"] == "scenario A"
+    )
+    assert scenario_a_csv_row["kappa"] == "0.7308"
+
+    mismatched = json.loads(results_path.read_text(encoding="utf-8"))
+    mismatched["cohens_kappa"]["overall"]["n"] = 9
+    results_path.write_text(json.dumps(mismatched), encoding="utf-8")
+    with pytest.raises(
+        ValueError,
+        match=r"overall: REPORT\.md and results\.json disagree; rerun "
+        r"python -m auditor\.validation\.run_validation",
+    ):
+        slide_assets._validation_kappa_rows(report_kappas, results_path)
+
+    results_path.unlink()
+    with pytest.raises(FileNotFoundError, match="results.json beside REPORT.md"):
+        slide_assets._validation_kappa_rows(report_kappas, results_path)
 
 
 def test_scripted_rows_are_filtered_from_success_assets_and_in_selection(tmp_path, monkeypatch):
@@ -1653,6 +1883,7 @@ def test_frontier_top3_excludes_scripted_and_preserves_tie_order(tmp_path):
 def test_validation_parser_checks_headers_and_real_report_structure(tmp_path):
     report_path = tmp_path / "REPORT.md"
     report_path.write_text(_REPORT, encoding="utf-8")
+    _write_report_results(report_path)
     patterns, kappas = slide_assets.parse_validation_report(report_path)
     assert patterns == [
         {
@@ -1672,8 +1903,10 @@ def test_validation_parser_checks_headers_and_real_report_structure(tmp_path):
             "false-alarm rate": "25%",
         },
     ]
-    assert [row["subset"] for row in kappas] == ["overall", "explicit patterns only"]
-    assert [float(row["kappa"]) for row in kappas] == [0.75, 1.0]
+    assert [row["subset"] for row in kappas] == [
+        "overall", "explicit patterns only", "scenario A",
+    ]
+    assert [float(row["kappa"]) for row in kappas] == [0.75, 1.0, 0.731]
 
     report_path.write_text(_REPORT.split("## Cohen's kappa", 1)[0], encoding="utf-8")
     with pytest.raises(ValueError, match="Cohen's kappa"):
