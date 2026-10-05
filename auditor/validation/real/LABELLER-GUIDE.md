@@ -85,15 +85,21 @@ For agreement, INSUFFICIENT_EVIDENCE, WRONG_CONCLUSION and VALID_SUCCESS all cou
   typos. A relabelled row is still recorded as blind, so using it after seeing the verdict silently
   contaminates the headline. If you relabel, say why in the note.
 - **Don't look up the answers.** Don't open anything that states the gold answer, a verdict for
-  one of your episodes, or the rules' trigger logic. The files below are the ones we know of; if
-  you find another file that does any of these, skip it too.
+  one of your episodes, or the rules' trigger logic. The entire documentation directory is closed
+  to you by default; the files below are the specific ones and why they are off limits.
+  `tests/test_docs_fence.py` enforces that a new docs file is fenced unless it is explicitly
+  allowlisted with a reason.
   - The answer key: `auditor/truth.json`, `auditor/expected_observations.json`,
     `auditor/rubric.json`, and `auditor/NOTES.md`, whose first section is the gold answer quoted
     from the source paper with its contribution labels. Its own header warns agent authors off,
     and a blind labeller is in the same position.
-  - Write-ups that restate the answer key: `docs/scenario-a-design-history.md` and
-    `docs/research/scenario-a-gold-check.md` restate it and the disputes over it, and the
-    repo-root `README.md` quotes from it.
+  - Write-ups that restate the answer key: `docs/scenario-a-design-history.md`,
+    `docs/research/scenario-a-gold-check.md`, and `docs/research/scenario-c-source.md` carry the
+    answer or the source paper's conclusions, and the repo-root `README.md` quotes from it.
+  - Protocol-rule trigger logic: `docs/research/control-aliases.md` gives PR4's accepted and
+    blocked control wordings, and `docs/research/serial-rechallenge.md` gives PB1's required 3:1
+    ratio and 3–4 day restimulation interval. These state rule trigger logic rather than the gold
+    answer.
   - Records of verdicts for these very runs: `docs/VERIFIER-REGRESSIONS.md` names one of your
     ten episodes by id and states an auditor verdict for it, `tests/fixtures/` holds that
     episode's frozen trajectory, `tests/regression/` asserts its expected verdict, and
