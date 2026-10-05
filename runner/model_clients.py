@@ -4,8 +4,10 @@ A client is anything with ``complete(system, messages) -> str`` (see
 ``agents.llm_agent.ModelClient``). ``AnthropicClient`` wraps the Anthropic
 Messages API; ``DryRunClient`` returns a fixed abstention without network
 access. Both report usage to a ``TokenLedger``, which logs calls and raises
-``SpendLimitExceeded`` when its estimated USD limit is exceeded. Batch
-collection combines per-episode ledgers for a stage spend guard.
+``SpendLimitExceeded`` when its estimated USD limit is exceeded. Before each
+call, both also reserve the call's worst-case cost and refuse to make a call
+that could cross the limit, so a ledger's spend never exceeds its limit.
+Batch collection combines per-episode ledgers for a stage spend guard.
 """
 from __future__ import annotations
 
@@ -14,7 +16,7 @@ import math
 import os
 import sys
 from dataclasses import dataclass, field
-from typing import Callable, Optional
+from typing import Callable, Mapping, Optional
 
 # USD per million tokens (input, output), public list prices. Matched by the
 # longest key that prefixes the model id, so dated ids resolve too.
@@ -32,10 +34,39 @@ DEFAULT_SPEND_LIMIT_USD = 20.0
 DEFAULT_TEMPERATURE = 1.0
 DEFAULT_PROVIDER_RETRIES = 1
 API_KEY_ENV = "ANTHROPIC_API_KEY"
+# Per-message allowance for role and turn framing tokens in the input bound.
+MESSAGE_FRAMING_TOKENS = 16
 
 
 class ProviderRefusal(RuntimeError):
-    pass
+    """The provider ended the call with ``stop_reason == "refusal"``.
+
+    Carries the provider's own stop information so the episode record can
+    persist it instead of inferring the refusal from the exception type."""
+
+    def __init__(self, message: str = "provider refused", *,
+                 stop_reason: str = "refusal", stop_details: Optional[dict] = None) -> None:
+        super().__init__(message)
+        self.stop_reason = stop_reason
+        self.stop_details = stop_details
+
+    @property
+    def provider_stop(self) -> dict:
+        return {"stop_reason": self.stop_reason, "stop_details": self.stop_details}
+
+
+def stop_details_payload(details) -> Optional[dict]:
+    """JSON form of the SDK's ``Message.stop_details`` (``RefusalStopDetails``
+    in anthropic 1.11: ``type``, ``category``, ``explanation``); every field the
+    SDK returns is kept, including ones newer than this code."""
+    if details is None:
+        return None
+    if isinstance(details, Mapping):
+        return dict(details)
+    dump = getattr(details, "model_dump", None)
+    if callable(dump):
+        return dump(mode="json")
+    return dict(vars(details))
 
 
 def sampling_settings(model: str, temperature: float) -> dict:
@@ -100,6 +131,17 @@ class TokenLedger:
                 f"after {self.calls} model calls ({self.input_tokens} input / {self.output_tokens} output tokens)"
             )
 
+    def reserve(self, input_tokens: int, output_tokens: int, label: str = "") -> None:
+        """Stop before a call whose worst-case usage could take spend past the limit."""
+        worst_case = self.estimate(input_tokens, output_tokens)
+        if self.cost_usd + worst_case > self.limit_usd:
+            raise SpendLimitExceeded(
+                f"STOP before call {self.calls + 1}{' ' + label if label else ''}: estimated spend "
+                f"${self.cost_usd:.4f} plus the call's worst case ${worst_case:.4f} "
+                f"({int(input_tokens)} input / {int(output_tokens)} output tokens) would exceed "
+                f"the ${self.limit_usd:.2f} limit"
+            )
+
     def snapshot(self) -> dict:
         return {
             "model_calls": self.calls,
@@ -111,6 +153,49 @@ class TokenLedger:
             "usd_per_mtok_out": self.usd_per_mtok_out,
             "spend_limit_usd": self.limit_usd,
         }
+
+
+def reserve_in_ledgers(
+    ledgers: list[Optional[TokenLedger]], input_tokens: int, output_tokens: int, label: str = "",
+) -> None:
+    seen: list[TokenLedger] = []
+    for ledger in ledgers:
+        if ledger is not None and not any(ledger is other for other in seen):
+            seen.append(ledger)
+            ledger.reserve(input_tokens, output_tokens, label=label)
+
+
+class InputTokenBound:
+    """Upper bound on a call's input tokens.
+
+    Assumes a token covers at least one UTF-8 byte (byte-level BPE) and allows
+    ``MESSAGE_FRAMING_TOKENS`` per message. When the prompt extends the last
+    one, the bound is the last call's reported input tokens plus the bytes
+    added since; otherwise it bounds the whole prompt.
+    """
+
+    def __init__(self) -> None:
+        self._prompt: Optional[list[tuple[str, str]]] = None
+        self._input_tokens = 0
+
+    @staticmethod
+    def _prompt_parts(system: str, messages: list[dict]) -> list[tuple[str, str]]:
+        return [("system", system)] + [(m["role"], m["content"]) for m in messages]
+
+    def bound(self, system: str, messages: list[dict]) -> int:
+        prompt = self._prompt_parts(system, messages)
+        previous = self._prompt
+        if previous is not None and prompt[:len(previous)] == previous:
+            added, base = prompt[len(previous):], self._input_tokens
+        else:
+            added, base = prompt, 0
+        return base + sum(
+            len(content.encode("utf-8")) + MESSAGE_FRAMING_TOKENS for _, content in added
+        )
+
+    def observe(self, system: str, messages: list[dict], input_tokens: int) -> None:
+        self._prompt = self._prompt_parts(system, messages)
+        self._input_tokens = int(input_tokens)
 
 
 class DryRunClient:
@@ -135,8 +220,13 @@ class DryRunClient:
         self.hypothesis_ids = list(hypothesis_ids)
         self.call_log: list[dict] = []
         self.provider_retries = 0
+        self._input_bound = InputTokenBound()
 
     def complete(self, system: str, messages: list[dict]) -> str:
+        reserve_in_ledgers(
+            [self.ledger], self._input_bound.bound(system, messages), self.max_tokens,
+            label=self.model,
+        )
         reply = json.dumps({
             "kind": "conclude",
             "contributing_hypotheses": [],
@@ -151,10 +241,12 @@ class DryRunClient:
             (len(system) + sum(len(message["content"]) for message in messages)) / 4
         )
         output_tokens = math.ceil(len(reply) / 4)
+        self._input_bound.observe(system, messages, input_tokens)
         self.call_log.append({
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
             "stop_reason": "dry_run",
+            "stop_details": None,
         })
         self.ledger.record(input_tokens, output_tokens, label=self.model)
         return reply
@@ -166,7 +258,9 @@ class AnthropicClient:
     The key is read from ``ANTHROPIC_API_KEY`` by the SDK; it is never passed
     on the command line or written anywhere. Every call's usage goes to the
     ledger before the text is returned, so a call that tips the stage over the
-    spend limit still gets counted and then stops the stage.
+    spend limit still gets counted and then stops the stage. Each call first
+    reserves its worst case (input bound plus ``max_tokens`` output) in both
+    ledgers and is not made if that could cross either limit.
     """
 
     def __init__(
@@ -199,6 +293,7 @@ class AnthropicClient:
         self.stage_ledger = stage_ledger
         self._client = client
         self.call_log: list[dict] = []
+        self._input_bound = InputTokenBound()
 
     def _record_usage(self, input_tokens: int, output_tokens: int) -> None:
         episode_error = stage_error = None
@@ -218,6 +313,10 @@ class AnthropicClient:
 
     def complete(self, system: str, messages: list[dict]) -> str:
         for _ in range(self.provider_retries + 1):
+            reserve_in_ledgers(
+                [self.stage_ledger, self.ledger], self._input_bound.bound(system, messages),
+                self.max_tokens, label=self.model,
+            )
             response = self._client.messages.create(
                 model=self.model,
                 system=system,
@@ -228,12 +327,19 @@ class AnthropicClient:
             )
             text = "".join(getattr(block, "text", "") for block in response.content)
             usage = response.usage
+            self._input_bound.observe(system, messages, usage.input_tokens)
             self.call_log.append({
                 "input_tokens": usage.input_tokens,
                 "output_tokens": usage.output_tokens,
                 "stop_reason": getattr(response, "stop_reason", None),
+                "stop_details": stop_details_payload(getattr(response, "stop_details", None)),
             })
             self._record_usage(usage.input_tokens, usage.output_tokens)
             if response.stop_reason != "refusal":
                 return text
-        raise ProviderRefusal("Anthropic returned stop_reason=refusal")
+        stop_details = self.call_log[-1]["stop_details"]
+        category = (stop_details or {}).get("category")
+        raise ProviderRefusal(
+            f"Anthropic returned stop_reason=refusal (stop_details.category={category})",
+            stop_reason="refusal", stop_details=stop_details,
+        )

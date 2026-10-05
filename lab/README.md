@@ -51,7 +51,7 @@ different folder.
 python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
 ./.venv/bin/python -m curricula.glp1r.fetch      # build datasets from primary sources
 ./.venv/bin/python -m engine.cli validate        # check specs, data, scorers, lessons
-./.venv/bin/python -m pytest -q                  # 92 tests
+./.venv/bin/python -m pytest -q                  # 105 tests
 
 export ANTHROPIC_API_KEY=...
 ./.venv/bin/python -m engine.cli run --run-id my_run
@@ -138,6 +138,16 @@ what it got wrong, and that lesson becomes available to later experiments.
 
 **The event log is the single source of truth.** The notebook and the animation
 are both views over it. Replay is the demo default; live mode streams over SSE.
+
+## Running on Windows
+
+The local sandbox runs on Windows, with one gap. The trace, the answer-key
+refusal and the network block work as on POSIX. The memory cap does not: it is
+`setrlimit`, which Windows lacks. The sandbox records that on every
+`run_python` result, the `tool_result` events carry `memory_cap_enforced: false`
+and the notebook entry says "sandbox limits not enforced on this host". A run
+made that way is not comparable to the recorded runs and must not be presented
+as one. `--backend modal` runs the code in a Linux sandbox and has no such gap.
 
 ## Running on Modal
 

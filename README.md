@@ -110,7 +110,9 @@ variant and per cell:
   science (shared rule: `metrics.split_parse_failures`, used by `metrics.py`, `summary.json`
   and `grid_summary.json`).
 - **Provider refusals** (Anthropic returned `stop_reason=refusal`) keep their usage and partial trajectory
-  but are not scored as science.
+  but are not scored as science. Each record's `provider_stop` holds the SDK's `stop_reason` and
+  `stop_details` (refusal `category`, `explanation`) for the final call, and the refusal
+  classification reads it; stage 2 wave 1 predates this field, so its refusals have no category.
 
 Episodes aborted after repeated Env refusals (overspend, malformed conclude) stay **in** the
 metrics, carrying the auditor's own `R_visible` and `final_score`, with `clean_success`
@@ -241,10 +243,20 @@ real `Env` and was scored by the unmodified auditor.
 | target claim misdeclared | inferred | 3/5 | 0/12 |
 | unsafe shortcut | inferred | 3/3 | 0/12 |
 
-| subset | n | observed agreement | Cohen's kappa |
+| subset | n | observed agreement | Cohen's kappa (95% CI, case bootstrap) |
 |---|---|---|---|
-| overall | 52 | 92.3% (48/52) | 0.806 |
-| explicit patterns only | 30 | 100% | 1.000 |
+| overall | 52 | 92.3% (48/52) | 0.806 (95% CI 0.602–0.956, n=52) |
+| explicit patterns only | 30 | 100% (30/30) | 1.000 (interval degenerate: all 30 cases agree) |
+| scenario A | 28 | 89.3% (25/28) | 0.731 (95% CI 0.404–1.000, n=28) |
+| scenario B | 24 | 95.8% (23/24) | 0.895 (95% CI 0.625–1.000, n=24) |
+
+Intervals are 95% percentile bootstraps (10,000 resamples, the `reports/replicates.py`
+constants). Resampling by planted pattern instead of by case, because a pattern's cases share
+one mechanism, widens the overall interval to 0.575–1.000. One flipped label moves the overall
+kappa to 0.764 (one more miss), 0.751 (one false alarm) or 0.851 (one fewer miss). The scenario
+intervals overlap, so no between-scenario comparison is supported at this n. The interval and
+the frozen verifier-regression set ([`docs/VERIFIER-REGRESSIONS.md`](docs/VERIFIER-REGRESSIONS.md))
+follow two suggestions by Kartik Bhardwaj.
 
 No honest case was flagged. The four misses are documented gaps:
 

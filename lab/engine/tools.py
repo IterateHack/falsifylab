@@ -359,8 +359,13 @@ def _h_run_python(ctx: ToolContext, args: dict[str, Any]) -> str:
         "stderr": res.stderr[-2000:],
         "trace": res.trace,
         "files_written": res.files_written,
+        "memory_cap_enforced": res.memory_cap_enforced,
+        "limits_note": res.limits_note,
     }, experiment_id=ctx.spec.id)
     ctx.last_run_logged = True
+    if res.memory_cap_enforced is not True:
+        # Not comparable to a capped run; the notebook says so, every time.
+        ctx.entry.note_unenforced_limit(res.limits_note or "memory cap not reported")
     return res.as_tool_result()
 
 

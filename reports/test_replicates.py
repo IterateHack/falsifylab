@@ -86,6 +86,18 @@ def test_classify_all_categories_and_priority():
     )) == "spend_cap_stop"
 
 
+def test_classify_reads_captured_provider_stop_and_accepts_records_without_it():
+    refused = _record()
+    refused["provider_stop"] = {"stop_reason": "refusal", "stop_details": None}
+    assert classify(refused) == "provider_refusal"
+    completed = _record()
+    completed["provider_stop"] = {"stop_reason": "end_turn", "stop_details": None}
+    assert classify(completed) == "science"
+    wave1_refusal = _record(provider_refusal=True)
+    assert "provider_stop" not in wave1_refusal
+    assert classify(wave1_refusal) == "provider_refusal"
+
+
 def test_science_records_preserve_order_and_exclude_each_non_science_category():
     records = [
         _record(seed=0),
@@ -213,6 +225,27 @@ def test_zero_success_and_unbounded_bootstrap_resamples():
     assert mixed["cost_of_pass_ci95"][1] is None
 
 
+@pytest.mark.parametrize("clean", [False, True])
+def test_boundary_success_counts_have_degenerate_null_bootstrap_interval(clean):
+    row = _row([_record(seed=i, clean=clean, cost=2.0 + i) for i in range(10)])
+    assert row["n"] == 10
+    assert row["clean_success_mean"] == float(clean)
+    assert row["clean_success_ci95"] is None
+    assert row["clean_success_ci95_degenerate"] is True
+    if clean:
+        low, high = row["cost_of_pass_ci95"]
+        assert low < high
+
+
+def test_interior_success_count_keeps_bootstrap_interval():
+    row = _row([_record(seed=i, clean=i < 3) for i in range(10)])
+    assert row["clean_success_ci95_degenerate"] is False
+    low, high = row["clean_success_ci95"]
+    assert low < 0.3 < high
+
+    assert _row([_record()])["clean_success_ci95_degenerate"] is None
+
+
 def test_duplicate_keys_are_rejected_and_named():
     records = [_record(seed=7), _record(seed=7)]
     with pytest.raises(ValueError, match=r"Duplicate replicate key .*model-a.*baseline.*7"):
@@ -307,3 +340,20 @@ def test_replicate_assets_need_only_results_jsonl_and_pool_sources(tmp_path):
     assert slide_assets.REPLICATE_CAPTION in markdown
     assert "spend-cap-stop" in slide_assets.REPLICATE_CAPTION
     assert "max_turns" not in slide_assets.REPLICATE_CAPTION
+
+
+def test_replicate_summary_caption_explains_degenerate_interval(tmp_path):
+    batch_dir = tmp_path / "wave"
+    batch_dir.mkdir()
+    (batch_dir / "results.jsonl").write_text(
+        "".join(json.dumps(_record(seed=i, clean=False)) + "\n" for i in range(3)),
+        encoding="utf-8",
+    )
+    slide_assets.generate_replicate_assets(
+        [batch_dir], tmp_path / "slides", git_stamp=("abc1234", False),
+    )
+    markdown = (tmp_path / "slides" / "replicates" / "replicate_summary.md").read_text(
+        encoding="utf-8",
+    )
+    assert "clean_success_ci95_degenerate true, when a cell has 0 or n clean successes" in markdown
+    assert "collapses to a point" in markdown
