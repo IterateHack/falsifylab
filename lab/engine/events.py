@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import sys
 import threading
 import time
 from dataclasses import dataclass, field, asdict
@@ -80,6 +81,15 @@ class RunLockedError(RuntimeError):
 
 
 def _pid_alive(pid: int) -> bool:
+    """Whether a process with this pid is running.
+
+    Wrong in either direction is a failure: False for a live writer lets two
+    processes share one event log; True for a dead one leaves a stale lock that
+    refuses every later run in that directory. So an answer the platform does
+    not give is raised, never defaulted.
+    """
+    if sys.platform == "win32":
+        return _pid_alive_windows(pid, _kernel32())
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
@@ -87,6 +97,75 @@ def _pid_alive(pid: int) -> bool:
     except PermissionError:
         return True
     return True
+
+
+# On Windows os.kill(pid, 0) is not a probe: signal 0 is CTRL_C_EVENT, so
+# CPython sends a console Ctrl+C to process group `pid` (and any other signal
+# is TerminateProcess). Ask the kernel instead, with rights that cannot alter
+# the process: query, and wait on its handle with a zero timeout. The wait,
+# rather than GetExitCodeProcess == STILL_ACTIVE, because a process that
+# exited with code 259 would read as alive.
+_PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+_SYNCHRONIZE = 0x00100000
+_WAIT_OBJECT_0 = 0x0
+_WAIT_TIMEOUT = 0x102
+_ERROR_ACCESS_DENIED = 5
+_ERROR_INVALID_PARAMETER = 87
+
+
+class _Kernel32:
+    def __init__(self) -> None:
+        import ctypes
+        from ctypes import wintypes
+
+        self._ctypes = ctypes
+        k = ctypes.WinDLL("kernel32", use_last_error=True)
+        k.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+        k.OpenProcess.restype = wintypes.HANDLE
+        k.WaitForSingleObject.argtypes = (wintypes.HANDLE, wintypes.DWORD)
+        k.WaitForSingleObject.restype = wintypes.DWORD
+        k.CloseHandle.argtypes = (wintypes.HANDLE,)
+        k.CloseHandle.restype = wintypes.BOOL
+        self._k = k
+
+    def open_process(self, access: int, pid: int):
+        return self._k.OpenProcess(access, False, pid)
+
+    def wait(self, handle, timeout_ms: int) -> int:
+        return self._k.WaitForSingleObject(handle, timeout_ms)
+
+    def close(self, handle) -> None:
+        self._k.CloseHandle(handle)
+
+    def last_error(self) -> int:
+        return self._ctypes.get_last_error()
+
+
+def _kernel32() -> _Kernel32:
+    return _Kernel32()
+
+
+def _pid_alive_windows(pid: int, k) -> bool:
+    handle = k.open_process(_PROCESS_QUERY_LIMITED_INFORMATION | _SYNCHRONIZE, pid)
+    if not handle:
+        err = k.last_error()
+        if err == _ERROR_INVALID_PARAMETER:     # no process has this pid
+            return False
+        if err == _ERROR_ACCESS_DENIED:         # it exists; we may not query it
+            return True
+        raise OSError(f"OpenProcess({pid}) failed with Windows error {err}; "
+                      f"cannot tell whether the lock owner is alive")
+    try:
+        state = k.wait(handle, 0)
+        if state == _WAIT_TIMEOUT:
+            return True
+        if state == _WAIT_OBJECT_0:             # exited; a handle still names it
+            return False
+        raise OSError(f"WaitForSingleObject on pid {pid} returned {state:#x} "
+                      f"(Windows error {k.last_error()}); cannot tell whether "
+                      f"the lock owner is alive")
+    finally:
+        k.close(handle)
 
 
 class EventLog:

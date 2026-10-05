@@ -79,17 +79,9 @@ jobs:
         run: npm run build
 
   lab-windows:
-    # Known failure (1 failed, 103 passed, 1 skipped on #65's CI run; 10 failed
-    # on main at 9397c7e, 49 before the pass_fds fix in #62; the 9 false
-    # ctypes.dlopen process_spawn flags were fixed in #65):
-    # - engine/tests/test_engine.py::test_a_second_writer_is_refused:
-    #   engine/events.py _pid_alive calls os.kill(pid, 0), which on Windows is
-    #   TerminateProcess, not a liveness probe; for pid 1 it raises WinError 87.
-    # continue-on-error stays until it is fixed; remove it then.
-    name: Lab suite on Windows (known failure, os.kill)
+    name: Lab suite on Windows (lab/)
     runs-on: windows-latest
     timeout-minutes: 30
-    continue-on-error: true
     defaults:
       run:
         working-directory: lab

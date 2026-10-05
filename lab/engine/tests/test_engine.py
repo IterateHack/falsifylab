@@ -272,13 +272,29 @@ def test_a_second_writer_is_refused(tmp_path):
     import os
     from engine.events import RunLockedError
 
+    import subprocess
+    import sys
+
     log = EventLog(tmp_path / "run", "run_x")
     log.append("run_started", {})
-    (tmp_path / "run" / "run.lock").write_text(
-        json.dumps({"pid": 1, "run_id": "run_x"}))      # pid 1 is always alive
-    with pytest.raises(RunLockedError):
-        EventLog(tmp_path / "run", "run_x")
-    # a stale lock from a dead process must not block a legitimate re-open
+    # A real other process, not a well-known pid: pid 1 exists on POSIX only.
+    other = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"])
+    try:
+        (tmp_path / "run" / "run.lock").write_text(
+            json.dumps({"pid": other.pid, "run_id": "run_x"}))
+        with pytest.raises(RunLockedError):
+            EventLog(tmp_path / "run", "run_x")
+    finally:
+        other.kill()
+        other.wait()
+    # A stale lock from a dead process must not block a legitimate re-open:
+    # one that exited (on Windows its handle is still open, so the pid still
+    # names it) and one that never existed.
+    for stale_pid in (other.pid, 999_999):
+        (tmp_path / "run" / "run.lock").write_text(
+            json.dumps({"pid": stale_pid, "run_id": "run_x"}))
+        EventLog(tmp_path / "run", "run_x").close()
+        assert not (tmp_path / "run" / "run.lock").exists()
     (tmp_path / "run" / "run.lock").write_text(
         json.dumps({"pid": 999_999, "run_id": "run_x"}))
     reopened = EventLog(tmp_path / "run", "run_x")
