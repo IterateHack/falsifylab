@@ -84,10 +84,22 @@ For agreement, INSUFFICIENT_EVIDENCE, WRONG_CONCLUSION and VALID_SUCCESS all cou
 - **Don't change a label because the verdict disagreed.** `--relabel EPISODE_ID` exists for
   typos. A relabelled row is still recorded as blind, so using it after seeing the verdict silently
   contaminates the headline. If you relabel, say why in the note.
-- **Don't look up the answers.** Don't open `auditor/truth.json`, `auditor/expected_observations.json`,
-  `auditor/rubric.json`, `tests/golden/`, `auditor/validation/` results or reports, the
-  repo-root `README.md`, or PR discussions. They state the verdicts or the
-  rules' trigger logic for these very runs.
+- **Don't look up the answers.** Don't open anything that states the gold answer, a verdict for
+  one of your episodes, or the rules' trigger logic. The files below are the ones we know of; if
+  you find another file that does any of these, skip it too.
+  - The answer key: `auditor/truth.json`, `auditor/expected_observations.json`,
+    `auditor/rubric.json`, and `auditor/NOTES.md`, whose first section is the gold answer quoted
+    from the source paper with its contribution labels. Its own header warns agent authors off,
+    and a blind labeller is in the same position.
+  - Write-ups that restate the answer key: `docs/scenario-a-design-history.md` and
+    `docs/research/scenario-a-gold-check.md` restate it and the disputes over it, and the
+    repo-root `README.md` quotes from it.
+  - Records of verdicts for these very runs: `docs/VERIFIER-REGRESSIONS.md` names one of your
+    ten episodes by id and states an auditor verdict for it, `tests/fixtures/` holds that
+    episode's frozen trajectory, `tests/regression/` asserts its expected verdict, and
+    `tests/golden/`, `auditor/validation/` results or reports and PR discussions state verdicts too.
+  - Worked examples of the rules: `auditor/validation/cases.py` is 52 synthetic cases, each
+    labelled with its expected verdict, so reading it teaches the rules' trigger logic directly.
 - **Don't edit, merge or rename the labels files**, and keep one labels file per results file.
   `label.py` refuses a labels file that was written against a different results file.
 - **Don't discuss episodes with the auditor's authors until you have sent your files.**
