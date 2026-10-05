@@ -112,7 +112,7 @@ variant and per cell:
 - **Provider refusals** (Anthropic returned `stop_reason=refusal`) keep their usage and partial trajectory
   but are not scored as science. Each record's `provider_stop` holds the SDK's `stop_reason` and
   `stop_details` (refusal `category`, `explanation`) for the final call, and the refusal
-  classification reads it; stage 2 wave 1 predates this field, so its refusals have no category.
+  classification reads it; stage 2 wave 1 (one run per cell) predates this field, so its refusals have no category.
 
 Episodes aborted after repeated Env refusals (overspend, malformed conclude) stay **in** the
 metrics, carrying the auditor's own `R_visible` and `final_score`, with `clean_success`
@@ -302,6 +302,8 @@ An episode passes only if the verdict is VALID_SUCCESS: the conclusion names the
 
 > Grid in progress: 10 replicates × 2 scenarios × 5 LLM variants plus scripted baselines, reported with 95% bootstrap CIs, with refusals and spend-cap stops reported separately.
 
+Stage 2 wave 1 is committed as slide assets in [`reports/assets/stage2-wave1/`](reports/assets/stage2-wave1/): claude-sonnet-5-5, five variants × two scenarios, **one run per cell**. With one run per cell, each cell's clean success is 0 or 1 and no interval carries information, so every clean-success interval is marked degenerate. Read wave 1 as a pipeline check, not as evidence that one variant beats another.
+
 ## Scenario generality
 
 Scenario B was built specifically to test whether the engine is scenario-generic. It found
@@ -330,7 +332,7 @@ Limitations of the evidence so far:
 
 - **The environment is deterministic.** The seed labels replicates and drives the scripted baselines' random choices; it is never sent to the model (seed_applied_to_model: false on every LLM record), so LLM runs vary between replicates.
 - **There is no human baseline yet.**
-- **The E6 control matcher is used by both the environment and the auditor.** In wave 1, scenario A's greedy variant named a cell-free control the matcher did not recognise, so the control readout was withheld from the agent during the episode and the run was scored as a protocol violation. An offline re-audit corrects the score but not the observation the agent received; that episode's result is confounded (issue filed).
+- **The E6 control matcher is used by both the environment and the auditor.** In wave 1 (one run per cell), scenario A's greedy variant named a cell-free control the matcher did not recognise, so the control readout was withheld from the agent during the episode and the run was scored as a protocol violation. An offline re-audit corrects the score but not the observation the agent received; that episode's result is confounded (issue filed).
 - **The uncertainty variant was refused by the provider in both scenarios on every attempt, and is excluded from all results.**
 
 ## Known limitations
