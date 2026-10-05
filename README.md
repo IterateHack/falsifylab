@@ -164,6 +164,25 @@ python -m pip install -r requirements-dev.txt -r runner/requirements.txt
 python3 -m pytest -q          # full offline suite, golden auditor tests included; no API calls
 ```
 
+Supported Python versions:
+
+- **Root suite (everything in this section): Python 3.11.** CI's root gate runs 3.11, and the
+  committed `demo/` artifacts were produced under 3.11. Python 3.10 cannot install the pinned
+  `matplotlib==3.11.2` in `requirements-dev.txt` and `runner/requirements.txt`.
+- **`lab/`: Python 3.11 or newer** (`requires-python = ">=3.11"` in `lab/pyproject.toml`). CI runs
+  the lab suites on 3.12.
+- **Hand labelling only** (`auditor.validation.real.label`): Python 3.10 or newer with nothing
+  installed. See `auditor/validation/real/LABELLER-GUIDE.md`.
+
+Reproducibility: from Python 3.12 on, `sum()` compensates float rounding, which changes the last
+bits of the auditor's Brier score. Re-running `python -m demo.build_sample` on 3.12 rewrites
+`brier` in 6 of the 8 demo records from `0.0017000000000000014` to `0.0017000000000000016`, and
+the demo freshness tests then fail. Python 3.10 reproduces the committed demo exactly. Any other
+minor version can produce a last-bit mismatch like this one. No other published figure moves:
+regenerating the wave-1 slide and replicate assets (`reports/assets/stage2-wave1/`), the seeded
+bootstrap intervals in `reports/replicates.py` (which use numpy means and `statistics.fmean`,
+not `sum()`) and the `auditor/validation/` results gives identical numbers on 3.11 and 3.12.
+
 ### Stage 1: one live episode
 
 ```
