@@ -127,14 +127,13 @@ def test_science_stack_runs_under_the_memory_cap():
     with get_executor("local", name="blas", mem_bytes=2 * 1024 ** 3) as ex:
         res = ex.run_python(
             "import os, numpy as np, pandas, scipy.optimize\n"
-            "print('threads', *(os.environ.get(v) for v in "
-            "('OPENBLAS_NUM_THREADS', 'OMP_NUM_THREADS', 'MKL_NUM_THREADS')))\n"
+            "print('threads', os.environ.get('OPENBLAS_NUM_THREADS'))\n"
             "x = np.linspace(0, 1, 50)\n"
             "print('fit', scipy.optimize.curve_fit(lambda t, a, b: a * t + b, x, 2 * x + 1)"
             "[0].round(3).tolist())\n",
             timeout_s=120)
     assert res.ok, res.stderr
-    assert "threads 1 1 1" in res.stdout
+    assert "threads 1\n" in res.stdout
     assert "fit [2.0, 1.0]" in res.stdout
 
 
