@@ -14,7 +14,9 @@ host it runs on: it finds the smallest cap the pinned import fits in, then
 requires, just above that cap, that the same import with the thread limit
 removed fails, and that it fits again once the cap allows for the extra
 threads. If the unpinned import fits, the test fails rather than passing
-without exercising the bug. Measured on an 8-CPU host (numpy 2.5.3 and
+without exercising the bug. A failed import is either OpenBLAS's error
+(numpy 2.5.3) or OpenBLAS retrying until the run times out (numpy 2.2.6);
+both leave the snippet without output, which is what the audit saw. Measured on an 8-CPU host (numpy 2.5.3 and
 2.2.6): each visible CPU beyond the first adds roughly 32-40 MiB to the
 unpinned import, about twice that with scipy's own OpenBLAS loaded too.
 """
@@ -67,11 +69,11 @@ def _imports(cap_mib: int, pinned: bool) -> bool:
                 return env
             mp.setattr(local, "child_env", unpinned_env)
         with LocalExecutor(name="pr38", mem_bytes=cap_mib * MIB) as ex:
-            res = ex.run_python(SNIPPET, timeout_s=60)
+            res = ex.run_python(SNIPPET, timeout_s=20)
     return res.ok and "imported" in res.stdout
 
 
-def _pinned_floor_mib(lo: int = 16, hi: int = 1024, step: int = 4) -> int:
+def _pinned_floor_mib(lo: int = 64, hi: int = 1024, step: int = 4) -> int:
     assert _imports(hi, pinned=True), f"pinned numpy import fails even at {hi} MiB"
     while hi - lo > step:
         mid = (lo + hi) // 2
