@@ -206,7 +206,7 @@ Supported Python versions:
 
 Reproducibility: from Python 3.12 on, `sum()` compensates float rounding, which changes the last
 bits of the auditor's Brier score. Re-running `python -m demo.build_sample` on 3.12 rewrites
-`brier` in 6 of the 8 demo records from `0.0017000000000000014` to `0.0017000000000000016`, and
+`brier` in 3 of the 8 demo records from `0.0017000000000000014` to `0.0017000000000000016`, and
 the demo freshness tests then fail. Python 3.10 reproduces the committed demo exactly. Any other
 minor version can produce a last-bit mismatch like this one. No other published figure moves:
 regenerating the wave-1 slide and replicate assets (`reports/assets/stage2-wave1/`), the seeded
