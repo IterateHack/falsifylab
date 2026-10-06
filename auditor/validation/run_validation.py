@@ -12,6 +12,14 @@ passing a trajectory.
 Cohen's kappa is reported with a case-level and a pattern-cluster bootstrap
 interval and a one-flipped-label sensitivity row, because with 52 cases one
 relabelled case moves the point estimate by several hundredths.
+
+Two populations, two figures (#76). Everything above is computed over the
+detection set (cases.CASES, 52 cases, label honest or planted): that is the
+population the published 0.806 describes and its meaning does not change.
+The verdict-level agreement section is computed over ALL_CASES, which adds the
+VERDICT_CASES (honest wrong conclusions, parse failures, alternative routes to
+the gold answer): expected verdict from the rubric and answer key against the
+auditor's verdict, seven classes, with its own kappa and intervals.
 """
 from __future__ import annotations
 
@@ -23,7 +31,9 @@ from pathlib import Path
 
 from contract import VERDICTS, audit
 
-from auditor.validation.cases import BUNDLES, CASES, HONEST, PATTERNS, build_trajectory
+from auditor.validation.cases import (
+    ALL_CASES, CASE_CLASSES, HONEST, PATTERNS, BUNDLES, build_trajectory, expected_verdict,
+)
 
 OUT_DIR = Path(__file__).resolve().parent
 RESULTS_PATH = OUT_DIR / "results.json"
@@ -52,19 +62,28 @@ def fires(signal: dict, verdict) -> bool:
     raise ValueError(f"unknown signal {signal!r}")
 
 
-def evaluate() -> list[dict]:
+def evaluate(cases=ALL_CASES) -> list[dict]:
     rows = []
-    for case in CASES:
+    for case in cases:
         v = audit(build_trajectory(case), *_bundle(case.scenario))
+        expected, basis = expected_verdict(case)
         rows.append({
             "id": case.id, "scenario": case.scenario, "label": case.label, "note": case.note,
+            "class": case.case_class, "cluster": case.cluster,
+            "expected_verdict": expected, "basis": basis,
             "verdict": v.verdict, "reward_hacks": sorted(v.reward_hacks), "flags": sorted(v.flags),
             "final_score": v.final_score,
             "passed": v.verdict == "VALID_SUCCESS" and not v.reward_hacks,
+            "verdict_agrees": v.verdict == expected,
             "signals_fired": sorted(pid for pid, p in PATTERNS.items()
                                     if case.scenario in p["scenarios"] and fires(p["signal"], v)),
         })
     return rows
+
+
+def detection_rows(rows: list[dict]) -> list[dict]:
+    """The 52-case population behind the published flagged-vs-passed kappa."""
+    return [r for r in rows if r["class"] == "detection"]
 
 
 def _rate(k: int, n: int):
@@ -191,6 +210,118 @@ def kappa_with_uncertainty(rows: list[dict], subset: str) -> dict:
     return k
 
 
+# --- verdict-level agreement over ALL_CASES (#76) -------------------------------
+
+def _mechanism_clusters(rows: list[dict]) -> list[list[int]]:
+    """Planted cases of one pattern share a scripted mechanism and so do the
+    VERDICT_CASES that declare a `cluster`; each such group is one cluster,
+    everything else a singleton."""
+    groups: dict = {}
+    for i, r in enumerate(rows):
+        if r["cluster"]:
+            key = ("cluster", r["cluster"])
+        elif r["label"] != HONEST:
+            key = ("pattern", r["label"])
+        else:
+            key = ("single", i)
+        groups.setdefault(key, []).append(i)
+    return list(groups.values())
+
+
+def verdict_kappa(rows: list[dict]) -> dict:
+    """Multi-class Cohen's kappa between the expected verdict (rubric + answer
+    key) and the auditor's verdict over the seven verdict classes."""
+    n = len(rows)
+    if not n:
+        return {"n": 0, "agreements": 0, "observed_agreement": None, "kappa": None}
+    agree = sum(r["verdict_agrees"] for r in rows)
+    po = agree / n
+    pe = sum(sum(r["expected_verdict"] == v for r in rows) * sum(r["verdict"] == v for r in rows)
+             for v in VERDICTS) / n ** 2
+    return {"n": n, "agreements": agree, "observed_agreement": round(po, 4),
+            "kappa": None if pe == 1 else round((po - pe) / (1 - pe), 4)}
+
+
+def bootstrap_verdict_kappa(rows: list[dict], clusters: list[list[int]], seed_key: str) -> dict:
+    """bootstrap_kappa for the multi-class statistic: per-cluster counts are
+    [size, agreements, expected-per-verdict..., actual-per-verdict...]."""
+    import numpy as np
+    from reports.replicates import BOOTSTRAP_RESAMPLES, BOOTSTRAP_SEED
+
+    k = len(VERDICTS)
+    per_cluster = np.array([
+        [len(c), sum(rows[i]["verdict_agrees"] for i in c)]
+        + [sum(rows[i]["expected_verdict"] == v for i in c) for v in VERDICTS]
+        + [sum(rows[i]["verdict"] == v for i in c) for v in VERDICTS]
+        for c in clusters], dtype=float)
+    result = {"resamples": BOOTSTRAP_RESAMPLES, "seed": BOOTSTRAP_SEED,
+              "n_clusters": len(clusters), "ci95": None, "degenerate": None,
+              "undefined_resamples": None}
+    if len(clusters) < 2:
+        return result
+    degenerate = all(r["verdict_agrees"] for r in rows)
+    result["degenerate"] = degenerate
+    if degenerate:
+        return result
+    rng = np.random.default_rng([BOOTSTRAP_SEED, zlib.crc32(seed_key.encode())])
+    draws = rng.integers(0, len(clusters), size=(BOOTSTRAP_RESAMPLES, len(clusters)))
+    totals = per_cluster[draws].sum(axis=1)
+    n, agree = totals[:, 0], totals[:, 1]
+    expected, actual = totals[:, 2:2 + k], totals[:, 2 + k:]
+    po = agree / n
+    pe = (expected * actual).sum(axis=1) / n ** 2
+    with np.errstate(divide="ignore", invalid="ignore"):
+        kappas = np.where(pe == 1, np.nan, (po - pe) / (1 - pe))
+    defined = kappas[~np.isnan(kappas)]
+    result["undefined_resamples"] = int(BOOTSTRAP_RESAMPLES - len(defined))
+    result["ci95"] = list(_percentile_ci(defined)) if len(defined) >= 2 else None
+    return result
+
+
+def verdict_kappa_with_uncertainty(rows: list[dict], subset: str) -> dict:
+    k = verdict_kappa(rows)
+    k["case_bootstrap"] = bootstrap_verdict_kappa(rows, [[i] for i in range(len(rows))],
+                                                  f"verdict|{subset}|case")
+    k["mechanism_cluster_bootstrap"] = bootstrap_verdict_kappa(rows, _mechanism_clusters(rows),
+                                                               f"verdict|{subset}|cluster")
+    return k
+
+
+VERDICT_SUBSETS = (("overall", "overall"), ("scenario_a", "scenario A"), ("scenario_b", "scenario B"))
+
+
+def verdict_agreement_section(rows: list[dict]) -> dict:
+    section = {
+        "definition": "expected verdict (rubric + answer key, cases.expected_verdict) against the "
+                      "auditor's verdict, all cases, seven classes; separate from cohens_kappa, "
+                      "which is flagged-vs-passed over the detection set only",
+        "bootstrap": "percentile, 95%, reports.replicates BOOTSTRAP_RESAMPLES/BOOTSTRAP_SEED; "
+                     "case = cases resampled; mechanism_cluster = planted pattern groups and "
+                     "declared VERDICT_CASES clusters resampled, everything else singletons; "
+                     "ci95 null + degenerate true when every case agrees",
+        "verdicts": list(VERDICTS),
+    }
+    for key, _ in VERDICT_SUBSETS:
+        sub = rows if key == "overall" else [r for r in rows if r["scenario"] == key[-1]]
+        section[key] = verdict_kappa_with_uncertainty(sub, key)
+    section["by_class"] = {}
+    for cls in CASE_CLASSES:
+        sub = [r for r in rows if r["class"] == cls]
+        agree = sum(r["verdict_agrees"] for r in sub)
+        section["by_class"][cls] = {
+            "n": len(sub), "agreements": agree, "observed_agreement": _rate(agree, len(sub)),
+            "disagreements": [r["id"] for r in sub if not r["verdict_agrees"]],
+        }
+    section["confusion_matrix_expected_x_verdict"] = {
+        exp: {v: sum(1 for r in rows if r["expected_verdict"] == exp and r["verdict"] == v)
+              for v in VERDICTS}
+        for exp in VERDICTS if any(r["expected_verdict"] == exp for r in rows)}
+    section["disagreements"] = [
+        {k: r[k] for k in ("id", "class", "note", "expected_verdict", "verdict", "final_score", "basis")}
+        for r in rows if not r["verdict_agrees"]]
+    return section
+
+
 def _intervals_overlap(a, b) -> bool | None:
     if not a or not b:
         return None
@@ -227,7 +358,8 @@ def kappa_section(rows: list[dict]) -> dict:
     return section
 
 
-def summarise(rows: list[dict]) -> dict:
+def summarise(all_rows: list[dict]) -> dict:
+    rows = detection_rows(all_rows)
     per_pattern = {}
     for pid, p in PATTERNS.items():
         planted = [r for r in rows if r["label"] == pid]
@@ -253,7 +385,16 @@ def summarise(rows: list[dict]) -> dict:
                  "planted": {"passed": cell(False, True), "flagged": cell(False, False)}}
 
     return {
-        "n_cases": len(rows),
+        "n_cases": len(all_rows),
+        "detection_set": {"n": len(rows),
+                          "definition": "cases.CASES: label honest or planted; the population of "
+                                        "per_pattern, the confusion matrices, misses, false_alarms "
+                                        "and cohens_kappa"},
+        "verdict_set": {"n": len(all_rows),
+                        "classes": {cls: sum(1 for r in all_rows if r["class"] == cls)
+                                    for cls in CASE_CLASSES},
+                        "definition": "cases.ALL_CASES: the detection set plus VERDICT_CASES; the "
+                                      "population of verdict_agreement"},
         "per_pattern": per_pattern,
         "confusion_matrix_label_x_verdict": {"verdicts": list(VERDICTS), "rows": matrix},
         "confusion_matrix_pass_flag": pass_flag,
@@ -262,7 +403,8 @@ def summarise(rows: list[dict]) -> dict:
         "false_alarms": [r for r in rows if r["label"] == HONEST and not r["passed"]],
         "detected_but_scored": [r for r in rows if r["label"] != HONEST
                                 and r["label"] in r["signals_fired"] and r["final_score"] > 0],
-        "cases": rows,
+        "verdict_agreement": verdict_agreement_section(all_rows),
+        "cases": all_rows,
     }
 
 
@@ -309,6 +451,16 @@ def render_markdown(s: dict) -> str:
             "the inference and the signal.", ""]
     out += [f"- **{pid}**: {pp[pid]['name']}. {pp[pid]['inference']} (source: {pp[pid]['source']})"
             for pid in inferred]
+    ds, vs = s["detection_set"], s["verdict_set"]
+    out += ["", "## Two populations", "",
+            f"The detection set is the {ds['n']} cases of `cases.CASES` (label honest or planted). "
+            "Every table from here to \"Label x verdict\" is computed over it, so the "
+            "flagged-vs-passed kappa keeps the meaning it was published with. "
+            f"The verdict set is all {vs['n']} cases of `cases.ALL_CASES`: the detection set plus the "
+            "`VERDICT_CASES` added for #76 ("
+            + ", ".join(f"{cls} {n}" for cls, n in vs["classes"].items() if cls != "detection")
+            + "), whose correct outcome is a verdict, not passed-or-flagged. The "
+            "\"Verdict-level agreement\" section is computed over it.", ""]
     out += ["", "## Per-pattern recall and false-positive rate", "",
             "FPR is measured over the honest cases of the same scenario(s).", "",
             "| pattern | provenance | detected / planted | recall | FP / honest | FPR |",
@@ -322,7 +474,8 @@ def render_markdown(s: dict) -> str:
             f"| planted | {pf['planted']['passed']} | {pf['planted']['flagged']} |"]
     kp = s["cohens_kappa"]
     out += ["", "## Cohen's kappa", "",
-            "Agreement between the label (planted vs honest) and the auditor (flagged vs passed). "
+            "Agreement between the label (planted vs honest) and the auditor (flagged vs passed), "
+            f"over the {ds['n']}-case detection set. "
             "Explicit-only keeps the honest cases and the RH1-RH3 cases; scenario A and B keep "
             "that scenario's cases.", "",
             "| subset | n | observed agreement | kappa |", "|---|---|---|---|"]
@@ -364,6 +517,38 @@ def render_markdown(s: dict) -> str:
             "|---" * (len(cm["verdicts"]) + 1) + "|"]
     out += [f"| {lab} | " + " | ".join(str(row[v] or "") for v in cm["verdicts"]) + " |"
             for lab, row in cm["rows"].items()]
+
+    va = s["verdict_agreement"]
+    out += ["", "## Verdict-level agreement (all cases)", "",
+            f"Expected verdict against the auditor's verdict over all {va['overall']['n']} cases, "
+            "seven classes. The expected verdict comes from the rubric's verdict definitions and "
+            "precedence and from the answer key (truth.json, expected_observations.json), never "
+            "from the auditor; `basis` on each case says which clause. This figure is separate "
+            "from the flagged-vs-passed kappa above and not comparable to it: a different "
+            "population, a different question (which verdict, not whether flagged) and a "
+            "seven-class chance correction.", "",
+            "| subset | n | agreement | kappa | case bootstrap 95% CI | mechanism-cluster bootstrap 95% CI |",
+            "|---|---|---|---|---|---|"]
+    out += [f"| {name} | {va[key]['n']} | {va[key]['agreements']}/{va[key]['n']} "
+            f"({_pct1(va[key]['observed_agreement'])}) | {_k(va[key]['kappa'])} "
+            f"| {_ci(va[key]['case_bootstrap'])} | {_ci(va[key]['mechanism_cluster_bootstrap'])} |"
+            for key, name in VERDICT_SUBSETS]
+    out += ["", "### By case class", "",
+            "Exact agreement only: within one class the expected verdicts are (nearly) all one "
+            "value, so a chance-corrected statistic says nothing.", "",
+            "| class | n | agreement | disagreements |", "|---|---|---|---|"]
+    out += [f"| {cls} | {c['n']} | {c['agreements']}/{c['n']} ({_pct1(c['observed_agreement'])}) "
+            f"| {', '.join(f'`{i}`' for i in c['disagreements']) or '—'} |"
+            for cls, c in va["by_class"].items()]
+    vm = va["confusion_matrix_expected_x_verdict"]
+    out += ["", "### Expected x verdict", "", "| expected | " + " | ".join(va["verdicts"]) + " |",
+            "|---" * (len(va["verdicts"]) + 1) + "|"]
+    out += [f"| {exp} | " + " | ".join(str(row[v] or "") for v in va["verdicts"]) + " |"
+            for exp, row in vm.items()]
+    out += ["", "### Verdict disagreements", ""]
+    out += [f"- `{d['id']}` ({d['class']}): {d['note']} -> expected {d['expected_verdict']}, "
+            f"auditor {d['verdict']}, final_score {d['final_score']:g}. Basis: {d['basis']}"
+            for d in va["disagreements"]] or ["None."]
 
     def listing(title, rows, empty):
         lines = ["", f"## {title}", ""]

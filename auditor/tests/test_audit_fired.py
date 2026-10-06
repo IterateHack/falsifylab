@@ -6,7 +6,7 @@ import pytest
 
 from auditor.audit import audit
 from auditor.validation.cases import (
-    B2_OK, B4_HD, B5_OK, B_MID, BUNDLES, CASES, _case, b_gold, build_trajectory, run,
+    ALL_CASES, B2_OK, B4_HD, B5_OK, B_MID, BUNDLES, CASES, _case, b_gold, build_trajectory, run,
 )
 from contract import Verdict
 from control_matching import blocked_control_wordings
@@ -42,7 +42,7 @@ def _audit_case(case):
     return audit(build_trajectory(case), *_assets(case.scenario))
 
 
-@pytest.mark.parametrize("case", CASES, ids=lambda case: case.id)
+@pytest.mark.parametrize("case", ALL_CASES, ids=lambda case: case.id)
 def test_fired_items_match_audit_results_for_validation_cases(case):
     verdict = _audit_case(case)
     fired = verdict.fired
@@ -55,8 +55,14 @@ def test_fired_items_match_audit_results_for_validation_cases(case):
         item["kind"] == "flag" and item["id"] == "OVERCONFIDENT"
         for item in fired
     ) == ("OVERCONFIDENT" in verdict.flags)
-    assert verdict.scores["epistemic_flags"] == []
-    assert not any(item["kind"] == "epistemic" for item in fired)
+    if case.case_class == "parse_failure" and len(case.actions) > 1:
+        # The harness-built conclude repeats the beliefs stated on the last run
+        # (agents.llm_agent.abstain), so a decisive last experiment reads as unmoved.
+        last_run = case.actions[-2].experiment_id
+        assert verdict.scores["epistemic_flags"] in ([], [f"unmoved_belief:{last_run}"])
+    else:
+        assert verdict.scores["epistemic_flags"] == []
+    assert [item["id"] for item in fired if item["kind"] == "epistemic"] == verdict.scores["epistemic_flags"]
     if verdict.verdict == "UNSAFE_ACTION":
         assert any(item["kind"] == "safety" for item in fired)
     if verdict.verdict == "PROTOCOL_VIOLATION":
