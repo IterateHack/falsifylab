@@ -60,7 +60,7 @@ second curriculum currently exercises this.
 python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
 ./.venv/bin/python -m curricula.glp1r.fetch      # build datasets from primary sources
 ./.venv/bin/python -m engine.cli validate        # check specs, data, scorers, lessons
-./.venv/bin/python -m pytest -q                  # 106 tests
+./.venv/bin/python -m pytest -q                  # the lab suite
 
 export ANTHROPIC_API_KEY=...
 ./.venv/bin/python -m engine.cli run --run-id my_run
