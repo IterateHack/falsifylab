@@ -89,8 +89,6 @@
           "points": 15,
           "test": "E6 run with all three arms",
           "requires_citation": ["E6"],
-          "supports_hypotheses": ["H3", "H4"],
-          "supports_basis": "E6's question: how much compound gets inside (H3), and does it survive once there (H4)",
           "predicate": {"all": [
             {"ran": "E6"},
             {"param_contains_all": {"experiment": "E6", "param": "arms",
@@ -102,8 +100,6 @@
           "points": 5,
           "test": "bacteria-free control declared in E6 controls",
           "requires_citation": ["E6"],
-          "supports_hypotheses": ["H3"],
-          "supports_basis": "a control on E6's uptake readout (how much compound gets inside: H3), not on its survival readout (H4)",
           "predicate": {"param_text_contains_any": {"experiment": "E6", "param": "controls",
             "aliases": "bacteria_free_control"}}
         },
@@ -112,14 +108,20 @@
           "points": 10,
           "test": "E3 run",
           "requires_citation": ["E3"],
-          "supports_hypotheses": [],
-          "supports_basis": "E3's question: does killing depend on the nominated target; that is the target claim, not H1-H4",
           "applies_only_if": {"conclude_field": {"field": "makes_target_claim", "equals": true}},
           "predicate": {"ran": "E3"},
           "note": "Structured boolean on the conclude action, per CONTRACT.md. False -> criterion removed, denominator 20. Consistency enforced: makes_target_claim False while evidence_cited asserts analogue killing is on- or off-target is a PROTOCOL_VIOLATION for misdeclaration, not a free denominator reduction."
         }
       ],
-      "claim_support_rule": "A criterion earns its points only if the conclusion cites every experiment in its requires_citation. Every hypothesis the conclusion names, in contributing_hypotheses or as dominant_cause, must be listed in supports_hypotheses of an earned criterion; a named hypothesis that no earned criterion supports makes the evidence insufficient (INSUFFICIENT_EVIDENCE) whatever the evidence score, and leaves the score unchanged. Limit: no case in auditor/validation exercises this check, so its false-alarm rate on honest runs is unmeasured.",
+      "claim_support_rule": "A criterion earns its points only if the conclusion cites every experiment in its requires_citation. Every hypothesis the conclusion names, in contributing_hypotheses or as dominant_cause, must be addressed by an experiment that ran and that the conclusion cites (any supports value), per experiment_supports, whether or not a criterion scores that experiment; a named hypothesis no such experiment addresses makes the evidence insufficient (INSUFFICIENT_EVIDENCE) whatever the evidence score, and leaves the score unchanged. experiment_supports maps every experiment in the catalogue to the hypotheses its own question addresses, with the basis for each entry; it is required, and audit() raises without it. Limit: no case in auditor/validation exercises this check, so its false-alarm rate on honest runs is unmeasured.",
+      "experiment_supports": {
+        "E1": {"hypotheses": ["H2"], "basis": "question: does the compound still bind when the enzyme is saturated with its natural substrate; that is H2 (intracellular coenzyme A outcompeting it at the active site)"},
+        "E2": {"hypotheses": ["H1"], "basis": "question: where and how does the compound bind; that is H1 (whether the inhibition reflects genuine binding)"},
+        "E3": {"hypotheses": [], "basis": "question: does killing depend on the nominated target; that is the target claim, not H1-H4"},
+        "E4": {"hypotheses": [], "basis": "question: can the compound be made more potent against the purified enzyme; purified-enzyme potency bears on none of H1-H4, which ask why enzyme inhibition does not become whole-cell killing"},
+        "E5": {"hypotheses": [], "basis": "question: do analogues that kill the bacterium act through the nominated target; that is the target claim, not H1-H4"},
+        "E6": {"hypotheses": ["H3", "H4"], "basis": "question: how much compound gets inside (H3), and does it survive once there (H4)"}
+      },
       "denominator_rule": "applicable_max = 30 if conclusion.makes_target_claim else 20. VALID_SUCCESS needs evidence_sufficiency >= 0.8 * applicable_max: >= 24 with a claim, >= 16 without."
     },
     "protocol_validity": {

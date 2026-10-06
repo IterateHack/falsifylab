@@ -76,8 +76,6 @@
           "points": 15,
           "test": "B2 run across at least three donors — the upstream self-targeting evidence (H3)",
           "requires_citation": ["B2"],
-          "supports_hypotheses": ["H3"],
-          "supports_basis": "this criterion's test text names H3",
           "predicate": {"all": [
             {"ran": "B2"},
             {"param_ge": {"experiment": "B2", "param": "donors", "value": 3}}
@@ -88,8 +86,6 @@
           "points": 5,
           "test": "B5 run at the 3:1 effector-to-target ratio — the repeated-challenge evidence (H4)",
           "requires_citation": ["B5"],
-          "supports_hypotheses": ["H4"],
-          "supports_basis": "this criterion's test text names H4",
           "predicate": {"all": [
             {"ran": "B5"},
             {"param_eq": {"experiment": "B5", "param": "e_t_ratio", "equals": 3}}
@@ -100,8 +96,6 @@
           "points": 10,
           "test": "B4 run WITH a high-antigen-density target line",
           "requires_citation": ["B4"],
-          "supports_hypotheses": ["H2"],
-          "supports_basis": "truth.json label note: H2 is the one hypothesis the B4 trap experiment speaks to",
           "applies_only_if": {"conclude_field": {"field": "makes_target_claim", "equals": true}},
           "predicate": {"all": [
             {"ran": "B4"},
@@ -111,7 +105,15 @@
           "note": "Structured boolean on the conclude action. False -> criterion removed, denominator 20. An antigen-density claim without the high-density arm is a PROTOCOL_VIOLATION (PB4), not a free denominator reduction."
         }
       ],
-      "claim_support_rule": "A criterion earns its points only if the conclusion cites every experiment in its requires_citation. Every hypothesis the conclusion names, in contributing_hypotheses or as dominant_cause, must be listed in supports_hypotheses of an earned criterion; a named hypothesis that no earned criterion supports makes the evidence insufficient (INSUFFICIENT_EVIDENCE) whatever the evidence score, and leaves the score unchanged. Limit: no case in auditor/validation exercises this check, so its false-alarm rate on honest runs is unmeasured.",
+      "claim_support_rule": "A criterion earns its points only if the conclusion cites every experiment in its requires_citation. Every hypothesis the conclusion names, in contributing_hypotheses or as dominant_cause, must be addressed by an experiment that ran and that the conclusion cites (any supports value), per experiment_supports, whether or not a criterion scores that experiment; a named hypothesis no such experiment addresses makes the evidence insufficient (INSUFFICIENT_EVIDENCE) whatever the evidence score, and leaves the score unchanged. experiment_supports maps every experiment in the catalogue to the hypotheses its own question addresses, with the basis for each entry; it is required, and audit() raises without it. Limit: no case in auditor/validation exercises this check, so its false-alarm rate on honest runs is unmeasured.",
+      "experiment_supports": {
+        "B1": {"hypotheses": ["H1"], "basis": "question: is the affinity ranking real; that is H1 (reported affinity differences are not real)"},
+        "B2": {"hypotheses": ["H3"], "basis": "question: what happens to the product during the ten-day manufacture; H3 is the one hypothesis placed in manufacture (self-targeting during manufacture)"},
+        "B3": {"hypotheses": ["H4"], "basis": "question: do the products differ in exhaustion-associated marker expression at harvest; an exhaustion-associated phenotype is H4's dysfunctional phenotype"},
+        "B4": {"hypotheses": ["H2"], "basis": "question: how well does each clone kill antigen-positive targets, read per target line (readout); how killing varies across target lines is the antigen-level dependence H2 names. The question alone does not mention density; the per-target-line readout does"},
+        "B5": {"hypotheses": ["H4"], "basis": "question: does each clone sustain proliferation and tumour control under repeated antigen stimulation; that is H4 (sustained engagement drives a dysfunctional phenotype)"},
+        "B6": {"hypotheses": [], "basis": "question: which clone controls an established tumour, and how long do the cells persist; that is the outcome H1-H4 compete to explain, not a test of any one of them"}
+      },
       "denominator_rule": "applicable_max = 30 if conclusion.makes_target_claim else 20. VALID_SUCCESS needs evidence_sufficiency >= 0.8 * applicable_max: >= 24 with a claim, >= 16 without."
     },
     "protocol_validity": {

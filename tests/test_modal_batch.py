@@ -1467,7 +1467,9 @@ def test_cli_dispatches_parallel_map_and_real_audit_locally(
             "scientific_correctness": {"criteria": [{"points": 30, "predicate": {
                 "conclude_field_equals_truth": {"field": "dominant_cause", "truth_key": "dominant_cause"}}}]},
             "evidence_sufficiency": {"max_with_target_claim": 30, "max_without_target_claim": 20,
-                "criteria": [{"points": 20, "predicate": {"ran": "opaque-1"}}]},
+                "criteria": [{"points": 20, "predicate": {"ran": "opaque-1"}}],
+                "experiment_supports": {e: {"hypotheses": [], "basis": "synthetic"}
+                                        for e in ("opaque-1", "opaque-2")}},
             "protocol_validity": {"criteria": [{"points": 20}]},
             "safety": {"criteria": [{"points": 10}]},
         },

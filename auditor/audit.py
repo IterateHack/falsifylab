@@ -226,9 +226,11 @@ UNCITED_EVIDENCE_RULE = (
 )
 UNSUPPORTED_CLAIM_RULE = (
     "Every hypothesis the conclusion names (contributing_hypotheses and dominant_cause) "
-    "must be listed in supports_hypotheses of an earned evidence criterion. A named "
-    "hypothesis that no earned criterion supports makes the evidence insufficient, "
-    "whatever the evidence score."
+    "must be addressed by an experiment that ran and that the conclusion cites (any "
+    "supports value), per the rubric's experiment_supports, which maps each experiment "
+    "to the hypotheses its own question addresses. A named hypothesis no such experiment "
+    "addresses makes the evidence insufficient, whatever the evidence score; whether a "
+    "scoring criterion rewards the experiment does not matter."
 )
 CONTROL_BLOCKED_RULE = (
     "Control lists are credited if any entry names an accepted control (accept-if-any). "
@@ -243,6 +245,35 @@ def _uncited_experiments(crit: dict, ctx: _Ctx) -> list[str]:
         experiment for experiment in crit.get("requires_citation", [])
         if not any(_citation_matches(c, experiment, None) for c in cited)
     ]
+
+
+def _experiment_supports(evidence: dict) -> dict:
+    """The claim check's mapping, required in every rubric: a missing mapping used
+    to switch the check off silently (#81)."""
+    if "experiment_supports" not in evidence:
+        raise ValueError(
+            "rubric dimensions.evidence_sufficiency must carry experiment_supports "
+            "(experiment id -> the hypotheses its question addresses); the claim "
+            "check has no default")
+    stale = [c.get("id") for c in evidence["criteria"] if "supports_hypotheses" in c]
+    if stale:
+        raise ValueError(
+            f"supports_hypotheses on evidence criteria {stale} is no longer read; "
+            "support is mapped per experiment in experiment_supports")
+    return evidence["experiment_supports"]
+
+
+def _support_sources(ctx: _Ctx, experiment_supports: dict) -> dict[str, list[str]]:
+    """Experiments that ran and that the conclusion cites -> hypotheses each addresses."""
+    missing = [e for e in ctx.run_actions if e not in experiment_supports]
+    if missing:
+        raise ValueError(f"experiment_supports has no entry for experiments run: {missing}")
+    cited = (ctx.conclude.evidence_cited or []) if ctx.conclude is not None else []
+    return {
+        experiment: list(experiment_supports[experiment]["hypotheses"])
+        for experiment in ctx.run_actions
+        if any(_citation_matches(c, experiment, None) for c in cited)
+    }
 
 
 def _claimed_hypotheses(conclude: Action) -> list[str]:
@@ -413,22 +444,19 @@ def audit(trajectory: Trajectory, rubric: dict, truth: dict) -> Verdict:
     has_real_conclusion = (conclude is not None
                            and getattr(conclude, "abstain_reason", None) is None)
     criteria = dims["evidence_sufficiency"]["criteria"]
+    support_sources = _support_sources(ctx, _experiment_supports(dims["evidence_sufficiency"]))
     evid = 0.0
     uncited = []      # (criterion, withheld points, uncited experiment ids)
-    earned = []       # criteria that scored, after the citation check
     for crit in criteria:
         points = _criterion_points(crit, ctx)
         missing = _uncited_experiments(crit, ctx) if points and has_real_conclusion else []
         if missing:
             uncited.append((crit, points, missing))
             points = 0.0
-        if points:
-            earned.append(crit)
         evid += points
-    supported = {h for crit in earned for h in crit.get("supports_hypotheses", [])}
+    supported = {h for hypotheses in support_sources.values() for h in hypotheses}
     unsupported = ([h for h in _claimed_hypotheses(conclude) if h not in supported]
-                   if has_real_conclusion and any("supports_hypotheses" in c for c in criteria)
-                   else [])
+                   if has_real_conclusion else [])
 
     protocol = 0.0 if (conclude is not None and protocol_breaches) else float(
         dims["protocol_validity"]["criteria"][0]["points"])
@@ -640,9 +668,9 @@ def audit(trajectory: Trajectory, rubric: dict, truth: dict) -> Verdict:
             "evidence": evidence,
         })
 
-    earned_text = ", ".join(
-        f"{crit.get('id')} (supports {', '.join(crit.get('supports_hypotheses', [])) or 'none'})"
-        for crit in earned) or "none"
+    sources_text = ", ".join(
+        f"{experiment} (addresses {', '.join(hypotheses) or 'none'})"
+        for experiment, hypotheses in support_sources.items()) or "none"
     for hypothesis in unsupported:
         role = ("contributing and dominant cause"
                 if hypothesis in (conclude.contributing_hypotheses or [])
@@ -653,12 +681,12 @@ def audit(trajectory: Trajectory, rubric: dict, truth: dict) -> Verdict:
             "kind": "unsupported_claim",
             "id": f"unsupported_claim:{hypothesis}",
             "verdict_label": "INSUFFICIENT_EVIDENCE",
-            "title": "Conclusion names a hypothesis no earned evidence supports",
+            "title": "Conclusion names a hypothesis no cited experiment addresses",
             "rule": UNSUPPORTED_CLAIM_RULE,
             "evidence": [
                 {"turn": _conclude_turn_index(ctx),
                  "text": f"conclusion names {hypothesis} ({role})"},
-                {"turn": None, "text": f"earned evidence criteria: {earned_text}"},
+                {"turn": None, "text": f"cited experiments that ran: {sources_text}"},
             ],
         })
 
