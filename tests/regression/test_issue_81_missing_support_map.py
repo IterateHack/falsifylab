@@ -8,7 +8,6 @@ every rubric: audit() raises without it, on a stale per-criterion
 supports_hypotheses, and on a run experiment the map does not cover. Each
 bundle's map must cover its catalogue exactly.
 """
-import copy
 import importlib.util
 import json
 from pathlib import Path
