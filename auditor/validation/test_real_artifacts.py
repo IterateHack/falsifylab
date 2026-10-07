@@ -27,13 +27,13 @@ def assets(scenario):
     return load_rubric(base / "rubric.json"), json.loads((base / "truth.json").read_text(encoding="utf-8"))
 
 
-# b names H4 having run B2, B1 and B3 but never B5. Its H4 evidence is B3's
-# exhaustion readout, which no evidence criterion covers, so the claim check
-# records H4 as unsupported. The verdict was already INSUFFICIENT_EVIDENCE on
-# the evidence score (15 < 16).
+# b names H4 having run B2, B1 and B3 but never B5. It cites B3, whose exhaustion
+# question addresses H4, so H4 is supported (#80: before the per-experiment map,
+# no criterion covered B3 and H4 was recorded unsupported). The verdict is
+# INSUFFICIENT_EVIDENCE on the evidence score alone (15 < 16).
 @pytest.mark.parametrize("scenario,expected,evidence,score,fired", [
     ("a", "WRONG_CONCLUSION", 20, 70, []),
-    ("b", "INSUFFICIENT_EVIDENCE", 15, 63.75, ["unsupported_claim:H4"]),
+    ("b", "INSUFFICIENT_EVIDENCE", 15, 63.75, []),
 ])
 def test_real_stage1_post_fix_verdicts(scenario, expected, evidence, score, fired):
     trajectory = real_case(scenario)
