@@ -31,9 +31,37 @@ _REPORT = """\
 | overall | 8 | 87.5% | 0.750 |
 | explicit patterns only | 6 | 100.0% | 1.000 |
 | scenario A | 4 | 75.0% | 0.731 |
+
+## Verdict-level agreement (all cases)
+| subset | n | agreement | kappa | case bootstrap 95% CI | mechanism-cluster bootstrap 95% CI |
+|---|---|---|---|---|---|
+| overall | 12 | 11/12 (91.7%) | 0.880 | 0.700–1.000 | 0.650–1.000 |
+| scenario A | 7 | 6/7 (85.7%) | 0.800 | 0.500–1.000 | 0.450–1.000 |
+| scenario B | 5 | 5/5 (100.0%) | 1.000 | degenerate (all cases agree) | degenerate (all cases agree) |
+
+### By case class
+| class | n | agreement | disagreements |
+|---|---|---|---|
+| detection | 8 | 7/8 (87.5%) | `demo.miss` |
 """
 
+
+def _verdict_block(n, agreements, kappa, case_ci, cluster_ci, clusters):
+    def bootstrap(ci, n_clusters):
+        return {"ci95": ci, "degenerate": ci is None, "n_clusters": n_clusters,
+                "resamples": 10000, "seed": 0}
+    return {"n": n, "agreements": agreements, "observed_agreement": round(agreements / n, 4),
+            "kappa": kappa, "case_bootstrap": bootstrap(case_ci, n),
+            "mechanism_cluster_bootstrap": bootstrap(cluster_ci, clusters)}
+
 _REPORT_RESULTS = {
+    "verdict_set": {"n": 12, "classes": {"detection": 8, "wrong_conclusion": 2,
+                                          "parse_failure": 1, "alt_route": 1}},
+    "verdict_agreement": {
+        "overall": _verdict_block(12, 11, 0.88, [0.7, 1.0], [0.65, 1.0], 9),
+        "scenario_a": _verdict_block(7, 6, 0.8, [0.5, 1.0], [0.45, 1.0], 5),
+        "scenario_b": _verdict_block(5, 5, 1.0, None, None, 4),
+    },
     "cohens_kappa": {
         "overall": {
             "n": 8,
@@ -179,7 +207,15 @@ def test_synthetic_cli_creates_all_stamped_assets_and_manifest(tmp_path, capsys)
     ).read_text(encoding="utf-8")
     assert "degenerate (all cases agree)" in validation_markdown
     assert "[0.602, 0.956]" in validation_markdown
+    verdict_rows = [row for row in validation_rows if row["type"] == "verdict_agreement"]
+    assert [row["subset"] for row in verdict_rows] == ["overall", "scenario A", "scenario B"]
+    assert validation_kappas[0]["n"] == "52" and int(verdict_rows[0]["n"]) > 52, \
+        "the detection-set kappa keeps its 52-case population; the verdict figure is over all cases"
+    assert verdict_rows[0]["mechanism_cluster_ci95"] and verdict_rows[0]["case_classes"]
+    assert slide_assets.VERDICT_HEADING in validation_markdown
+    assert "separate statistic from Cohen's kappa" in validation_markdown
     assert not (output / "_synthetic_input" / "REPORT.md").exists()
+
     replicate_entry = next(
         entry for entry in entries
         if entry["path"] == "replicates/replicate_summary.json"
@@ -1684,11 +1720,13 @@ def test_validation_figure_title_is_updated(tmp_path, monkeypatch):
     report_path = tmp_path / "REPORT.md"
     report_path.write_text(_REPORT, encoding="utf-8")
     _write_report_results(report_path)
-    patterns, report_kappas = slide_assets.parse_validation_report(report_path)
-    kappas = slide_assets._validation_kappa_rows(
-        report_kappas, report_path.with_name("results.json"),
+    patterns, report_kappas, report_verdicts = slide_assets.parse_validation_report(report_path)
+    results_path = report_path.with_name("results.json")
+    kappas = slide_assets._validation_kappa_rows(report_kappas, results_path)
+    verdicts = slide_assets._validation_verdict_rows(report_verdicts, results_path)
+    slide_assets._plot_validation(
+        tmp_path / "validation.png", patterns, kappas, verdicts, _stamp(),
     )
-    slide_assets._plot_validation(tmp_path / "validation.png", patterns, kappas, _stamp())
     assert titles == ["Auditor recall and false alarms"]
 
 
@@ -1696,7 +1734,7 @@ def test_validation_assets_check_results_and_render_degenerate_intervals(tmp_pat
     report_path = tmp_path / "REPORT.md"
     report_path.write_text(_REPORT, encoding="utf-8")
     results_path = _write_report_results(report_path)
-    patterns, report_kappas = slide_assets.parse_validation_report(report_path)
+    patterns, report_kappas, _ = slide_assets.parse_validation_report(report_path)
     kappa_rows = slide_assets._validation_kappa_rows(
         report_kappas, results_path,
     )
@@ -1884,7 +1922,8 @@ def test_validation_parser_checks_headers_and_real_report_structure(tmp_path):
     report_path = tmp_path / "REPORT.md"
     report_path.write_text(_REPORT, encoding="utf-8")
     _write_report_results(report_path)
-    patterns, kappas = slide_assets.parse_validation_report(report_path)
+    patterns, kappas, verdicts = slide_assets.parse_validation_report(report_path)
+    assert [row["subset"] for row in verdicts] == ["overall", "scenario A", "scenario B"]
     assert patterns == [
         {
             "pattern": "demo.one",
@@ -1917,11 +1956,20 @@ def test_validation_parser_checks_headers_and_real_report_structure(tmp_path):
     )
     with pytest.raises(ValueError, match="Per-pattern recall and false-positive rate"):
         slide_assets.parse_validation_report(report_path)
+    report_path.write_text(
+        _REPORT.split("## Verdict-level agreement", 1)[0], encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="Verdict-level agreement"):
+        slide_assets.parse_validation_report(report_path)
 
-    real_patterns, real_kappas = slide_assets.parse_validation_report(
+    real_patterns, real_kappas, real_verdicts = slide_assets.parse_validation_report(
         slide_assets.DEFAULT_VALIDATION,
     )
     assert len(real_patterns) >= 1
+    assert [row["subset"] for row in real_verdicts] == ["overall", "scenario A", "scenario B"]
+    assert int(real_verdicts[0]["n"]) > int(
+        next(row["n"] for row in real_kappas if row["subset"] == "overall"),
+    )
     by_subset = {row["subset"]: row for row in real_kappas}
     assert {"overall", "explicit patterns only"} <= by_subset.keys()
     assert all(float(row["kappa"]) == float(row["kappa"]) for row in real_kappas)
@@ -1974,3 +2022,29 @@ def test_output_directory_must_not_exist(tmp_path):
             "--output", str(output),
         ])
     assert exc.value.code == 2
+
+
+def test_verdict_rows_cross_check_report_against_results(tmp_path):
+    report_path = tmp_path / "REPORT.md"
+    report_path.write_text(_REPORT, encoding="utf-8")
+    results_path = _write_report_results(report_path)
+    patterns, kappa_rows, verdict_rows = slide_assets.parse_validation_report(report_path)
+    assert [row["subset"] for row in verdict_rows] == ["overall", "scenario A", "scenario B"]
+    rows = slide_assets._validation_verdict_rows(verdict_rows, results_path)
+    assert rows[0]["agreements"] == 11 and rows[0]["case_ci95"] == [0.7, 1.0]
+    assert rows[2]["case_ci95_degenerate"] is True
+    assert rows[0]["case_classes"] == "detection 8; wrong_conclusion 2; parse_failure 1; alt_route 1"
+    table = slide_assets._verdict_table_rows(rows)
+    assert table[0]["agreement"] == "11/12 (91.7%)"
+    assert table[2]["mechanism-cluster bootstrap 95% CI"] == "degenerate (all cases agree)"
+
+    tampered = json.loads(results_path.read_text(encoding="utf-8"))
+    tampered["verdict_agreement"]["overall"]["agreements"] = 10
+    results_path.write_text(json.dumps(tampered), encoding="utf-8")
+    with pytest.raises(ValueError, match="Verdict-agreement subset overall"):
+        slide_assets._validation_verdict_rows(verdict_rows, results_path)
+
+    del tampered["verdict_agreement"]
+    results_path.write_text(json.dumps(tampered), encoding="utf-8")
+    with pytest.raises(ValueError, match="verdict_agreement block"):
+        slide_assets._validation_verdict_rows(verdict_rows, results_path)
