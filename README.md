@@ -22,7 +22,7 @@ Two scenarios ship, both from open-access papers, and both load through one unmo
 
 A second instrument built alongside the auditor: a real-data curriculum (GLP-1R), sandboxed analysis, a prediction-before-data gate, lesson cards and a pixel-art lab UI. It uses the same verdict labels, implemented independently; precedence and the meaning of "fabricated citation" differ. There is no code integration between the two. See [lab/README.md](lab/README.md), and run its commands from lab/.
 
-The lab's suite passes only when its dependencies are installed outside the user site, e.g. in the venv lab/README.md creates, because its sandbox runs analysis scripts with `python -I`, which ignores the user site. Measured: the suite passes in that venv (Python 3.12); with a bare system Python 3.10 and numpy, scipy and pandas only in `~/.local`, 11 tests fail. That count is how you recognise this failure mode, so a PR that changes the lab suite re-measures it.
+The lab's suite passes only when its dependencies are installed outside the user site, e.g. in the venv lab/README.md creates, because its sandbox runs analysis scripts with `python -I`, which ignores the user site. Measured: the suite passes in that venv (Python 3.12); with a bare system Python 3.10 and numpy, scipy and pandas only in `~/.local`, 12 tests fail. That count is how you recognise this failure mode, so a PR that changes the lab suite re-measures it.
 
 ## The answer-key fence
 
