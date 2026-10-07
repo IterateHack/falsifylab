@@ -7,7 +7,7 @@ Arm B (docs/scenario-c-design-proposal.md, section 2): the only purchasable
 evidence answers a different question and discriminates none of permeation,
 efflux and metabolism. Scenario A's H3 (permeation or efflux) and H4
 (metabolism) are those causes, so the fixture reuses scenario A's machinery
-with an Arm B evidence criterion that supports no hypothesis and an Arm B
+with an Arm B experiment map in which no experiment addresses any hypothesis and an Arm B
 truth in which no hypothesis is labelled and there is no dominant cause.
 
 Direction: false negative. This is the first case in the repo that exercises
@@ -33,8 +33,11 @@ def _arm_b_rubric():
         "test": "accumulation readout run and cited (answers Arm A only)",
         "predicate": copy.deepcopy(ev1["predicate"]),
         "requires_citation": ["E6"],
-        "supports_hypotheses": [],
     }]
+    # Arm B: no purchasable experiment discriminates permeation, efflux or metabolism.
+    evidence["experiment_supports"] = {
+        experiment: {"hypotheses": [], "basis": "Arm B: addresses none of H1-H4"}
+        for experiment in evidence["experiment_supports"]}
     return rubric
 
 
