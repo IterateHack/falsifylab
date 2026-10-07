@@ -367,7 +367,26 @@ branches are reported, not patched: a generality test that fails is a result.
 
 To our knowledge, no existing benchmark jointly scores an agent's choice of experiments under a budget and, in the same episode, issues a rule-based verdict on whether the evidence it bought is sufficient for its conclusion, penalising conclusions that cite evidence that doesn't support them.
 
-Evidence sufficiency is scored on which experiments were run and with which parameters, not on what the conclusion cites. Citations only ever trigger penalties (the RH1/RH2 and fabricated-citation rules, and the PR4/PB4 protocol constraints); none can earn credit for a supported citation. An episode citing no evidence can therefore still pass, and all 12 honest validation cases do (issue #35).
+Evidence sufficiency scores both what was run and what was claimed. An evidence criterion
+earns its points only when the conclusion cites the experiment it scores, and every
+hypothesis the conclusion names — each entry in `contributing_hypotheses`, plus
+`dominant_cause` — must be addressed by an experiment that ran and that the conclusion
+cites. A named hypothesis no cited experiment addresses makes the evidence insufficient
+(`INSUFFICIENT_EVIDENCE`) whatever the evidence score, recorded in `fired` as
+`unsupported_claim:<H>`. The map from experiment to the hypotheses its own question
+addresses is the rubric's `experiment_supports`, auditor-side and never loaded into the
+agent's context; it is required, and the auditor raises without it rather than skipping the
+check. Support comes from experiments rather than from scoring criteria deliberately:
+criteria exist only for the experiments behind the gold answer, so taking support from them
+would mark an honest run that reaches the right answer by a second legitimate route as
+insufficient (issues #35, #80, #81).
+
+The change is regression-safe and its efficacy is unmeasured. Across the 52 validation
+cases, the wave-1 re-audit and the demo sample, no verdict, score or flag changes and
+Cohen's κ holds at 0.806 — evidence that the gate breaks nothing, not that it catches
+anything. No case in those sets is one the claim check decides: the 52 cases contain no
+`WRONG_CONCLUSION` and no `PARSE_FAILURE` episode, and κ as reported here is agreement on
+flagged-versus-passed, not on which verdict was issued (issue #76).
 
 Nearest neighbours:
 

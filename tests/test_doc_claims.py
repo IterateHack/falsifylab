@@ -279,11 +279,62 @@ def _empty_citation_honest_runs_pass() -> bool:
     return any(_audit(c, evidence_cited=[]).verdict == "VALID_SUCCESS" for c in HONEST_CASES)
 
 
-@pytest.mark.xfail(strict=True, reason="README Related work #35 paragraph is stale since #75; "
-                                       "its replacement text is Don's. Remove this marker with it.")
+def _related_work_gate_paragraph() -> str:
+    paras = [" ".join(p.split()) for p in _text("README.md").split("\n\n")]
+    return next(p for p in paras if p.startswith("Evidence sufficiency scores both what was run"))
+
+
 def test_related_work_35_paragraph_matches_the_gate():
-    claims_still_pass = "An episode citing no evidence can therefore still pass" in _prose("README.md")
-    assert claims_still_pass == _empty_citation_honest_runs_pass()
+    """README Related work, the claim-gate paragraph: its mechanism only. The measurement
+    paragraph after it (52 cases, kappa, no WRONG_CONCLUSION) is meant to move with the
+    corpus (#76) and is not pinned here, so growing the corpus is not a failure."""
+    from auditor.audit import audit
+    from auditor.validation.cases import CASES, HONEST, build_trajectory
+    from auditor.validation.run_validation import _bundle
+
+    para = _related_work_gate_paragraph()
+    for phrase in ("earns its points only when the conclusion cites the experiment it scores",
+                   "must be addressed by an experiment that ran and that the conclusion cites",
+                   "recorded in `fired` as `unsupported_claim:<H>`",
+                   "the rubric's `experiment_supports`, auditor-side and never loaded",
+                   "it is required, and the auditor raises without it",
+                   "Support comes from experiments rather than from scoring criteria"):
+        assert phrase in para, phrase
+    assert "An episode citing no evidence can therefore still pass" not in _prose("README.md")
+    assert not _empty_citation_honest_runs_pass(), "an uncited honest run passes the gate"
+
+    agent_side = [p for s in BUNDLES for p in (BUNDLES[s] / "agent").rglob("*") if p.is_file()]
+    agent_side += sorted((ROOT / "agents" / "prompts").glob("*.md"))
+    assert not [p for p in agent_side if "experiment_supports" in p.read_text(encoding="utf-8")]
+
+    for s in BUNDLES:
+        rubric, truth = _bundle(s)
+        ev = rubric["dimensions"]["evidence_sufficiency"]
+        assert set(ev["experiment_supports"]) == {e["id"] for e in _experiments(s)}, s
+        assert not [c for c in ev["criteria"] if "supports_hypotheses" in c], s
+        scored = {e for c in ev["criteria"] for e in c.get("requires_citation", [])}
+        # Support from criteria would leave these experiments' hypotheses unsupportable.
+        assert [e for e, v in ev["experiment_supports"].items() if v["hypotheses"] and e not in scored], s
+
+        case = next(c for c in CASES if c.scenario == s and c.label == HONEST)
+        trajectory = build_trajectory(case)
+        conclude = trajectory.turns[-1].action
+        named = set(conclude.contributing_hypotheses or []) | {conclude.dominant_cause}
+        passed = audit(copy.deepcopy(trajectory), rubric, truth)
+        assert passed.verdict == "VALID_SUCCESS", case.id
+
+        no_support = copy.deepcopy(rubric)
+        for entry in no_support["dimensions"]["evidence_sufficiency"]["experiment_supports"].values():
+            entry["hypotheses"] = []
+        v = audit(copy.deepcopy(trajectory), no_support, truth)
+        assert v.verdict == "INSUFFICIENT_EVIDENCE", case.id
+        assert {f["id"] for f in v.fired if f["kind"] == "unsupported_claim"} == \
+            {f"unsupported_claim:{h}" for h in named}, case.id
+        assert v.scores["evidence_sufficiency"] == passed.scores["evidence_sufficiency"], case.id
+
+        del no_support["dimensions"]["evidence_sufficiency"]["experiment_supports"]
+        with pytest.raises(ValueError, match="experiment_supports"):
+            audit(copy.deepcopy(trajectory), no_support, truth)
 
 
 # --- verdicts and their precedence --------------------------------------------
