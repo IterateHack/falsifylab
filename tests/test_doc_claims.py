@@ -41,7 +41,7 @@ WORDS = ("zero one two three four five six seven eight nine ten eleven twelve").
 UNCHECKED = {
     "literature": "Related work, Known limitations and docs/research/: what papers say, "
                   "PMIDs, arXiv ids, 'no existing benchmark jointly scores...'.",
-    "other machines": "the '11 tests fail' user-site count (README), Python 3.10 "
+    "other machines": "the 'N tests fail' user-site count (README), Python 3.10 "
                       "installability and demo reproduction, the cold-capstone figures on the "
                       "evidence/cold-capstone branch, Stage 1 scores 33.75/63.75 as originally "
                       "recorded, wave-1 call counts held on the data/wave1 branch.",
@@ -124,9 +124,11 @@ def _table_rows(rel: str, header_start: str) -> list[list[str]]:
 BARE_COUNT = re.compile(
     r"\b(\d+)\s+(?:\w+\s+)?(?:tests?|passed|failed|xfailed|skipped|errors?)(?:\s+(?:pass|fail)(?:es|s)?)?\b", re.I)
 # A count kept because it is diagnostic (AGENTS.md), with where it is re-measured.
+# "N" stands for any number: the README count is measured on another machine (UNCHECKED),
+# so this file cannot derive it and does not pin it.
 DIAGNOSTIC_COUNTS = {
-    ("README.md", "11 tests fail"): "how the user-site failure mode is recognised; "
-                                    "re-measured by hand by any PR that changes the lab suite",
+    ("README.md", "N tests fail"): "how the user-site failure mode is recognised; "
+                                   "re-measured by hand by any PR that changes the lab suite",
     ("docs/VERIFIER-REGRESSIONS.md", "9 tests"): "the size of #65's exposing case on the Windows "
                                                  "lab job at the SHA the row names",
 }
@@ -138,10 +140,14 @@ def test_docs_carry_no_bare_test_totals():
         for rel in DOCS
         for m in BARE_COUNT.finditer(_prose(rel))
     }
-    assert found - set(DIAGNOSTIC_COUNTS) == set(), (
+    def allowed(rel: str, text: str, key: tuple[str, str]) -> bool:
+        return rel == key[0] and re.fullmatch(re.escape(key[1]).replace("N", r"\d+"), text) is not None
+
+    assert {f for f in found if not any(allowed(*f, k) for k in DIAGNOSTIC_COUNTS)} == set(), (
         "AGENTS.md: do not add bare test totals to docs; keep a number only where it is "
         "diagnostic, and then list it in DIAGNOSTIC_COUNTS with its reason")
-    assert set(DIAGNOSTIC_COUNTS) <= found, "a DIAGNOSTIC_COUNTS entry is no longer in the docs"
+    unused = [k for k in DIAGNOSTIC_COUNTS if not any(allowed(*f, k) for f in found)]
+    assert unused == [], "a DIAGNOSTIC_COUNTS entry is no longer in the docs"
 
 
 # --- auditor validation: case counts, kappa and n -----------------------------
@@ -561,7 +567,9 @@ def _path_tokens(rel: str) -> set[str]:
 
 def _resolves(tok: str, rel: str, tracked: set[str]) -> bool:
     dirs = {"/".join(p.split("/")[:i]) for p in tracked for i in range(1, p.count("/") + 1)}
-    tok = tok.rstrip("/")
+    tok = tok.strip("\"'").rstrip("/")
+    if tok.startswith(".../"):  # a path elided on another machine: match it as a tree suffix
+        tok = tok[4:]
     if "<" in tok:
         tok = tok.split("<")[0].rstrip("/")
     base = (ROOT / rel).parent
