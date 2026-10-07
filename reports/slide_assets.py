@@ -103,6 +103,16 @@ KAPPA_SUBSET_LABELS = {
     "scenario_a": "scenario A",
     "scenario_b": "scenario B",
 }
+VERDICT_HEADING = "## Verdict-level agreement (all cases)"
+VERDICT_HEADER = (
+    "subset", "n", "agreement", "kappa", "case bootstrap 95% CI",
+    "mechanism-cluster bootstrap 95% CI",
+)
+VERDICT_SUBSET_LABELS = {
+    "overall": "overall",
+    "scenario_a": "scenario A",
+    "scenario_b": "scenario B",
+}
 DERIVED_SUMMARIES = (
     "derived from results.jsonl (runner.modal_batch.aggregate/grid_summary)"
 )
@@ -1468,7 +1478,7 @@ def _parse_report_table(text: str, heading: str, expected_header: tuple[str, ...
     rows = []
     for line in lines[heading_index + 1:]:
         stripped = line.strip()
-        if stripped.startswith("## "):
+        if stripped.startswith("#"):
             break
         if not stripped.startswith("|"):
             continue
@@ -1490,10 +1500,11 @@ def _parse_report_table(text: str, heading: str, expected_header: tuple[str, ...
     return rows
 
 
-def parse_validation_report(path: Path) -> tuple[list[dict], list[dict]]:
+def parse_validation_report(path: Path) -> tuple[list[dict], list[dict], list[dict]]:
     text = Path(path).read_text(encoding="utf-8")
     pattern_source = _parse_report_table(text, PATTERN_HEADING, PATTERN_HEADER)
     kappa_rows = _parse_report_table(text, KAPPA_HEADING, KAPPA_HEADER)
+    verdict_rows = _parse_report_table(text, VERDICT_HEADING, VERDICT_HEADER)
     patterns = [
         {
             "pattern": row["pattern"],
@@ -1505,7 +1516,56 @@ def parse_validation_report(path: Path) -> tuple[list[dict], list[dict]]:
         }
         for row in pattern_source
     ]
-    return patterns, kappa_rows
+    return patterns, kappa_rows, verdict_rows
+
+
+def _validation_verdict_rows(report_rows: list[dict], results_path: Path) -> list[dict]:
+    """The verdict-level agreement rows (#76): expected verdict vs auditor
+    verdict over every case, a separate statistic from the detection-set kappa.
+    REPORT.md and results.json must agree, as for the kappa rows."""
+    results_doc = json.loads(Path(results_path).read_text(encoding="utf-8"))
+    section = results_doc.get("verdict_agreement")
+    if not isinstance(section, dict):
+        raise ValueError(f"{results_path} is missing its verdict_agreement block")
+    report_subsets = {row["subset"]: row for row in report_rows}
+    if set(report_subsets) != set(VERDICT_SUBSET_LABELS.values()):
+        mismatch = sorted(set(report_subsets) ^ set(VERDICT_SUBSET_LABELS.values()))[0]
+        raise ValueError(
+            f"Verdict-agreement subset {mismatch}: REPORT.md and results.json disagree; "
+            "rerun python -m auditor.validation.run_validation"
+        )
+    classes = results_doc.get("verdict_set", {}).get("classes", {})
+    rows = []
+    for subset_key, display_name in VERDICT_SUBSET_LABELS.items():
+        result = section[subset_key]
+        report_row = report_subsets[display_name]
+        n, agreements, kappa = result["n"], result["agreements"], result["kappa"]
+        agreement_text = f"{agreements}/{n} ({agreements / n:.1%})"
+        if not (int(report_row["n"]) == n and report_row["agreement"] == agreement_text
+                and f"{kappa:.3f}" == report_row["kappa"]):
+            raise ValueError(
+                f"Verdict-agreement subset {display_name}: REPORT.md and results.json "
+                "disagree; rerun python -m auditor.validation.run_validation"
+            )
+        case_bootstrap = result["case_bootstrap"]
+        cluster_bootstrap = result["mechanism_cluster_bootstrap"]
+        rows.append({
+            "subset": display_name,
+            "n": n,
+            "agreements": agreements,
+            "observed agreement": result["observed_agreement"],
+            "kappa": kappa,
+            "case_ci95": case_bootstrap["ci95"],
+            "case_ci95_degenerate": case_bootstrap["degenerate"],
+            "case_n_clusters": case_bootstrap["n_clusters"],
+            "mechanism_cluster_ci95": cluster_bootstrap["ci95"],
+            "mechanism_cluster_ci95_degenerate": cluster_bootstrap["degenerate"],
+            "mechanism_cluster_n_clusters": cluster_bootstrap["n_clusters"],
+            "bootstrap_resamples": case_bootstrap["resamples"],
+            "bootstrap_seed": case_bootstrap["seed"],
+            "case_classes": "; ".join(f"{cls} {count}" for cls, count in classes.items()),
+        })
+    return rows
 
 
 def _validation_kappa_rows(
@@ -1603,6 +1663,41 @@ def _kappa_table_rows(kappa_rows: list[dict]) -> list[dict]:
     ]
 
 
+VERDICT_HEADERS = (
+    "subset", "n", "agreement", "kappa", "case bootstrap 95% CI",
+    "mechanism-cluster bootstrap 95% CI",
+)
+
+
+def _verdict_table_rows(verdict_rows: list[dict]) -> list[dict]:
+    return [
+        {
+            **row,
+            "agreement": f"{row['agreements']}/{row['n']} ({float(row['observed agreement']):.1%})",
+            "kappa": f"{float(row['kappa']):.3f}",
+            "case bootstrap 95% CI": _kappa_ci_text(
+                row["case_ci95"], row["case_ci95_degenerate"],
+            ),
+            "mechanism-cluster bootstrap 95% CI": _kappa_ci_text(
+                row["mechanism_cluster_ci95"], row["mechanism_cluster_ci95_degenerate"],
+            ),
+        }
+        for row in verdict_rows
+    ]
+
+
+def _verdict_caption(verdict_rows: list[dict]) -> str:
+    overall = verdict_rows[0]
+    return (
+        f"Expected verdict (rubric + answer key) against the auditor's verdict over all "
+        f"{overall['n']} cases ({overall['case_classes']}), seven verdict classes, with a "
+        "seven-class chance correction. A separate statistic from Cohen's kappa above, which "
+        "stays on the detection set and keeps its published meaning; the two are not "
+        "comparable. Mechanism-cluster = planted pattern groups and declared case clusters "
+        "resampled as units."
+    )
+
+
 def _kappa_caption(kappa_rows: list[dict]) -> str:
     resamples = kappa_rows[0]["bootstrap_resamples"]
     seed = kappa_rows[0]["bootstrap_seed"]
@@ -1615,7 +1710,7 @@ def _kappa_caption(kappa_rows: list[dict]) -> str:
 
 
 def _validation_markdown(
-    patterns: list[dict], kappa_rows: list[dict], stamp: dict,
+    patterns: list[dict], kappa_rows: list[dict], verdict_rows: list[dict], stamp: dict,
 ) -> str:
     pattern_headers = [
         "pattern", "provenance", "detected/planted", "recall",
@@ -1636,28 +1731,39 @@ def _validation_markdown(
         "",
         _kappa_caption(kappa_rows),
         "",
+        VERDICT_HEADING,
+        "",
+        *_markdown_table(list(VERDICT_HEADERS), _verdict_table_rows(verdict_rows)),
+        "",
+        _verdict_caption(verdict_rows),
+        "",
         f"*{_stamp_line(stamp)}*",
         "",
     ]
     return "\n".join(lines)
 
 
-def _validation_csv_rows(patterns: list[dict], kappa_rows: list[dict]) -> list[dict]:
+def _validation_csv_rows(
+    patterns: list[dict], kappa_rows: list[dict], verdict_rows: list[dict],
+) -> list[dict]:
     rows = []
     for row in patterns:
         rows.append({"type": "pattern", **row})
     for row in kappa_rows:
         rows.append({"type": "kappa", **row})
+    for row in verdict_rows:
+        rows.append({"type": "verdict_agreement", **row})
     return rows
 
 
 def _plot_validation(
-    path: Path, patterns: list[dict], kappa_rows: list[dict], stamp: dict,
+    path: Path, patterns: list[dict], kappa_rows: list[dict], verdict_rows: list[dict],
+    stamp: dict,
 ) -> None:
     figure = _figure(stamp)
-    figure.set_size_inches(12, 7.5)
-    pattern_axes, kappa_axes = figure.subplots(
-        2, 1, gridspec_kw={"height_ratios": [3, 2]},
+    figure.set_size_inches(12, 10)
+    pattern_axes, kappa_axes, verdict_axes = figure.subplots(
+        3, 1, gridspec_kw={"height_ratios": [3, 2, 1.7]},
     )
     figure.suptitle("Auditor recall and false alarms", fontsize=14, y=0.985)
     pattern_axes.axis("off")
@@ -1706,8 +1812,34 @@ def _plot_validation(
         fontsize=6,
         transform=kappa_axes.transAxes,
     )
+
+    verdict_axes.axis("off")
+    verdict_axes.set_title(
+        "Verdict-level agreement (all cases; separate statistic)", fontsize=12, pad=3,
+    )
+    verdict_table = verdict_axes.table(
+        cellText=[
+            [_display_cell(header, row.get(header)) for header in VERDICT_HEADERS]
+            for row in _verdict_table_rows(verdict_rows)
+        ],
+        colLabels=list(VERDICT_HEADERS),
+        cellLoc="center",
+        bbox=[0.01, 0.3, 0.98, 0.6],
+        colWidths=[0.16, 0.06, 0.18, 0.08, 0.25, 0.27],
+    )
+    verdict_table.auto_set_font_size(False)
+    verdict_table.set_fontsize(8)
+    verdict_axes.text(
+        0.5,
+        0.02,
+        textwrap.fill(_verdict_caption(verdict_rows), width=150),
+        ha="center",
+        va="bottom",
+        fontsize=6,
+        transform=verdict_axes.transAxes,
+    )
     figure.subplots_adjust(
-        left=0.04, right=0.96, bottom=0.18, top=0.9, hspace=0.12,
+        left=0.04, right=0.96, bottom=0.14, top=0.93, hspace=0.18,
     )
     _save_figure(figure, path, stamp)
 
@@ -1903,9 +2035,10 @@ def generate_validation_assets(
 ) -> list[dict]:
     report_path = Path(report_path)
     output_root = Path(output_root)
-    patterns, report_kappa_rows = parse_validation_report(report_path)
+    patterns, report_kappa_rows, report_verdict_rows = parse_validation_report(report_path)
     results_path = report_path.with_name("results.json")
     kappa_rows = _validation_kappa_rows(report_kappa_rows, results_path)
+    verdict_rows = _validation_verdict_rows(report_verdict_rows, results_path)
     stamp = build_validation_stamp(
         report_path,
         synthetic=synthetic,
@@ -1915,17 +2048,23 @@ def generate_validation_assets(
     md_path = output_root / "auditor_validation.md"
     csv_path = output_root / "auditor_validation.csv"
     png_path = output_root / "auditor_validation.png"
-    md_path.write_text(_validation_markdown(patterns, kappa_rows, stamp), encoding="utf-8")
+    md_path.write_text(
+        _validation_markdown(patterns, kappa_rows, verdict_rows, stamp), encoding="utf-8",
+    )
     csv_headers = [
         "type", "pattern", "provenance", "detected/planted", "recall",
         "false alarms (FP / honest)", "false-alarm rate", "subset", "n",
         "observed agreement", "kappa", "case_ci95", "case_ci95_degenerate",
         "case_n_clusters", "pattern_cluster_ci95",
         "pattern_cluster_ci95_degenerate", "pattern_cluster_n_clusters",
+        "agreements", "mechanism_cluster_ci95", "mechanism_cluster_ci95_degenerate",
+        "mechanism_cluster_n_clusters", "case_classes",
         "bootstrap_resamples", "bootstrap_seed",
     ]
-    _write_csv(csv_path, csv_headers, _validation_csv_rows(patterns, kappa_rows), stamp)
-    _plot_validation(png_path, patterns, kappa_rows, stamp)
+    _write_csv(
+        csv_path, csv_headers, _validation_csv_rows(patterns, kappa_rows, verdict_rows), stamp,
+    )
+    _plot_validation(png_path, patterns, kappa_rows, verdict_rows, stamp)
     source_files = [report_path, results_path]
     return [
         _asset_entry(path, output_root, stamp, source_files, repo_root=repo_root)

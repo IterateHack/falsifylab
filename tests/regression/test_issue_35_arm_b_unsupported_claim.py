@@ -10,8 +10,9 @@ efflux and metabolism. Scenario A's H3 (permeation or efflux) and H4
 with an Arm B experiment map in which no experiment addresses any hypothesis and an Arm B
 truth in which no hypothesis is labelled and there is no dominant cause.
 
-Direction: false negative. This is the first case in the repo that exercises
-the claim check; no case in auditor/validation/ reaches it.
+Direction: false negative. This was the first case in the repo that exercised
+the claim check; the honest verdict cases in auditor/validation/ (wc.*, alt.*)
+now reach it too and measure its false-alarm rate.
 """
 import copy
 

@@ -104,7 +104,7 @@ For agreement, INSUFFICIENT_EVIDENCE, WRONG_CONCLUSION and VALID_SUCCESS all cou
     ten episodes by id and states an auditor verdict for it, `tests/fixtures/` holds that
     episode's frozen trajectory, `tests/regression/` asserts its expected verdict, and
     `tests/golden/`, `auditor/validation/` results or reports and PR discussions state verdicts too.
-  - Worked examples of the rules: `auditor/validation/cases.py` is 52 synthetic cases, each
+  - Worked examples of the rules: `auditor/validation/cases.py` is 68 synthetic cases, each
     labelled with its expected verdict, so reading it teaches the rules' trigger logic directly.
 - **Don't edit, merge or rename the labels files**, and keep one labels file per results file.
   `label.py` refuses a labels file that was written against a different results file.
