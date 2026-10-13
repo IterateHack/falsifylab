@@ -6,13 +6,14 @@ from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
+import random
 import sys
 from typing import Callable, TextIO
 
 from contract import Verdict, trajectory_from_dict
 from metrics import is_parse_failure_verdict
 from runner.factories import scenario_dir
-from runner.modal_batch import Refusal
+from runner.modal_batch import Refusal, is_provider_refusal
 from runner.reaudit import _read_records
 from runner.run_one import format_refusals, format_trajectory, format_verdict
 
@@ -77,11 +78,15 @@ def label_session(
     *,
     labeller: str,
     show_verdict: bool = False,
+    no_reveal: bool = False,
+    shuffle_seed: int | None = None,
     input_fn: Callable[[], str] = input,
     out: TextIO = sys.stdout,
     relabel: tuple[str, ...] | list[str] = (),
 ) -> dict:
     """Prompt for labels, appending and flushing each accepted row immediately."""
+    if no_reveal and show_verdict:
+        raise ValueError("--no-reveal cannot be combined with --show-verdict.")
     results_path = Path(results_path)
     labels_path = Path(labels_path)
     results_sha256 = hashlib.sha256(results_path.read_bytes()).hexdigest()
@@ -102,17 +107,40 @@ def label_session(
         record for record in records
         if is_parse_failure_verdict(record["verdict"]["verdict"])
     ]
+    provider_refusals = [
+        record for record in records
+        if not is_parse_failure_verdict(record["verdict"]["verdict"])
+        and is_provider_refusal(record)
+    ]
     already_labelled = {row["episode_id"] for row in prior_rows}
     queue = [
         record for record in records
         if not is_parse_failure_verdict(record["verdict"]["verdict"])
+        and not is_provider_refusal(record)
         and (
             record["job"]["episode_id"] not in already_labelled
             or record["job"]["episode_id"] in relabel_ids
         )
     ]
+    if shuffle_seed is not None:
+        random.Random(f"{shuffle_seed}:{labeller}").shuffle(queue)
+    if not show_verdict and not no_reveal:
+        print(
+            "Warning: without --no-reveal the verdict is shown after each label; "
+            "these rows are not headline-eligible.",
+            file=out,
+            flush=True,
+        )
+    if no_reveal:
+        print(f"Excluded {len(parse_failures)} episode(s) from labelling.", file=out, flush=True)
+    else:
+        print(
+            f"Excluded {len(parse_failures)} PARSE_FAILURE episode(s) from labelling.",
+            file=out,
+            flush=True,
+        )
     print(
-        f"Excluded {len(parse_failures)} PARSE_FAILURE episode(s) from labelling.",
+        f"Excluded {len(provider_refusals)} provider_refusal episode(s) from labelling.",
         file=out,
         flush=True,
     )
@@ -130,12 +158,15 @@ def label_session(
         aborted = record.get("aborted_on_refusals", False)
         trajectory = trajectory_from_dict(_trajectory_doc(record, results_path))
         refusals = [Refusal(**item) for item in record.get("refusals", [])]
-        print(
-            f"\n[{episode_id}] scenario={scenario} variant={job.get('variant')} "
-            f"model={job.get('model')} seed={job.get('seed')} ({index} of {len(queue)})",
-            file=out,
-            flush=True,
-        )
+        if show_verdict:
+            header = (
+                f"\n[{episode_id}] scenario={scenario} variant={job.get('variant')} "
+                f"model={job.get('model')} seed={job.get('seed')} "
+                f"({index} of {len(queue)})"
+            )
+        else:
+            header = f"\n[{episode_id}] scenario={scenario} ({index} of {len(queue)})"
+        print(header, file=out, flush=True)
         print(format_trajectory(trajectory), file=out, flush=True)
         print(format_refusals(refusals, aborted), file=out, flush=True)
         if show_verdict:
@@ -157,6 +188,7 @@ def label_session(
                     "skipped": skipped,
                     "remaining": remaining,
                     "excluded_parse_failure": len(parse_failures),
+                    "excluded_provider_refusal": len(provider_refusals),
                 }
             if command == "?":
                 print(vocabulary, file=out, flush=True)
@@ -180,7 +212,9 @@ def label_session(
                 "note": note or None,
                 "labeller": labeller,
                 "saw_verdict": show_verdict,
-                "auditor_verdict": verdict.verdict,
+                "saw_job_identity": show_verdict,
+                "auditor_verdict": None if no_reveal else verdict.verdict,
+                "verdict_revealed": not no_reveal,
                 "labelled_at": datetime.now(timezone.utc).isoformat(),
             }
             with labels_path.open("a", encoding="utf-8") as stream:
@@ -188,7 +222,7 @@ def label_session(
                 stream.flush()
             labelled += 1
             remaining = len(queue) - index
-            if not show_verdict:
+            if not show_verdict and not no_reveal:
                 print(format_verdict(verdict, aborted_on_refusals=aborted), file=out, flush=True)
             break
     return {
@@ -196,6 +230,7 @@ def label_session(
         "skipped": skipped,
         "remaining": remaining,
         "excluded_parse_failure": len(parse_failures),
+        "excluded_provider_refusal": len(provider_refusals),
     }
 
 
@@ -209,6 +244,16 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="triage only: show the auditor verdict before labelling; these labels are excluded from the headline kappa",
     )
+    parser.add_argument(
+        "--no-reveal",
+        action="store_true",
+        help="never show or save the auditor verdict",
+    )
+    parser.add_argument(
+        "--shuffle-seed",
+        type=int,
+        help="deterministically shuffle the remaining episode queue",
+    )
     parser.add_argument("--relabel", action="append", default=[], metavar="EPISODE_ID")
     return parser
 
@@ -221,12 +266,16 @@ def main(
 ) -> dict:
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.no_reveal and args.show_verdict:
+        parser.error("--no-reveal cannot be combined with --show-verdict.")
     try:
         result = label_session(
             args.results,
             args.labels,
             labeller=args.labeller,
             show_verdict=args.show_verdict,
+            no_reveal=args.no_reveal,
+            shuffle_seed=args.shuffle_seed,
             input_fn=input if input_fn is None else input_fn,
             out=sys.stdout if out is None else out,
             relabel=args.relabel,

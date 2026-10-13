@@ -129,10 +129,12 @@ def test_session_can_show_verdict_before_label_and_excludes_parse_failure(tmp_pa
         "skipped": 0,
         "remaining": 0,
         "excluded_parse_failure": 1,
+        "excluded_provider_refusal": 0,
     }
     assert set(rows[0]) == {
         "episode_id", "scenario", "results_sha256", "labels", "note", "labeller",
-        "saw_verdict", "auditor_verdict", "labelled_at",
+        "saw_verdict", "saw_job_identity", "auditor_verdict", "verdict_revealed",
+        "labelled_at",
     }
     assert rows[0]["saw_verdict"] is True
     assert rows[0]["results_sha256"] == hashlib.sha256(results_path.read_bytes()).hexdigest()
@@ -197,6 +199,12 @@ def test_default_hides_verdict_until_after_first_row_is_written(tmp_path):
     result = label_module.label_session(
         results_path, labels_path, labeller="Ada", input_fn=input_fn, out=out,
     )
+    warning = (
+        "Warning: without --no-reveal the verdict is shown after each label; "
+        "these rows are not headline-eligible."
+    )
+    assert out.getvalue().splitlines()[0] == warning
+    assert out.getvalue().count(warning) == 1
     assert result["labelled"] == 4
     assert "== Audit ==" not in before_first_input[0]
     assert "== Audit ==" in out.getvalue()
@@ -234,6 +242,7 @@ def test_foreign_results_hash_is_rejected_by_label_and_agreement(tmp_path):
     labels_path = tmp_path / "labels.jsonl"
     labels_path.write_text(json.dumps({
         "episode_id": "00000000", "results_sha256": "different",
+        "saw_job_identity": False,
     }) + "\n", encoding="utf-8")
     with pytest.raises(ValueError, match="one results file"):
         label_module.label_session(
@@ -250,7 +259,7 @@ def test_agreement_rejects_labels_for_missing_episode_ids(tmp_path):
     labels_path.write_text(json.dumps({
         "episode_id": "missing", "results_sha256": hashlib.sha256(
             results_path.read_bytes(),
-        ).hexdigest(), "labels": ["honest"],
+        ).hexdigest(), "labels": ["honest"], "saw_job_identity": False,
     }) + "\n", encoding="utf-8")
     with pytest.raises(ValueError, match="absent from results"):
         agreement_module.agreement(results_path, labels_path)
@@ -318,6 +327,8 @@ def test_per_category_reward_hacks_are_scenario_qualified(tmp_path):
             "note": None,
             "labeller": "Ada",
             "saw_verdict": False,
+            "saw_job_identity": False,
+            "verdict_revealed": False,
             "auditor_verdict": record["verdict"]["verdict"],
             "labelled_at": "2025-01-01T00:00:00+00:00",
         })
@@ -352,6 +363,8 @@ def test_headline_uses_only_blind_rows_and_anchored_rows_are_separate(tmp_path):
             "note": None,
             "labeller": "Ada",
             "saw_verdict": labels_by_id[record["job"]["episode_id"]][1],
+            "saw_job_identity": False,
+            "verdict_revealed": False,
             "auditor_verdict": record["verdict"]["verdict"],
             "labelled_at": "2025-01-01T00:00:00+00:00",
         }
@@ -410,6 +423,7 @@ def test_protocol_violation_is_a_flagged_label_category_and_is_accepted(tmp_path
         results_path,
         labels_path,
         labeller="Ada",
+        no_reveal=True,
         input_fn=_scripted(["protocol_violation", ""]),
         out=io.StringIO(),
     )
@@ -439,6 +453,7 @@ def test_dry_run_batch_label_cli_and_agreement_cli_never_launch_modal(tmp_path, 
     labels_path = tmp_path / "labels.jsonl"
     label_module.main([
         str(batch_dir / "results.jsonl"), "--labels", str(labels_path), "--labeller", "CLI",
+        "--no-reveal",
     ], out=io.StringIO())
     agreement_path = tmp_path / "agreement.json"
     markdown_path = tmp_path / "agreement.md"
