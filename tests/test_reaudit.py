@@ -1,6 +1,7 @@
 """Synthetic and real-bundle checks for re-auditing saved batch results."""
 from dataclasses import asdict
 import json
+import platform
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -97,6 +98,21 @@ def _create_synthetic_batch(output: Path) -> list[dict]:
     return results
 
 
+def _reaudit_with(tmp_path, audit_fn):
+    source = tmp_path / "source"
+    _create_synthetic_batch(source)
+    results_path = source / "results.jsonl"
+    records = [json.loads(line) for line in results_path.read_text().splitlines()]
+    metadata = reaudit_module.reaudit(
+        results_path,
+        tmp_path / "reaudited",
+        audit_fn=audit_fn,
+        rubric=RUBRIC,
+        truth=TRUTH,
+    )
+    return [record["job"]["episode_id"] for record in records], metadata
+
+
 def _snapshot(directory: Path) -> dict:
     return {
         path.relative_to(directory): (path.read_bytes(), path.stat().st_mtime_ns)
@@ -140,6 +156,54 @@ def test_synthetic_identity_preserves_records_summaries_and_source(tmp_path, mon
     provenance.assert_called_once_with()
     assert json.loads((output / "reaudit.json").read_text()) == metadata
     assert _snapshot(source) == source_snapshot
+
+
+def test_new_empty_score_keys_are_schema_only_changes(tmp_path):
+    def add_empty_scores(trajectory, rubric, truth):
+        current = _identity_audit(trajectory, rubric, truth)
+        current.scores.update({"uncited_evidence": [], "unsupported_claims": {}})
+        return current
+
+    episode_ids, metadata = _reaudit_with(tmp_path, add_empty_scores)
+
+    assert metadata["verdicts_changed"] == episode_ids
+    assert metadata["substantive_changes"] == []
+    assert metadata["schema_only_changes"] == episode_ids
+
+
+@pytest.mark.parametrize("field", ["verdict", "final_score"])
+def test_verdict_and_final_score_changes_are_substantive(tmp_path, field):
+    def change_verdict(trajectory, rubric, truth):
+        current = _identity_audit(trajectory, rubric, truth)
+        if field == "verdict":
+            current.verdict = "WRONG_CONCLUSION"
+        else:
+            current.final_score += 1
+        return current
+
+    episode_ids, metadata = _reaudit_with(tmp_path, change_verdict)
+
+    assert metadata["substantive_changes"] == episode_ids
+    assert metadata["schema_only_changes"] == []
+
+
+def test_float_last_bit_score_change_is_schema_only(tmp_path):
+    def change_float(trajectory, rubric, truth):
+        current = _identity_audit(trajectory, rubric, truth)
+        current.scores["brier"] += 5e-13
+        return current
+
+    episode_ids, metadata = _reaudit_with(tmp_path, change_float)
+
+    assert metadata["verdicts_changed"] == episode_ids
+    assert metadata["substantive_changes"] == []
+    assert metadata["schema_only_changes"] == episode_ids
+
+
+def test_reaudit_metadata_reports_python_version(tmp_path):
+    _, metadata = _reaudit_with(tmp_path, _identity_audit)
+
+    assert metadata["python_version"] == platform.python_version()
 
 
 @pytest.mark.parametrize("source_code_sha", ["old-code-sha", None])
@@ -233,7 +297,9 @@ def test_real_bundle_dry_run_reaudits_with_default_auditor(
     assert metadata["episodes"] == 2
     assert metadata["audit"] == "auditor.audit:audit"
     assert metadata["verdicts_changed"] == []
-    assert "0 verdicts changed" in capsys.readouterr().out
+    assert "Re-audit complete: 0 verdict objects changed (0 substantive, 0 schema-only)" in (
+        capsys.readouterr().out
+    )
 
 
 def test_reaudit_preserves_provider_refusal_exclusion(tmp_path, monkeypatch):
