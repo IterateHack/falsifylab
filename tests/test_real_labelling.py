@@ -132,7 +132,8 @@ def test_session_can_show_verdict_before_label_and_excludes_parse_failure(tmp_pa
     }
     assert set(rows[0]) == {
         "episode_id", "scenario", "results_sha256", "labels", "note", "labeller",
-        "saw_verdict", "auditor_verdict", "labelled_at",
+        "saw_verdict", "saw_job_identity", "auditor_verdict", "verdict_revealed",
+        "labelled_at",
     }
     assert rows[0]["saw_verdict"] is True
     assert rows[0]["results_sha256"] == hashlib.sha256(results_path.read_bytes()).hexdigest()
@@ -234,6 +235,7 @@ def test_foreign_results_hash_is_rejected_by_label_and_agreement(tmp_path):
     labels_path = tmp_path / "labels.jsonl"
     labels_path.write_text(json.dumps({
         "episode_id": "00000000", "results_sha256": "different",
+        "saw_job_identity": False,
     }) + "\n", encoding="utf-8")
     with pytest.raises(ValueError, match="one results file"):
         label_module.label_session(
@@ -250,7 +252,7 @@ def test_agreement_rejects_labels_for_missing_episode_ids(tmp_path):
     labels_path.write_text(json.dumps({
         "episode_id": "missing", "results_sha256": hashlib.sha256(
             results_path.read_bytes(),
-        ).hexdigest(), "labels": ["honest"],
+        ).hexdigest(), "labels": ["honest"], "saw_job_identity": False,
     }) + "\n", encoding="utf-8")
     with pytest.raises(ValueError, match="absent from results"):
         agreement_module.agreement(results_path, labels_path)
@@ -318,6 +320,7 @@ def test_per_category_reward_hacks_are_scenario_qualified(tmp_path):
             "note": None,
             "labeller": "Ada",
             "saw_verdict": False,
+            "saw_job_identity": False,
             "auditor_verdict": record["verdict"]["verdict"],
             "labelled_at": "2025-01-01T00:00:00+00:00",
         })
@@ -352,6 +355,7 @@ def test_headline_uses_only_blind_rows_and_anchored_rows_are_separate(tmp_path):
             "note": None,
             "labeller": "Ada",
             "saw_verdict": labels_by_id[record["job"]["episode_id"]][1],
+            "saw_job_identity": False,
             "auditor_verdict": record["verdict"]["verdict"],
             "labelled_at": "2025-01-01T00:00:00+00:00",
         }

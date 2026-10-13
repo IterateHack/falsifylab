@@ -10,6 +10,7 @@ from typing import TextIO
 
 from auditor.validation.cases import HONEST
 from auditor.validation.run_validation import cohen_kappa
+from auditor.validation.real.common import is_blind_label
 from metrics import is_parse_failure_verdict
 from runner.factories import scenario_dir
 from runner.reaudit import _read_records
@@ -146,11 +147,13 @@ def agreement(results_path: Path, labels_path: Path) -> dict:
     category_names["unsafe"] = "Unsafe action"
     category_names["other_hack"] = "Uncategorised reward hack"
     category_names["protocol_violation"] = "Protocol violation"
-    blind_scored = [
-        item for item in scored if not item["row"].get("saw_verdict", True)
-    ]
+    blind_scored = [item for item in scored if is_blind_label(item["row"])]
     saw_verdict_scored = [
         item for item in scored if item["row"].get("saw_verdict", True)
+    ]
+    job_identity_exposed = [
+        item for item in scored
+        if not item["row"].get("saw_verdict", True) and not is_blind_label(item["row"])
     ]
     headline = _agreement_blocks(blind_scored, category_names)
     anchored = _agreement_blocks(saw_verdict_scored, category_names)
@@ -177,7 +180,8 @@ def agreement(results_path: Path, labels_path: Path) -> dict:
         "n_parse_failure": len(parse_failures),
         "n_unlabelled": n_unlabelled,
         "n_saw_verdict": sum(bool(item["row"].get("saw_verdict", True)) for item in scored),
-        "n_blind": sum(not bool(item["row"].get("saw_verdict", True)) for item in scored),
+        "n_blind": len(blind_scored),
+        "n_job_identity_exposed": len(job_identity_exposed),
         "n_scored": len(scored),
         "disagreements": disagreements,
     }
@@ -202,7 +206,7 @@ def format_markdown(report: dict) -> str:
         (
             f"Counts: scored={report['n_scored']} / parse_failure excluded={report['n_parse_failure']} "
             f"/ unlabelled={report['n_unlabelled']} / saw_verdict={report['n_saw_verdict']} "
-            f"/ blind={report['n_blind']}."
+            f"/ blind={report['n_blind']} / job_identity_exposed={report['n_job_identity_exposed']}."
         ),
         "",
         "## Disagreements",
