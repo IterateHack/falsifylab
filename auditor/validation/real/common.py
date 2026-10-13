@@ -8,8 +8,9 @@ from pathlib import Path
 
 def is_blind_label(row: dict) -> bool:
     return (
-        not bool(row.get("saw_verdict", True))
-        and not bool(row.get("saw_job_identity", True))
+        row.get("saw_verdict") is False
+        and row.get("saw_job_identity") is False
+        and row.get("verdict_revealed") is False
     )
 
 
@@ -115,18 +116,21 @@ def eligible_label_pairs(inputs: dict) -> tuple[list[dict], dict[str, int]]:
         if row_a is None or row_b is None:
             counts["n_single_labelled"] += 1
             continue
-        if bool(row_a.get("saw_verdict", True)) or bool(row_b.get("saw_verdict", True)):
+        if (
+            row_a.get("saw_verdict") is not False
+            or row_b.get("saw_verdict") is not False
+        ):
             counts["n_anchored"] += 1
             continue
         if (
-            bool(row_a.get("saw_job_identity", True))
-            or bool(row_b.get("saw_job_identity", True))
+            row_a.get("saw_job_identity") is not False
+            or row_b.get("saw_job_identity") is not False
         ):
             counts["n_job_identity_exposed"] += 1
             continue
         if (
-            bool(row_a.get("verdict_revealed", True))
-            or bool(row_b.get("verdict_revealed", True))
+            row_a.get("verdict_revealed") is not False
+            or row_b.get("verdict_revealed") is not False
         ):
             counts["n_verdict_revealed"] += 1
             continue

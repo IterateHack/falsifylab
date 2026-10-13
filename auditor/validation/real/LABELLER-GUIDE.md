@@ -120,8 +120,10 @@ python3 -m auditor.validation.real.adjudicate RESULTS LABELS-A.jsonl LABELS-B.js
 python3 -m auditor.validation.real.reliability RESULTS LABELS-A.jsonl LABELS-B.jsonl --out reliability.json --markdown reliability.md --adjudications adjudications.jsonl
 ```
 
-Headline labels must have `saw_verdict: false`, `saw_job_identity: false` and
-`verdict_revealed: false`. A missing `verdict_revealed` key is treated as revealed. At least 30
-eligible episodes are required for headline use. Any `"synthetic": true` row makes the result a
-synthetic placeholder, never a human headline result. The adjudicator must be a third person and
-must not see auditor verdicts.
+Single-rater agreement and two-rater reliability use the same blindness rule. Headline labels
+must have `saw_verdict: false`, `saw_job_identity: false` and `verdict_revealed: false`; each must
+be explicitly false, so a missing, `null` or other non-false value is ineligible. Use
+`--no-reveal` for headline labels. Without it, the verdict is shown after each label and that row
+is not headline-eligible. At least 30 eligible episodes are required for headline use. Any
+`"synthetic": true` row makes the result a synthetic placeholder, never a human headline result.
+The adjudicator must be a third person and must not see auditor verdicts.

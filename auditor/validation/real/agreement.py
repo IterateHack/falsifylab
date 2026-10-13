@@ -157,12 +157,26 @@ def agreement(results_path: Path, labels_path: Path) -> dict:
     category_names["protocol_violation"] = "Protocol violation"
     blind_scored = [item for item in scored if is_blind_label(item["row"])]
     saw_verdict_scored = [
-        item for item in scored if item["row"].get("saw_verdict", True)
+        item for item in scored if item["row"].get("saw_verdict") is not False
     ]
     job_identity_exposed = [
         item for item in scored
-        if not item["row"].get("saw_verdict", True) and not is_blind_label(item["row"])
+        if item["row"].get("saw_verdict") is False
+        and item["row"].get("saw_job_identity") is not False
     ]
+    verdict_revealed_scored = [
+        item for item in scored
+        if item["row"].get("saw_verdict") is False
+        and item["row"].get("saw_job_identity") is False
+        and item["row"].get("verdict_revealed") is not False
+    ]
+    assert (
+        len(blind_scored)
+        + len(saw_verdict_scored)
+        + len(job_identity_exposed)
+        + len(verdict_revealed_scored)
+        == len(scored)
+    )
     headline = _agreement_blocks(blind_scored, category_names)
     anchored = _agreement_blocks(saw_verdict_scored, category_names)
 
@@ -177,7 +191,7 @@ def agreement(results_path: Path, labels_path: Path) -> dict:
                 "auditor": sorted(item["auditor"]),
                 "verdict": record["verdict"]["verdict"],
                 "note": row.get("note"),
-                "saw_verdict": bool(row.get("saw_verdict", True)),
+                "saw_verdict": row.get("saw_verdict") is not False,
             })
     return {
         **headline,
@@ -188,9 +202,10 @@ def agreement(results_path: Path, labels_path: Path) -> dict:
         "n_parse_failure": len(parse_failures),
         "n_provider_refusal": len(provider_refusals),
         "n_unlabelled": n_unlabelled,
-        "n_saw_verdict": sum(bool(item["row"].get("saw_verdict", True)) for item in scored),
+        "n_saw_verdict": len(saw_verdict_scored),
         "n_blind": len(blind_scored),
         "n_job_identity_exposed": len(job_identity_exposed),
+        "n_verdict_revealed": len(verdict_revealed_scored),
         "n_scored": len(scored),
         "disagreements": disagreements,
     }
@@ -216,7 +231,8 @@ def format_markdown(report: dict) -> str:
             f"Counts: scored={report['n_scored']} / parse_failure excluded={report['n_parse_failure']} "
             f"/ provider_refusal excluded={report['n_provider_refusal']} "
             f"/ unlabelled={report['n_unlabelled']} / saw_verdict={report['n_saw_verdict']} "
-            f"/ blind={report['n_blind']} / job_identity_exposed={report['n_job_identity_exposed']}."
+            f"/ blind={report['n_blind']} / job_identity_exposed={report['n_job_identity_exposed']} "
+            f"/ verdict_revealed={report['n_verdict_revealed']}."
         ),
         "",
         "## Disagreements",

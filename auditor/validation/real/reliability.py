@@ -172,6 +172,20 @@ def reliability(
 ) -> dict:
     inputs = load_annotation_inputs(results_path, labels_a_path, labels_b_path)
     items, exclusion_counts = eligible_label_pairs(inputs)
+    classified_count = sum(
+        exclusion_counts[key]
+        for key in (
+            "n_parse_failure",
+            "n_provider_refusal",
+            "n_unlabelled_by_either",
+            "n_single_labelled",
+            "n_anchored",
+            "n_job_identity_exposed",
+            "n_verdict_revealed",
+            "n_eligible",
+        )
+    )
+    assert classified_count == len(inputs["records"])
     category_names = _category_names(inputs["records"])
     report = {
         "inter_rater": _inter_rater(items, category_names),

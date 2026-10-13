@@ -124,6 +124,13 @@ def label_session(
     ]
     if shuffle_seed is not None:
         random.Random(f"{shuffle_seed}:{labeller}").shuffle(queue)
+    if not show_verdict and not no_reveal:
+        print(
+            "Warning: without --no-reveal the verdict is shown after each label; "
+            "these rows are not headline-eligible.",
+            file=out,
+            flush=True,
+        )
     if no_reveal:
         print(f"Excluded {len(parse_failures)} episode(s) from labelling.", file=out, flush=True)
     else:

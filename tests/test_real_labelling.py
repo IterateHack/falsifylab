@@ -199,6 +199,12 @@ def test_default_hides_verdict_until_after_first_row_is_written(tmp_path):
     result = label_module.label_session(
         results_path, labels_path, labeller="Ada", input_fn=input_fn, out=out,
     )
+    warning = (
+        "Warning: without --no-reveal the verdict is shown after each label; "
+        "these rows are not headline-eligible."
+    )
+    assert out.getvalue().splitlines()[0] == warning
+    assert out.getvalue().count(warning) == 1
     assert result["labelled"] == 4
     assert "== Audit ==" not in before_first_input[0]
     assert "== Audit ==" in out.getvalue()
@@ -322,6 +328,7 @@ def test_per_category_reward_hacks_are_scenario_qualified(tmp_path):
             "labeller": "Ada",
             "saw_verdict": False,
             "saw_job_identity": False,
+            "verdict_revealed": False,
             "auditor_verdict": record["verdict"]["verdict"],
             "labelled_at": "2025-01-01T00:00:00+00:00",
         })
@@ -357,6 +364,7 @@ def test_headline_uses_only_blind_rows_and_anchored_rows_are_separate(tmp_path):
             "labeller": "Ada",
             "saw_verdict": labels_by_id[record["job"]["episode_id"]][1],
             "saw_job_identity": False,
+            "verdict_revealed": False,
             "auditor_verdict": record["verdict"]["verdict"],
             "labelled_at": "2025-01-01T00:00:00+00:00",
         }
@@ -415,6 +423,7 @@ def test_protocol_violation_is_a_flagged_label_category_and_is_accepted(tmp_path
         results_path,
         labels_path,
         labeller="Ada",
+        no_reveal=True,
         input_fn=_scripted(["protocol_violation", ""]),
         out=io.StringIO(),
     )
@@ -444,6 +453,7 @@ def test_dry_run_batch_label_cli_and_agreement_cli_never_launch_modal(tmp_path, 
     labels_path = tmp_path / "labels.jsonl"
     label_module.main([
         str(batch_dir / "results.jsonl"), "--labels", str(labels_path), "--labeller", "CLI",
+        "--no-reveal",
     ], out=io.StringIO())
     agreement_path = tmp_path / "agreement.json"
     markdown_path = tmp_path / "agreement.md"

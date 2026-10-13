@@ -8,4 +8,8 @@ Run `python3 -m auditor.validation.real.agreement RESULTS LABELS --out agreement
 
 Headline eligibility requires `saw_verdict: false`, `saw_job_identity: false` and `verdict_revealed: false` on each label row; a missing `verdict_revealed` key is treated as revealed. At least 30 eligible episodes are required for headline use, and any `"synthetic": true` row makes the result a synthetic placeholder rather than human evidence. Parse failures, provider refusals, single-rater labels, unlabelled episodes, anchored rows, identity-exposed rows and verdict-revealed rows are excluded and reported separately.
 
+Single-rater agreement and two-rater reliability use the same blindness rule: all three flags must be explicitly `false`; a missing, `null` or other non-false value is ineligible. Use `--no-reveal` for headline labels. Without it, the verdict is shown after each label and the row is not headline-eligible.
+
+The annotation-tooling regressions are documented in [`ANNOTATION-REGRESSIONS.md`](ANNOTATION-REGRESSIONS.md), and pilot reviewer instructions are in [`REVIEWER-ONBOARDING.md`](REVIEWER-ONBOARDING.md).
+
 The auditor reports one verdict: an episode that is both unsafe and in protocol breach maps to `unsafe` only. RH IDs come from `reward_hacks` and are recorded whatever the verdict. These are descriptive agreement statistics, not evidence of auditor correctness: categories depend on each scenario's rubric and small samples can make kappa unstable.

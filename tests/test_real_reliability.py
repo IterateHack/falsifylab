@@ -17,6 +17,7 @@ import pytest
 
 from auditor.validation.real import adjudicate as adjudicate_module
 from auditor.validation.real import agreement as agreement_module
+from auditor.validation.real import common as common_module
 from auditor.validation.real import label as label_module
 from auditor.validation.real import reliability as reliability_module
 from test_real_labelling import _build_results, _read_rows, _scripted
@@ -181,6 +182,35 @@ def _reliability(results_path: Path, labels_a_path: Path, labels_b_path: Path, *
     )
 
 
+@pytest.mark.parametrize(
+    ("key", "state"),
+    [
+        (key, state)
+        for key in ("saw_verdict", "saw_job_identity", "verdict_revealed")
+        for state in ("true", "missing", "none", "false")
+    ],
+    ids=[
+        f"{key}-{state}"
+        for key in ("saw_verdict", "saw_job_identity", "verdict_revealed")
+        for state in ("true", "missing", "none", "false")
+    ],
+)
+def test_is_blind_label_requires_explicit_false(key, state):
+    row = {
+        "saw_verdict": False,
+        "saw_job_identity": False,
+        "verdict_revealed": False,
+    }
+    if state == "true":
+        row[key] = True
+    elif state == "missing":
+        row.pop(key)
+    elif state == "none":
+        row[key] = None
+
+    assert common_module.is_blind_label(row) is (state == "false")
+
+
 def test_human_human_kappa_counts_and_bootstrap_are_deterministic(tmp_path):
     results_path = tmp_path / "results.jsonl"
     records = _write_results(results_path, 10)
@@ -277,6 +307,23 @@ def test_exclusion_counts_are_separate_and_excluded_rows_never_enter_inter_rater
             "n_eligible": 3,
         }
     assert report["inter_rater"]["binary"]["n"] == 3
+    assert sum(
+        report[key]
+        for key in (
+            "n_parse_failure", "n_provider_refusal", "n_unlabelled_by_either",
+            "n_single_labelled", "n_anchored", "n_job_identity_exposed",
+            "n_verdict_revealed", "n_eligible",
+        )
+    ) == len(records)
+    inputs = common_module.load_annotation_inputs(
+        results_path, labels_a_path, labels_b_path,
+    )
+    eligible, _ = common_module.eligible_label_pairs(inputs)
+    assert all(
+        common_module.is_blind_label(item["row_a"])
+        and common_module.is_blind_label(item["row_b"])
+        for item in eligible
+    )
 
 
 def test_provider_refusals_are_excluded_from_all_annotation_paths(tmp_path):
@@ -331,19 +378,33 @@ def test_provider_refusals_are_excluded_from_all_annotation_paths(tmp_path):
     assert [row["episode_id"] for row in _read_rows(adjudications_path)] == ["00000001"]
 
 
-def test_agreement_ignores_verdict_revealed_flag(tmp_path):
+def test_agreement_excludes_non_false_verdict_revealed_rows(tmp_path):
     results_path = tmp_path / "results.jsonl"
-    records = _write_results(results_path, 2)
+    records = _write_results(results_path, 4)
     labels_path = tmp_path / "labels.jsonl"
     rows = _write_labels(
         results_path, records, labels_path, labeller="Rater",
     )
     rows[0]["verdict_revealed"] = True
+    rows[1].pop("verdict_revealed")
+    rows[2]["verdict_revealed"] = None
     _write_jsonl(labels_path, rows)
 
     report = agreement_module.agreement(results_path, labels_path)
-    assert report["n_scored"] == 2
-    assert report["n_blind"] == 2
+    assert report["n_scored"] == 4
+    assert report["n_blind"] == 1
+    assert report["n_saw_verdict"] == 0
+    assert report["n_job_identity_exposed"] == 0
+    assert report["n_verdict_revealed"] == 3
+    assert report["binary"]["n"] == 1
+    assert (
+        report["n_blind"]
+        + report["n_saw_verdict"]
+        + report["n_job_identity_exposed"]
+        + report["n_verdict_revealed"]
+        == report["n_scored"]
+    )
+    assert "/ verdict_revealed=3" in agreement_module.format_markdown(report)
 
 
 @pytest.mark.parametrize(

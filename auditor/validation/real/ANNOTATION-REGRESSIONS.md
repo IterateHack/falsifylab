@@ -1,0 +1,19 @@
+# Annotation and evaluation regressions
+
+This file records bugs in the real-trajectory annotation and agreement tooling under
+`auditor/validation/real/`. Each entry pins the test that guards the fix.
+
+These are not verifier bugs. The auditor's rules, the control matcher, scorers and the sandbox
+are tracked in `docs/VERIFIER-REGRESSIONS.md`. Bugs here change which episodes and labels enter an
+agreement calculation, not how an episode is audited.
+
+| # | What broke | Effect | Fix | Pinned test(s) |
+|---|---|---|---|---|
+| 1 | Provider-refusal episodes (no turns; the provider refused before the agent acted) were queued for labelling and scored by `agreement.py`. The auditor gives them a verdict, so they counted as honest/honest agreement. | Agreement and κ were inflated by episodes that contain no scientific reasoning. | PR #87: excluded from `label`, `agreement`, `reliability` and `adjudicate`, and reported as a separate count (`excluded_provider_refusal` / `n_provider_refusal`). | `tests/test_real_reliability.py::test_provider_refusals_are_excluded_from_all_annotation_paths` |
+| 2 | Before PR #87, `label.py` always printed variant, model and seed in the episode header. Rows did not record this, so they were treated as blind. | Labels made with the prompt variant visible could enter the headline. | PR #87: the blind header omits them. Rows record `saw_job_identity`, and a missing key counts as exposed. | `tests/test_real_reliability.py::test_exclusion_counts_are_separate_and_excluded_rows_never_enter_inter_rater`; `tests/test_real_reliability.py::test_agreement_excludes_job_identity_and_legacy_rows_but_keeps_anchored_section` |
+| 3 | The single-rater `agreement.py` headline ignored `verdict_revealed`, while two-rater `reliability` excluded revealed rows. | A labeller who saw the verdict after each label (and so was anchored for later runs) still counted in the single-rater headline. | PR #87: a single blindness rule, `is_blind_label`. `saw_verdict`, `saw_job_identity` and `verdict_revealed` must all be explicitly `false`, and a missing or non-false value is ineligible. | `tests/test_real_reliability.py::test_is_blind_label_requires_explicit_false[saw_verdict-true]`, `tests/test_real_reliability.py::test_is_blind_label_requires_explicit_false[saw_verdict-missing]`, `tests/test_real_reliability.py::test_is_blind_label_requires_explicit_false[saw_verdict-none]`, `tests/test_real_reliability.py::test_is_blind_label_requires_explicit_false[saw_verdict-false]`, `tests/test_real_reliability.py::test_is_blind_label_requires_explicit_false[saw_job_identity-true]`, `tests/test_real_reliability.py::test_is_blind_label_requires_explicit_false[saw_job_identity-missing]`, `tests/test_real_reliability.py::test_is_blind_label_requires_explicit_false[saw_job_identity-none]`, `tests/test_real_reliability.py::test_is_blind_label_requires_explicit_false[saw_job_identity-false]`, `tests/test_real_reliability.py::test_is_blind_label_requires_explicit_false[verdict_revealed-true]`, `tests/test_real_reliability.py::test_is_blind_label_requires_explicit_false[verdict_revealed-missing]`, `tests/test_real_reliability.py::test_is_blind_label_requires_explicit_false[verdict_revealed-none]`, `tests/test_real_reliability.py::test_is_blind_label_requires_explicit_false[verdict_revealed-false]`; `tests/test_real_reliability.py::test_agreement_excludes_non_false_verdict_revealed_rows` |
+
+Rules:
+- A fix to this tooling adds a row here and the exposing case as a test in the same PR.
+- Do not name individual real episodes in this file. Labellers are told not to read records that
+  connect episode IDs to outcomes.
