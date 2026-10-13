@@ -86,19 +86,25 @@ def load_annotation_inputs(
 
 def eligible_label_pairs(inputs: dict) -> tuple[list[dict], dict[str, int]]:
     from metrics import is_parse_failure_verdict
+    from runner.modal_batch import is_provider_refusal
 
     counts = {
         "n_parse_failure": 0,
+        "n_provider_refusal": 0,
         "n_unlabelled_by_either": 0,
         "n_single_labelled": 0,
         "n_anchored": 0,
         "n_job_identity_exposed": 0,
+        "n_verdict_revealed": 0,
         "n_eligible": 0,
     }
     eligible = []
     for record in inputs["records"]:
         if is_parse_failure_verdict(record["verdict"]["verdict"]):
             counts["n_parse_failure"] += 1
+            continue
+        if is_provider_refusal(record):
+            counts["n_provider_refusal"] += 1
             continue
         episode_id = record["job"]["episode_id"]
         row_a = inputs["labels_a"].get(episode_id)
@@ -117,6 +123,12 @@ def eligible_label_pairs(inputs: dict) -> tuple[list[dict], dict[str, int]]:
             or bool(row_b.get("saw_job_identity", True))
         ):
             counts["n_job_identity_exposed"] += 1
+            continue
+        if (
+            bool(row_a.get("verdict_revealed", True))
+            or bool(row_b.get("verdict_revealed", True))
+        ):
+            counts["n_verdict_revealed"] += 1
             continue
         eligible.append({
             "record": record,

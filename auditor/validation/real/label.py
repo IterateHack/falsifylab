@@ -13,7 +13,7 @@ from typing import Callable, TextIO
 from contract import Verdict, trajectory_from_dict
 from metrics import is_parse_failure_verdict
 from runner.factories import scenario_dir
-from runner.modal_batch import Refusal
+from runner.modal_batch import Refusal, is_provider_refusal
 from runner.reaudit import _read_records
 from runner.run_one import format_refusals, format_trajectory, format_verdict
 
@@ -107,10 +107,16 @@ def label_session(
         record for record in records
         if is_parse_failure_verdict(record["verdict"]["verdict"])
     ]
+    provider_refusals = [
+        record for record in records
+        if not is_parse_failure_verdict(record["verdict"]["verdict"])
+        and is_provider_refusal(record)
+    ]
     already_labelled = {row["episode_id"] for row in prior_rows}
     queue = [
         record for record in records
         if not is_parse_failure_verdict(record["verdict"]["verdict"])
+        and not is_provider_refusal(record)
         and (
             record["job"]["episode_id"] not in already_labelled
             or record["job"]["episode_id"] in relabel_ids
@@ -126,6 +132,11 @@ def label_session(
             file=out,
             flush=True,
         )
+    print(
+        f"Excluded {len(provider_refusals)} provider_refusal episode(s) from labelling.",
+        file=out,
+        flush=True,
+    )
     labelled = 0
     skipped = 0
     remaining = len(queue)
@@ -170,6 +181,7 @@ def label_session(
                     "skipped": skipped,
                     "remaining": remaining,
                     "excluded_parse_failure": len(parse_failures),
+                    "excluded_provider_refusal": len(provider_refusals),
                 }
             if command == "?":
                 print(vocabulary, file=out, flush=True)
@@ -211,6 +223,7 @@ def label_session(
         "skipped": skipped,
         "remaining": remaining,
         "excluded_parse_failure": len(parse_failures),
+        "excluded_provider_refusal": len(provider_refusals),
     }
 
 

@@ -37,6 +37,7 @@ def _write_results(
     count: int,
     *,
     parse_failure_ids: set[str] | None = None,
+    provider_refusal_ids: set[str] | None = None,
     verdicts: dict[str, tuple[str, list[str]]] | None = None,
 ) -> list[dict]:
     seed_path = path.with_name(path.name + ".fixture")
@@ -46,6 +47,7 @@ def _write_results(
         row for row in seed_records if row["verdict"]["verdict"] == "PARSE_FAILURE"
     )
     parse_failure_ids = parse_failure_ids or set()
+    provider_refusal_ids = provider_refusal_ids or set()
     records = []
     for index in range(count):
         episode_id = f"{index:08d}"
@@ -58,6 +60,13 @@ def _write_results(
             verdict, reward_hacks = verdicts[episode_id]
             record["verdict"]["verdict"] = verdict
             record["verdict"]["reward_hacks"] = reward_hacks
+        if episode_id in provider_refusal_ids:
+            record["outcome"] = "provider_refusal"
+            record["provider_refusal"] = True
+            record["provider_stop"] = None
+            record["refusals"] = []
+            record["verdict"]["verdict"] = "INSUFFICIENT_EVIDENCE"
+            record["verdict"]["reward_hacks"] = []
         records.append(record)
     _write_jsonl(path, records)
     return records
@@ -74,6 +83,8 @@ def _write_labels(
     saw_job_identity_ids: set[str] | None = None,
     legacy_ids: set[str] | None = None,
     synthetic_ids: set[str] | None = None,
+    verdict_revealed_ids: set[str] | None = None,
+    legacy_verdict_revealed_ids: set[str] | None = None,
     omit_ids: set[str] | None = None,
     labeller_by_id: dict[str, str] | None = None,
 ) -> list[dict]:
@@ -83,6 +94,8 @@ def _write_labels(
     saw_job_identity_ids = saw_job_identity_ids or set()
     legacy_ids = legacy_ids or set()
     synthetic_ids = synthetic_ids or set()
+    verdict_revealed_ids = verdict_revealed_ids or set()
+    legacy_verdict_revealed_ids = legacy_verdict_revealed_ids or set()
     omit_ids = omit_ids or set()
     labeller_by_id = labeller_by_id or {}
     rows = []
@@ -98,9 +111,12 @@ def _write_labels(
             "labeller": labeller_by_id.get(episode_id, labeller),
             "saw_verdict": episode_id in saw_verdict_ids,
             "saw_job_identity": episode_id in saw_job_identity_ids,
+            "verdict_revealed": episode_id in verdict_revealed_ids,
         }
         if episode_id in legacy_ids:
             row.pop("saw_job_identity")
+        if episode_id in legacy_verdict_revealed_ids:
+            row.pop("verdict_revealed")
         if episode_id in synthetic_ids:
             row["synthetic"] = True
         rows.append(row)
@@ -226,16 +242,18 @@ def test_human_human_kappa_counts_and_bootstrap_are_deterministic(tmp_path):
 def test_exclusion_counts_are_separate_and_excluded_rows_never_enter_inter_rater(tmp_path):
     results_path = tmp_path / "results.jsonl"
     parse_id = "00000002"
-    records = _write_results(results_path, 8, parse_failure_ids={parse_id})
+    records = _write_results(results_path, 10, parse_failure_ids={parse_id})
     labels_a_path, labels_b_path = tmp_path / "a.jsonl", tmp_path / "b.jsonl"
     _write_pair(
         results_path, records, labels_a_path, labels_b_path,
         options_a={
             "saw_job_identity_ids": {"00000004"},
+            "verdict_revealed_ids": {"00000008"},
             "omit_ids": {"00000006"},
         },
         options_b={
             "saw_verdict_ids": {"00000003"},
+            "legacy_verdict_revealed_ids": {"00000009"},
             "omit_ids": {"00000005", "00000006"},
         },
     )
@@ -244,18 +262,88 @@ def test_exclusion_counts_are_separate_and_excluded_rows_never_enter_inter_rater
     assert {
         key: report[key]
         for key in (
-            "n_parse_failure", "n_unlabelled_by_either", "n_single_labelled",
-            "n_anchored", "n_job_identity_exposed", "n_eligible",
+            "n_parse_failure", "n_provider_refusal", "n_unlabelled_by_either",
+            "n_single_labelled", "n_anchored", "n_job_identity_exposed",
+            "n_verdict_revealed", "n_eligible",
         )
     } == {
-        "n_parse_failure": 1,
-        "n_unlabelled_by_either": 1,
-        "n_single_labelled": 1,
-        "n_anchored": 1,
-        "n_job_identity_exposed": 1,
-        "n_eligible": 3,
-    }
+            "n_parse_failure": 1,
+            "n_provider_refusal": 0,
+            "n_unlabelled_by_either": 1,
+            "n_single_labelled": 1,
+            "n_anchored": 1,
+            "n_job_identity_exposed": 1,
+            "n_verdict_revealed": 2,
+            "n_eligible": 3,
+        }
     assert report["inter_rater"]["binary"]["n"] == 3
+
+
+def test_provider_refusals_are_excluded_from_all_annotation_paths(tmp_path):
+    results_path = tmp_path / "results.jsonl"
+    records = _write_results(results_path, 3, provider_refusal_ids={"00000000"})
+    labels_a_path, labels_b_path = tmp_path / "a.jsonl", tmp_path / "b.jsonl"
+    _write_pair(
+        results_path, records, labels_a_path, labels_b_path,
+        labels_a={"00000000": ["RH1"], "00000001": ["honest"]},
+        labels_b={"00000000": ["honest"], "00000001": ["RH1"]},
+    )
+
+    label_path, label_output = tmp_path / "label.jsonl", io.StringIO()
+    label_result = label_module.label_session(
+        results_path, label_path, labeller="Queue test", no_reveal=True,
+        input_fn=_scripted(["q"]), out=label_output,
+    )
+    assert label_result == {
+        "labelled": 0,
+        "skipped": 0,
+        "remaining": 2,
+        "excluded_parse_failure": 0,
+        "excluded_provider_refusal": 1,
+    }
+    assert "Excluded 1 provider_refusal episode(s) from labelling." in label_output.getvalue()
+    assert label_path.exists() is False
+
+    agreement = agreement_module.agreement(results_path, labels_a_path)
+    assert agreement["n_provider_refusal"] == 1
+    assert agreement["n_scored"] == 2
+    assert "provider_refusal excluded=1" in agreement_module.format_markdown(agreement)
+    assert all(item["episode_id"] != "00000000" for item in agreement["disagreements"])
+
+    reliability = _reliability(results_path, labels_a_path, labels_b_path)
+    assert reliability["n_provider_refusal"] == 1
+    assert reliability["n_eligible"] == 2
+    assert reliability["inter_rater"]["binary"]["n"] == 2
+    reliability_markdown = reliability_module.format_markdown(reliability)
+    assert "provider_refusal=1" in reliability_markdown
+    assert "verdict_revealed=0" in reliability_markdown
+
+    adjudications_path, adjudication_output = tmp_path / "adj.jsonl", io.StringIO()
+    adjudicate_module.main(
+        _adjudicate_args(
+            results_path, labels_a_path, labels_b_path, adjudications_path,
+        ),
+        input_fn=_scripted(["honest", "Reviewed independently."]),
+        out=adjudication_output,
+    )
+    assert "[00000000]" not in adjudication_output.getvalue()
+    assert "[00000001]" in adjudication_output.getvalue()
+    assert [row["episode_id"] for row in _read_rows(adjudications_path)] == ["00000001"]
+
+
+def test_agreement_ignores_verdict_revealed_flag(tmp_path):
+    results_path = tmp_path / "results.jsonl"
+    records = _write_results(results_path, 2)
+    labels_path = tmp_path / "labels.jsonl"
+    rows = _write_labels(
+        results_path, records, labels_path, labeller="Rater",
+    )
+    rows[0]["verdict_revealed"] = True
+    _write_jsonl(labels_path, rows)
+
+    report = agreement_module.agreement(results_path, labels_path)
+    assert report["n_scored"] == 2
+    assert report["n_blind"] == 2
 
 
 @pytest.mark.parametrize(

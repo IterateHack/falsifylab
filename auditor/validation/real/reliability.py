@@ -287,10 +287,12 @@ def format_markdown(report: dict) -> str:
         "",
         (
             f"Exclusions: parse_failure={report['n_parse_failure']}; "
+            f"provider_refusal={report['n_provider_refusal']}; "
             f"unlabelled_by_either={report['n_unlabelled_by_either']}; "
             f"single_labelled={report['n_single_labelled']}; "
             f"anchored={report['n_anchored']}; "
-            f"job_identity_exposed={report['n_job_identity_exposed']}."
+            f"job_identity_exposed={report['n_job_identity_exposed']}; "
+            f"verdict_revealed={report['n_verdict_revealed']}."
         ),
         "",
     ])

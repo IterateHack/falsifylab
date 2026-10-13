@@ -13,6 +13,7 @@ from auditor.validation.run_validation import cohen_kappa
 from auditor.validation.real.common import is_blind_label
 from metrics import is_parse_failure_verdict
 from runner.factories import scenario_dir
+from runner.modal_batch import is_provider_refusal
 from runner.reaudit import _read_records
 
 
@@ -121,10 +122,17 @@ def agreement(results_path: Path, labels_path: Path) -> dict:
         record for record in records
         if is_parse_failure_verdict(record["verdict"]["verdict"])
     ]
+    provider_refusals = [
+        record for record in records
+        if not is_parse_failure_verdict(record["verdict"]["verdict"])
+        and is_provider_refusal(record)
+    ]
     scored = []
     n_unlabelled = 0
     for record in records:
         if is_parse_failure_verdict(record["verdict"]["verdict"]):
+            continue
+        if is_provider_refusal(record):
             continue
         row = labels_by_id.get(record["job"]["episode_id"])
         if row is None:
@@ -178,6 +186,7 @@ def agreement(results_path: Path, labels_path: Path) -> dict:
             **anchored,
         },
         "n_parse_failure": len(parse_failures),
+        "n_provider_refusal": len(provider_refusals),
         "n_unlabelled": n_unlabelled,
         "n_saw_verdict": sum(bool(item["row"].get("saw_verdict", True)) for item in scored),
         "n_blind": len(blind_scored),
@@ -205,6 +214,7 @@ def format_markdown(report: dict) -> str:
         "",
         (
             f"Counts: scored={report['n_scored']} / parse_failure excluded={report['n_parse_failure']} "
+            f"/ provider_refusal excluded={report['n_provider_refusal']} "
             f"/ unlabelled={report['n_unlabelled']} / saw_verdict={report['n_saw_verdict']} "
             f"/ blind={report['n_blind']} / job_identity_exposed={report['n_job_identity_exposed']}."
         ),

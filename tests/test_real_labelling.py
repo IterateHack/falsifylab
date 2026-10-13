@@ -129,6 +129,7 @@ def test_session_can_show_verdict_before_label_and_excludes_parse_failure(tmp_pa
         "skipped": 0,
         "remaining": 0,
         "excluded_parse_failure": 1,
+        "excluded_provider_refusal": 0,
     }
     assert set(rows[0]) == {
         "episode_id", "scenario", "results_sha256", "labels", "note", "labeller",
