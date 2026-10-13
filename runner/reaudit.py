@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 from copy import deepcopy
 import json
+import platform
 from pathlib import Path
 from typing import Callable, Mapping
 
@@ -22,6 +23,42 @@ from runner.provenance import code_sha
 
 class MissingTrajectoryError(FileNotFoundError):
     pass
+
+
+_SUBSTANTIVE_VERDICT_FIELDS = ("verdict", "final_score", "reward_hacks", "violations")
+
+
+def _has_substantive_verdict_change(old: Mapping, new: Mapping) -> bool:
+    if any(old.get(key) != new.get(key) for key in _SUBSTANTIVE_VERDICT_FIELDS):
+        return True
+
+    old_scores = old.get("scores", {})
+    new_scores = new.get("scores", {})
+    for key in set(old_scores) | set(new_scores):
+        old_value = old_scores.get(key)
+        new_value = new_scores.get(key)
+        if old_value == new_value:
+            continue
+        if key not in old_scores and new_value in ([], {}, None):
+            continue
+        if (
+            isinstance(old_value, float)
+            and isinstance(new_value, float)
+            and abs(old_value - new_value) < 1e-12
+        ):
+            continue
+        return True
+
+    other_fields = (
+        set(old) | set(new)
+    ) - set(_SUBSTANTIVE_VERDICT_FIELDS) - {"scores"}
+    for key in other_fields:
+        if old.get(key) == new.get(key):
+            continue
+        if key not in old and new.get(key) in ([], {}, None):
+            continue
+        return True
+    return False
 
 
 def _read_records(results_path: Path) -> list[dict]:
@@ -83,6 +120,7 @@ def reaudit(results_path: Path, output: Path, *,
     output.mkdir(parents=True, exist_ok=False)
     rebuilt_records = []
     changed = []
+    substantive_changes = []
     for record in records:
         if record.get("verdict", {}).get("verdict") == HARNESS_ERROR_VERDICT:
             rebuilt = dict(record)
@@ -123,6 +161,10 @@ def reaudit(results_path: Path, output: Path, *,
         rebuilt["source_code_sha"] = record.get("code_sha")
         if rebuilt["verdict"] != record.get("verdict"):
             changed.append(episode_id)
+            if _has_substantive_verdict_change(
+                record.get("verdict", {}), rebuilt["verdict"],
+            ):
+                substantive_changes.append(episode_id)
         rebuilt_records.append(rebuilt)
 
     with (output / "results.jsonl").open("w", encoding="utf-8") as stream:
@@ -143,6 +185,11 @@ def reaudit(results_path: Path, output: Path, *,
         "audit": audit_reference,
         "code_sha": current_code_sha,
         "verdicts_changed": changed,
+        "substantive_changes": substantive_changes,
+        "schema_only_changes": [
+            episode_id for episode_id in changed if episode_id not in substantive_changes
+        ],
+        "python_version": platform.python_version(),
     }
     (output / "reaudit.json").write_text(
         json.dumps(result, indent=2, allow_nan=False) + "\n", encoding="utf-8",
@@ -192,7 +239,11 @@ def main(argv: list[str] | None = None) -> None:
         )
     except MissingTrajectoryError as exc:
         parser.error(str(exc))
-    print(f"Re-audit complete: {len(result['verdicts_changed'])} verdicts changed")
+    print(
+        f"Re-audit complete: {len(result['verdicts_changed'])} verdict objects changed "
+        f"({len(result['substantive_changes'])} substantive, "
+        f"{len(result['schema_only_changes'])} schema-only)"
+    )
 
 
 if __name__ == "__main__":

@@ -259,7 +259,7 @@ python -m runner.reaudit runs/live-a/results.jsonl --output runs/live-a-reaudit
 ```
 
 Writes re-scored `results.jsonl` and summaries to the new directory, plus `reaudit.json`
-listing which episodes' verdicts changed. `--audit module:callable`, `--rubric` and
+listing `verdicts_changed`, `substantive_changes`, and `schema_only_changes`. `--audit module:callable`, `--rubric` and
 `--truth` swap the auditor or its inputs.
 
 ### Viewer
