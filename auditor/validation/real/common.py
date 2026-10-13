@@ -23,6 +23,13 @@ def file_sha256(path: Path) -> str:
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+def is_packet_records(records: list[dict]) -> bool:
+    packet_flags = [record.get("packet_format") == 1 for record in records]
+    if any(packet_flags) and not all(packet_flags):
+        raise ValueError("Results file mixes packet and non-packet records.")
+    return all(packet_flags)
+
+
 def load_annotation_inputs(
     results_path: Path,
     labels_a_path: Path,
@@ -36,6 +43,7 @@ def load_annotation_inputs(
     labels_b_path = Path(labels_b_path)
     results_sha256 = file_sha256(results_path)
     records = _read_records(results_path)
+    packet = is_packet_records(records)
     results_by_id = {record["job"]["episode_id"]: record for record in records}
     label_files = (labels_a_path, labels_b_path)
     raw_rows = [read_jsonl(path) for path in label_files]
@@ -76,6 +84,7 @@ def load_annotation_inputs(
         "labels_a_sha256": file_sha256(labels_a_path),
         "labels_b_sha256": file_sha256(labels_b_path),
         "records": records,
+        "is_packet": packet,
         "results_by_id": results_by_id,
         "labels_a": latest_rows[0],
         "labels_b": latest_rows[1],
@@ -101,12 +110,13 @@ def eligible_label_pairs(inputs: dict) -> tuple[list[dict], dict[str, int]]:
     }
     eligible = []
     for record in inputs["records"]:
-        if is_parse_failure_verdict(record["verdict"]["verdict"]):
-            counts["n_parse_failure"] += 1
-            continue
-        if is_provider_refusal(record):
-            counts["n_provider_refusal"] += 1
-            continue
+        if not inputs["is_packet"]:
+            if is_parse_failure_verdict(record["verdict"]["verdict"]):
+                counts["n_parse_failure"] += 1
+                continue
+            if is_provider_refusal(record):
+                counts["n_provider_refusal"] += 1
+                continue
         episode_id = record["job"]["episode_id"]
         row_a = inputs["labels_a"].get(episode_id)
         row_b = inputs["labels_b"].get(episode_id)

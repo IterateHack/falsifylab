@@ -10,7 +10,7 @@ from typing import TextIO
 
 from auditor.validation.cases import HONEST
 from auditor.validation.run_validation import cohen_kappa
-from auditor.validation.real.common import is_blind_label
+from auditor.validation.real.common import is_blind_label, is_packet_records
 from metrics import is_parse_failure_verdict
 from runner.factories import scenario_dir
 from runner.modal_batch import is_provider_refusal
@@ -112,6 +112,10 @@ def agreement(results_path: Path, labels_path: Path) -> dict:
     labels_path = Path(labels_path)
     results_sha256 = hashlib.sha256(results_path.read_bytes()).hexdigest()
     records = _read_records(results_path)
+    if is_packet_records(records):
+        raise ValueError(
+            "packet has no auditor verdicts; use reliability with --mapping and --source-results"
+        )
     labels_by_id = _read_label_rows(labels_path, results_sha256)
     results_by_id = {record["job"]["episode_id"]: record for record in records}
     missing_ids = labels_by_id.keys() - results_by_id.keys()

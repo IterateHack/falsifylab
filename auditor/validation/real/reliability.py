@@ -11,10 +11,13 @@ from auditor.validation.cases import HONEST
 from auditor.validation.real import agreement
 from auditor.validation.real.common import (
     eligible_label_pairs,
+    file_sha256,
+    is_packet_records,
     load_adjudications,
     load_annotation_inputs,
 )
 from auditor.validation.run_validation import bootstrap_kappa, cohen_kappa
+from runner.reaudit import _read_records
 
 
 MIN_HEADLINE_N = 30
@@ -26,6 +29,7 @@ SEVEN_CLASS_REASON = (
 
 
 def _cohen_block(pairs: list[tuple[bool, bool]], seed_key: str) -> dict:
+    pairs = sorted(pairs)
     rows = [
         {"label": "flagged" if first else HONEST, "passed": not second}
         for first, second in pairs
@@ -127,6 +131,7 @@ def _auditor_reference(
     items: list[dict],
     adjudications: dict[str, dict],
     category_names: dict[str, str],
+    auditor_records_by_id: dict[str, dict] | None = None,
 ) -> dict:
     reference_items = []
     n_unadjudicated = 0
@@ -142,7 +147,11 @@ def _auditor_reference(
         reference_items.append({
             "scenario": item["scenario"],
             "labels_a": reference,
-            "labels_b": agreement.auditor_labels(item["record"]),
+            "labels_b": agreement.auditor_labels(
+                item["record"]
+                if auditor_records_by_id is None
+                else auditor_records_by_id[item["episode_id"]]
+            ),
         })
     binary_pairs = [
         (item["labels_a"] != {"honest"}, item["labels_b"] != {"honest"})
@@ -169,8 +178,55 @@ def reliability(
     labels_b_path: Path,
     *,
     adjudications_path: Path | None = None,
+    mapping_path: Path | None = None,
+    source_results_path: Path | None = None,
 ) -> dict:
     inputs = load_annotation_inputs(results_path, labels_a_path, labels_b_path)
+    packet_mode = inputs["is_packet"]
+    if (mapping_path is None) != (source_results_path is None):
+        raise ValueError("--mapping and --source-results must be provided together.")
+    if not packet_mode and mapping_path is not None:
+        raise ValueError("--mapping and --source-results are only for packet results.")
+    if packet_mode and adjudications_path is not None and mapping_path is None:
+        raise ValueError(
+            "Packet auditor_vs_reference requires --mapping and --source-results."
+        )
+
+    auditor_records_by_id = None
+    mapping = None
+    if packet_mode and mapping_path is not None:
+        mapping = json.loads(Path(mapping_path).read_text(encoding="utf-8"))
+        if not isinstance(mapping, dict):
+            raise ValueError("Mapping file must contain an object.")
+        if mapping.get("packet_sha256") != inputs["results_sha256"]:
+            raise ValueError("Mapping packet SHA-256 does not match the packet file.")
+        source_results_path = Path(source_results_path)
+        source_sha256 = file_sha256(source_results_path)
+        if mapping.get("source_results_sha256") != source_sha256:
+            raise ValueError("Mapping source SHA-256 does not match source results.")
+        source_records = _read_records(source_results_path)
+        if is_packet_records(source_records):
+            raise ValueError("Source results must not be an annotation packet.")
+        source_by_id = {
+            record["job"]["episode_id"]: record for record in source_records
+        }
+        entries = mapping.get("entries")
+        if not isinstance(entries, dict):
+            raise ValueError("Mapping entries must be an object.")
+        packet_ids = {
+            record["job"]["episode_id"] for record in inputs["records"]
+        }
+        missing_packet_ids = packet_ids - entries.keys()
+        if missing_packet_ids:
+            raise ValueError("Mapping is missing packet IDs.")
+        auditor_records_by_id = {}
+        for packet_id in packet_ids:
+            entry = entries[packet_id]
+            original_id = entry.get("episode_id") if isinstance(entry, dict) else None
+            if original_id not in source_by_id:
+                raise ValueError("Mapping entry is absent from source results.")
+            auditor_records_by_id[packet_id] = source_by_id[original_id]
+
     items, exclusion_counts = eligible_label_pairs(inputs)
     classified_count = sum(
         exclusion_counts[key]
@@ -187,12 +243,25 @@ def reliability(
     )
     assert classified_count == len(inputs["records"])
     category_names = _category_names(inputs["records"])
+    reported_exclusion_counts = dict(exclusion_counts)
+    if mapping is not None:
+        excluded = mapping.get("excluded", {})
+        if not isinstance(excluded, dict):
+            raise ValueError("Mapping excluded counts must be an object.")
+        for key, mapping_key in (
+            ("n_parse_failure", "parse_failure"),
+            ("n_provider_refusal", "provider_refusal"),
+        ):
+            count = excluded.get(mapping_key)
+            if not isinstance(count, int) or isinstance(count, bool) or count < 0:
+                raise ValueError(f"Mapping excluded.{mapping_key} must be a non-negative integer.")
+            reported_exclusion_counts[key] = count
     report = {
         "inter_rater": _inter_rater(items, category_names),
         "seven_class": {"available": False, "reason": SEVEN_CLASS_REASON},
         "min_headline_n": MIN_HEADLINE_N,
         "labellers": inputs["labellers"],
-        **exclusion_counts,
+        **reported_exclusion_counts,
     }
     adjudication_rows = []
     if adjudications_path is not None:
@@ -200,7 +269,7 @@ def reliability(
             adjudications_path, inputs,
         )
         report["auditor_vs_reference"] = _auditor_reference(
-            items, adjudications, category_names,
+            items, adjudications, category_names, auditor_records_by_id,
         )
 
     synthetic_rows = (
@@ -321,6 +390,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--markdown", type=Path)
     parser.add_argument("--adjudications", type=Path)
+    parser.add_argument("--mapping", type=Path)
+    parser.add_argument("--source-results", type=Path)
     return parser
 
 
@@ -333,6 +404,8 @@ def main(argv: list[str] | None = None, *, out: TextIO | None = None) -> dict:
             args.labels_a,
             args.labels_b,
             adjudications_path=args.adjudications,
+            mapping_path=args.mapping,
+            source_results_path=args.source_results,
         )
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         parser.error(str(exc))
