@@ -12,4 +12,23 @@ Single-rater agreement and two-rater reliability use the same blindness rule: al
 
 The annotation-tooling regressions are documented in [`ANNOTATION-REGRESSIONS.md`](ANNOTATION-REGRESSIONS.md), and pilot reviewer instructions are in [`REVIEWER-ONBOARDING.md`](REVIEWER-ONBOARDING.md).
 
+## Coordinator: opaque blinded packets
+
+1. Restore the source results locally, for example from `origin/data/wave1`.
+2. Build each packet with its mapping in a separate directory:
+
+   ```sh
+   python3 -m auditor.validation.real.packet runs/stage2-wave1/a/results.jsonl --packet /shared/packet-a.jsonl --mapping /coordinator-only/mapping-a.json
+   python3 -m auditor.validation.real.packet runs/stage2-wave1/b/results.jsonl --packet /shared/packet-b.jsonl --mapping /coordinator-only/mapping-b.json
+   ```
+
+3. Send annotators only the packet files and the shuffle seed; never send the mappings.
+4. Run reliability with the matching mapping and source results:
+
+   ```sh
+   python3 -m auditor.validation.real.reliability /shared/packet-a.jsonl labels-A-a.jsonl labels-B-a.jsonl --out reliability-a.json --mapping /coordinator-only/mapping-a.json --source-results runs/stage2-wave1/a/results.jsonl
+   ```
+
+5. Store each mapping off any shared drive used by annotators.
+
 The auditor reports one verdict: an episode that is both unsafe and in protocol breach maps to `unsafe` only. RH IDs come from `reward_hacks` and are recorded whatever the verdict. These are descriptive agreement statistics, not evidence of auditor correctness: categories depend on each scenario's rubric and small samples can make kappa unstable.

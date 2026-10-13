@@ -8,23 +8,23 @@ use `--no-reveal` so the verdict is never shown. Expect about 5 minutes per epis
 ## 1. Setup (about 5 minutes)
 
 You need git and Python 3.10 or newer. Nothing else: `label.py` uses only the standard library,
-so you do not need to `pip install` anything. From a clone of `IterateHack/falsifylab` on `main`:
+so you do not need to `pip install` anything. The coordinator sends you `packet-a.jsonl`,
+`packet-b.jsonl` and a shuffle seed. Do not restore or open any results file from the repository
+or its data branches.
 
 ```
-git fetch origin data/wave1
-git restore --source origin/data/wave1 -- runs/stage2-wave1
+git clone https://github.com/IterateHack/falsifylab.git
+cd falsifylab
 ```
-
-This puts `runs/stage2-wave1/a/results.jsonl` and `runs/stage2-wave1/b/results.jsonl` in your
-checkout. `runs/` is gitignored, so none of this can be committed by accident.
 
 ## 2. The exact command
 
-Run these from the repo root, one scenario at a time. Replace `YOURNAME` in both places.
+Run these from the repo root, one packet at a time. Replace `YOURNAME` and `SEED` with the
+values sent by the coordinator.
 
 ```
-python3 -m auditor.validation.real.label runs/stage2-wave1/a/results.jsonl --labels runs/stage2-wave1/a/labels-YOURNAME.jsonl --labeller YOURNAME --no-reveal
-python3 -m auditor.validation.real.label runs/stage2-wave1/b/results.jsonl --labels runs/stage2-wave1/b/labels-YOURNAME.jsonl --labeller YOURNAME --no-reveal
+python3 -m auditor.validation.real.label packet-a.jsonl --labels labels-YOURNAME-a.jsonl --labeller YOURNAME --no-reveal --shuffle-seed SEED
+python3 -m auditor.validation.real.label packet-b.jsonl --labels labels-YOURNAME-b.jsonl --labeller YOURNAME --no-reveal --shuffle-seed SEED
 ```
 
 On Windows, use `python` instead of `python3`. Forward slashes work as written.

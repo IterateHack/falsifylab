@@ -10,6 +10,7 @@ import random
 import sys
 from typing import Callable, TextIO
 
+from auditor.validation.real.common import is_packet_records
 from contract import Verdict, trajectory_from_dict
 from metrics import is_parse_failure_verdict
 from runner.factories import scenario_dir
@@ -91,6 +92,10 @@ def label_session(
     labels_path = Path(labels_path)
     results_sha256 = hashlib.sha256(results_path.read_bytes()).hexdigest()
     records = _read_records(results_path)
+    packet_mode = is_packet_records(records)
+    if packet_mode and show_verdict:
+        raise ValueError("--show-verdict is unavailable for packet results.")
+    no_reveal = no_reveal or packet_mode
     prior_rows = _label_rows(labels_path)
     if any(row.get("results_sha256") != results_sha256 for row in prior_rows):
         raise ValueError(
@@ -103,25 +108,36 @@ def label_session(
     if unknown_relabels:
         raise ValueError(f"Cannot relabel episode IDs absent from results: {sorted(unknown_relabels)}")
 
-    parse_failures = [
-        record for record in records
-        if is_parse_failure_verdict(record["verdict"]["verdict"])
-    ]
-    provider_refusals = [
-        record for record in records
-        if not is_parse_failure_verdict(record["verdict"]["verdict"])
-        and is_provider_refusal(record)
-    ]
     already_labelled = {row["episode_id"] for row in prior_rows}
-    queue = [
-        record for record in records
-        if not is_parse_failure_verdict(record["verdict"]["verdict"])
-        and not is_provider_refusal(record)
-        and (
-            record["job"]["episode_id"] not in already_labelled
-            or record["job"]["episode_id"] in relabel_ids
-        )
-    ]
+    if packet_mode:
+        parse_failures = []
+        provider_refusals = []
+        queue = [
+            record for record in records
+            if (
+                record["job"]["episode_id"] not in already_labelled
+                or record["job"]["episode_id"] in relabel_ids
+            )
+        ]
+    else:
+        parse_failures = [
+            record for record in records
+            if is_parse_failure_verdict(record["verdict"]["verdict"])
+        ]
+        provider_refusals = [
+            record for record in records
+            if not is_parse_failure_verdict(record["verdict"]["verdict"])
+            and is_provider_refusal(record)
+        ]
+        queue = [
+            record for record in records
+            if not is_parse_failure_verdict(record["verdict"]["verdict"])
+            and not is_provider_refusal(record)
+            and (
+                record["job"]["episode_id"] not in already_labelled
+                or record["job"]["episode_id"] in relabel_ids
+            )
+        ]
     if shuffle_seed is not None:
         random.Random(f"{shuffle_seed}:{labeller}").shuffle(queue)
     if not show_verdict and not no_reveal:
@@ -154,7 +170,7 @@ def label_session(
         scenario = job.get("scenario", "a")
         rubric_names = _load_rubric_labels(scenario)
         vocabulary = _vocabulary_text(scenario, rubric_names)
-        verdict = Verdict(**record["verdict"])
+        verdict = None if packet_mode else Verdict(**record["verdict"])
         aborted = record.get("aborted_on_refusals", False)
         trajectory = trajectory_from_dict(_trajectory_doc(record, results_path))
         refusals = [Refusal(**item) for item in record.get("refusals", [])]
